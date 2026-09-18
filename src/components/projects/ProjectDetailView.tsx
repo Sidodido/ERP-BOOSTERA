@@ -738,37 +738,37 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
 
             {/* SECTION 1 : PHASE 1 (Conception & Architecture UI/UX) */}
             {(taskPartFilter === "ALL" || taskPartFilter === "PART_1") && (
-              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-lg space-y-0">
+              <div className="bg-white dark:bg-neutral-900/60 border border-slate-200 dark:border-neutral-800/80 rounded-2xl overflow-hidden shadow-xs space-y-0">
                 {/* Section Header */}
-                <div className="p-4 bg-gradient-to-r from-blue-950/40 via-neutral-900 to-neutral-900 border-b border-neutral-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="p-4 bg-slate-50/80 dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30 flex items-center justify-center shrink-0">
                       <Layers className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-neutral-100">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-neutral-100">
                           Phase 1 : Conception, Architecture & UI/UX Figma
                         </h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20 font-bold">
                           Conception & UI/UX
                         </span>
                       </div>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-neutral-400 mt-0.5">
                         Cahier des charges, Wireframes & Maquettes Figma (Web/Mobile), Architecture technique
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2.5 self-end sm:self-auto">
-                    <span className="text-xs px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 font-mono font-medium">
+                    <span className="text-xs px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-300 font-mono font-semibold">
                       {part1Completed}/{part1Tasks.length} validées ({part1Pct}%)
                     </span>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => openForPart("PART_1")}
-                      className="gap-1 text-xs border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+                      className="gap-1 text-xs bg-white dark:bg-transparent border border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Ajouter</span>
@@ -798,30 +798,30 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
 
             {/* SECTION 2 : PHASE 2 (Développement Web, Mobile & Déploiement) */}
             {(taskPartFilter === "ALL" || taskPartFilter === "PART_2") && (
-              <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-lg space-y-0">
+              <div className="bg-white dark:bg-neutral-900/60 border border-slate-200 dark:border-neutral-800/80 rounded-2xl overflow-hidden shadow-xs space-y-0">
                 {/* Section Header */}
-                <div className="p-4 bg-gradient-to-r from-purple-950/40 via-neutral-900 to-neutral-900 border-b border-neutral-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div className="p-4 bg-slate-50/80 dark:bg-neutral-900 border-b border-slate-200 dark:border-neutral-800/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-purple-500/15 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 border border-purple-200 dark:bg-purple-500/15 dark:text-purple-400 dark:border-purple-500/30 flex items-center justify-center shrink-0">
                       <Globe className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-neutral-100">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-neutral-100">
                           Phase 2 : Développement Web, Mobile & Déploiement
                         </h4>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20 font-bold">
                           Développement & Mise en Ligne
                         </span>
                       </div>
-                      <p className="text-[11px] text-neutral-400 mt-0.5">
+                      <p className="text-[11px] text-slate-500 dark:text-neutral-400 mt-0.5">
                         Développement Frontend & Mobile, Backend APIs, Tests QA, Serveur, Domaine & Stores
                       </p>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
-                    <span className="text-xs px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 font-mono font-medium">
+                    <span className="text-xs px-2.5 py-1 rounded-lg bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-300 font-mono font-semibold">
                       {part2Completed}/{part2Tasks.length} ({part2Pct}%)
                     </span>
 
@@ -829,7 +829,7 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                       size="sm"
                       variant="outline"
                       onClick={() => openForPart("PART_2")}
-                      className="gap-1 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+                      className="gap-1 text-xs bg-white dark:bg-transparent border border-purple-200 dark:border-purple-500/30 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-500/10 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                       <span>Ajouter Tâche</span>

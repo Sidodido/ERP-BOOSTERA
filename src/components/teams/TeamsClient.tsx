@@ -20,10 +20,12 @@ import {
   Sparkles,
   PhoneCall,
   Calendar,
+  Trash2,
 } from "lucide-react";
 import {
   createEmployeeGoalAction,
   updateEmployeeGoalAction,
+  deleteEmployeeGoalAction,
   createPerformanceReviewAction,
   syncGoalsAction,
 } from "@/actions/teams";
@@ -183,6 +185,24 @@ export function TeamsClient({
         router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur");
+      }
+    });
+  };
+
+  const handleDeleteGoal = (id: string, label?: string) => {
+    const confirmed = window.confirm(
+      label
+        ? `Êtes-vous sûr de vouloir supprimer l'objectif pour ${label} ?`
+        : "Êtes-vous sûr de vouloir supprimer cet objectif ?"
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      try {
+        await deleteEmployeeGoalAction(id);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la suppression de l'objectif");
       }
     });
   };
@@ -415,7 +435,7 @@ export function TeamsClient({
                   <th className="py-3.5 px-4 text-center">Cible</th>
                   <th className="py-3.5 px-4 text-center">Réalisé en Direct ⚡</th>
                   <th className="py-3.5 px-4">Progression & Statut</th>
-                  {isPrivileged && <th className="py-3.5 px-4 text-right">Ajuster Manuel</th>}
+                  {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
@@ -488,13 +508,13 @@ export function TeamsClient({
                         </td>
                         {isPrivileged && (
                           <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() =>
                                   handleUpdateGoalProgress(g.id, g.achievedValue, -1)
                                 }
                                 title="Diminuer manuellement (-1)"
-                                className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold cursor-pointer"
+                                className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:border-transparent text-xs font-bold cursor-pointer transition"
                               >
                                 -1
                               </button>
@@ -503,18 +523,21 @@ export function TeamsClient({
                                   handleUpdateGoalProgress(g.id, g.achievedValue, 1)
                                 }
                                 title="Augmenter manuellement (+1)"
-                                className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
+                                className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white dark:border-transparent text-xs font-bold cursor-pointer transition"
                               >
                                 +1
                               </button>
                               <button
                                 onClick={() =>
-                                  handleUpdateGoalProgress(g.id, g.achievedValue, 5)
+                                  handleDeleteGoal(
+                                    g.id,
+                                    `${g.employee.firstName} ${g.employee.lastName} (${g.metric})`
+                                  )
                                 }
-                                title="Augmenter manuellement (+5)"
-                                className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                                title="Supprimer cet objectif"
+                                className="p-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 dark:border-rose-800/40 transition cursor-pointer"
                               >
-                                +5
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>

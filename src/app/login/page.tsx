@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { loginAction } from "@/actions/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { ShieldCheck, ArrowRight, UserCheck, Briefcase, CreditCard, Wrench } from "lucide-react";
+import { ShieldCheck, ArrowRight, UserCheck, Wrench } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -154,32 +154,8 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                onClick={() => handleQuickFill("mehdi.tech@boostera.dz")}
-                className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-purple-400">
-                  <Briefcase className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span className="truncate">Chef Projet</span>
-                </div>
-                <p className="text-[10px] text-neutral-500 truncate mt-0.5">Production</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill("leila.finance@boostera.dz")}
-                className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-amber-400">
-                  <CreditCard className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="truncate">Finance</span>
-                </div>
-                <p className="text-[10px] text-neutral-500 truncate mt-0.5">Comptabilité</p>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => handleQuickFill("sidahmed@boostera.dz")}
-                className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group col-span-2 sm:col-span-1"
+                className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
               >
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-indigo-400">
                   <Wrench className="w-3.5 h-3.5 text-indigo-400 shrink-0" />

@@ -130,39 +130,39 @@ export function MonthlyGoalsWidget({
   const getMetricIcon = (metric: string) => {
     switch (metric.toUpperCase()) {
       case "APPELS":
-        return <PhoneCall className="w-5 h-5 text-emerald-400" />;
+        return <PhoneCall className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />;
       case "RENDEZ_VOUS":
-        return <Calendar className="w-5 h-5 text-purple-400" />;
+        return <Calendar className="w-5 h-5 text-purple-600 dark:text-purple-400" />;
       case "CLIENTS":
-        return <Users className="w-5 h-5 text-blue-400" />;
+        return <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />;
       case "CA":
       case "CA_DA":
-        return <TrendingUp className="w-5 h-5 text-amber-400" />;
+        return <TrendingUp className="w-5 h-5 text-amber-600 dark:text-amber-400" />;
       case "VIDEOS":
-        return <Video className="w-5 h-5 text-rose-400" />;
+        return <Video className="w-5 h-5 text-rose-600 dark:text-rose-400" />;
       case "DESIGNS":
       case "CREATIONS":
-        return <Palette className="w-5 h-5 text-indigo-400" />;
+        return <Palette className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />;
       default:
-        return <Target className="w-5 h-5 text-indigo-400" />;
+        return <Target className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />;
     }
   };
 
   const getMetricBadgeStyle = (metric: string) => {
     switch (metric.toUpperCase()) {
       case "APPELS":
-        return "bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+        return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30";
       case "RENDEZ_VOUS":
-        return "bg-purple-500/10 text-purple-400 border-purple-500/30";
+        return "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30";
       case "CLIENTS":
-        return "bg-blue-500/10 text-blue-400 border-blue-500/30";
+        return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/30";
       case "CA":
       case "CA_DA":
-        return "bg-amber-500/10 text-amber-400 border-amber-500/30";
+        return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30";
       case "VIDEOS":
-        return "bg-rose-500/10 text-rose-400 border-rose-500/30";
+        return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30";
       default:
-        return "bg-indigo-500/10 text-indigo-400 border-indigo-500/30";
+        return "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/30";
     }
   };
 
@@ -205,38 +205,38 @@ export function MonthlyGoalsWidget({
       {/* Header Widget */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
-            <Target className="w-4 h-4 text-indigo-400" />
+          <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center">
+            <Target className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-neutral-100">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-bold text-slate-900 dark:text-neutral-100">
                 {title || "Mes Objectifs du Mois"}
               </h2>
-              <span className="px-2 py-0.5 rounded-md bg-indigo-950/60 text-indigo-300 text-[11px] font-semibold border border-indigo-800/40">
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 text-[11px] font-bold border border-indigo-200 dark:border-indigo-800/40 shadow-xs">
                 {monthName} {currentYearNum}
               </span>
-              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/50 text-emerald-400 text-[10px] font-bold border border-emerald-800/40">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 text-[10px] font-bold border border-emerald-200 dark:border-emerald-800/40 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Synchronisé en direct
               </span>
             </div>
-            <p className="text-xs text-neutral-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-neutral-400 mt-0.5">
               {subtitle || "Progression calculée automatiquement d'après vos actions réelles enregistrées."}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="text-xs font-medium text-neutral-300 bg-neutral-900 px-3 py-1.5 rounded-xl border border-neutral-800 flex items-center gap-2">
-            <Award className="w-3.5 h-3.5 text-amber-400" />
+          <div className="text-xs font-medium text-slate-700 dark:text-neutral-300 bg-white dark:bg-neutral-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-neutral-800 flex items-center gap-2 shadow-xs">
+            <Award className="w-3.5 h-3.5 text-amber-500" />
             <span>
-              <strong className="text-emerald-400">{completedGoals}</strong> / {totalGoals} objectifs atteints
+              <strong className="text-emerald-600 dark:text-emerald-400">{completedGoals}</strong> / {totalGoals} objectifs atteints
             </span>
           </div>
           <Link
             href="/equipes?tab=GOALS"
-            className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition"
+            className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 flex items-center gap-1 font-semibold transition"
           >
             <span>Détails</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -250,10 +250,10 @@ export function MonthlyGoalsWidget({
           <button
             type="button"
             onClick={() => setSelectedCollaborator("ALL")}
-            className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 ${
+            className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 cursor-pointer ${
               selectedCollaborator === "ALL"
                 ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
-                : "bg-neutral-900/80 text-neutral-400 hover:text-neutral-200 border border-neutral-800 hover:border-neutral-700"
+                : "bg-white dark:bg-neutral-900/80 text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200 border border-slate-200 dark:border-neutral-800 hover:border-slate-300"
             }`}
           >
             Tous les collaborateurs ({distinctEmployees.length})
@@ -266,15 +266,15 @@ export function MonthlyGoalsWidget({
                 key={emp.id || emp.name}
                 type="button"
                 onClick={() => setSelectedCollaborator(emp.name)}
-                className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-1.5 cursor-pointer ${
                   isSelected
                     ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
-                    : "bg-neutral-900/80 text-neutral-400 hover:text-neutral-200 border border-neutral-800 hover:border-neutral-700"
+                    : "bg-white dark:bg-neutral-900/80 text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200 border border-slate-200 dark:border-neutral-800 hover:border-slate-300"
                 }`}
               >
                 <span>👤</span>
                 <span>{emp.name}</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-indigo-700/60 text-indigo-100" : "bg-neutral-800 text-neutral-400"}`}>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-indigo-700 text-white" : "bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400"}`}>
                   {empGoalsCount}
                 </span>
               </button>
@@ -291,31 +291,31 @@ export function MonthlyGoalsWidget({
             return (
               <div
                 key={collab.employeeName}
-                className={`rounded-2xl p-5 border transition-all shadow-sm flex flex-col justify-between ${
+                className={`rounded-2xl p-5 border transition-all shadow-xs flex flex-col justify-between ${
                   isAllCompleted
-                    ? "bg-gradient-to-b from-emerald-950/20 via-neutral-900/90 to-neutral-900 border-emerald-500/30 hover:border-emerald-500/50"
-                    : "bg-neutral-900/80 border-neutral-800 hover:border-neutral-700"
+                    ? "bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-500/30 ring-1 ring-emerald-300/40"
+                    : "bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 hover:border-slate-300"
                 }`}
               >
                 <div>
                   {/* Collaborator Card Header */}
-                  <div className="flex items-center justify-between gap-3 border-b border-neutral-800/80 pb-3 mb-3.5">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-neutral-800/80 pb-3 mb-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center font-bold text-sm text-indigo-300">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center font-bold text-sm text-indigo-700 dark:text-indigo-300">
                         {collab.employeeName.charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm font-bold text-neutral-100">
+                          <h3 className="text-sm font-bold text-slate-900 dark:text-neutral-100">
                             {collab.employeeName}
                           </h3>
                           {collab.position && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700 font-medium">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-neutral-800 text-slate-600 dark:text-neutral-300 border border-slate-200 dark:border-neutral-700 font-medium">
                               {collab.position}
                             </span>
                           )}
                         </div>
-                        <span className="text-xs text-neutral-400">
+                        <span className="text-xs text-slate-500 dark:text-neutral-400">
                           {collab.goals.length} objectif(s) fixés pour {monthName} {currentYearNum}
                         </span>
                       </div>
@@ -325,10 +325,10 @@ export function MonthlyGoalsWidget({
                       <span
                         className={`text-xs px-2.5 py-1 rounded-xl font-bold border flex items-center gap-1.5 ${
                           isAllCompleted
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
                             : collab.completedCount > 0
-                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                            : "bg-neutral-800 text-neutral-300 border-neutral-700"
+                            ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30"
+                            : "bg-slate-100 text-slate-700 border-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700"
                         }`}
                       >
                         <span>🎯</span>
@@ -338,7 +338,7 @@ export function MonthlyGoalsWidget({
                       <button
                         type="button"
                         onClick={() => setSelectedCollaborator(collab.employeeName)}
-                        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold p-1 hover:underline cursor-pointer"
+                        className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-semibold p-1 hover:underline cursor-pointer"
                         title="Voir en détail"
                       >
                         Détail →
@@ -357,27 +357,27 @@ export function MonthlyGoalsWidget({
                       return (
                         <div
                           key={goal.id}
-                          className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1.5"
+                          className="p-3 rounded-xl bg-slate-50/70 dark:bg-neutral-950/60 border border-slate-200/80 dark:border-neutral-800/80 space-y-1.5"
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {getMetricIcon(goal.metric)}
-                              <span className="text-xs font-bold text-neutral-200">
+                              <span className="text-xs font-bold text-slate-800 dark:text-neutral-200">
                                 {goal.metricLabel}
                               </span>
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-mono font-bold text-neutral-100">
+                              <span className="text-xs font-mono font-bold text-slate-900 dark:text-neutral-100">
                                 {isCA ? formatCurrency(goal.achievedValue) : goal.achievedValue} / {isCA ? formatCurrency(goal.targetValue) : goal.targetValue} {goal.unit}
                               </span>
                               <span
                                 className={`text-xs font-mono font-black ${
                                   isReached
-                                    ? "text-emerald-400"
+                                    ? "text-emerald-600 dark:text-emerald-400"
                                     : progressPercent >= 70
-                                    ? "text-amber-400"
-                                    : "text-neutral-400"
+                                    ? "text-amber-600 dark:text-amber-400"
+                                    : "text-slate-600 dark:text-neutral-400"
                                 }`}
                               >
                                 ({progressPercent}%)
@@ -386,7 +386,7 @@ export function MonthlyGoalsWidget({
                           </div>
 
                           {/* Progress bar */}
-                          <div className="w-full bg-neutral-900 h-2 rounded-full overflow-hidden border border-neutral-800">
+                          <div className="w-full bg-slate-200/70 dark:bg-neutral-900 h-2 rounded-full overflow-hidden border border-slate-200 dark:border-neutral-800">
                             <div
                               className={`h-full rounded-full transition-all ${
                                 isReached
@@ -405,12 +405,12 @@ export function MonthlyGoalsWidget({
                 </div>
 
                 {/* Footer of card */}
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-400">
-                  <span>Moyenne d'avancement : <strong className="text-neutral-200">{collab.averageProgress}%</strong></span>
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 flex items-center justify-between text-[11px] text-slate-500 dark:text-neutral-400">
+                  <span>Moyenne d'avancement : <strong className="text-slate-800 dark:text-neutral-200">{collab.averageProgress}%</strong></span>
                   <button
                     type="button"
                     onClick={() => setSelectedCollaborator(collab.employeeName)}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-medium hover:underline cursor-pointer"
+                    className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 font-semibold hover:underline cursor-pointer"
                   >
                     Filtrer sur ce collaborateur
                   </button>
@@ -433,16 +433,16 @@ export function MonthlyGoalsWidget({
 
             const isCA = goal.metric === "CA" || goal.metric === "CA_DA";
 
+            const cardBorder = isReached
+              ? "bg-white dark:bg-neutral-900 border-emerald-300 dark:border-emerald-500/40 ring-1 ring-emerald-300/40"
+              : progressPercent >= 70
+              ? "bg-white dark:bg-neutral-900 border-amber-300 dark:border-amber-500/40 ring-1 ring-amber-300/40"
+              : "bg-white dark:bg-neutral-900 border-slate-200 dark:border-neutral-800 hover:border-slate-300";
+
             return (
               <div
                 key={goal.id}
-                className={`relative overflow-hidden rounded-2xl p-5 border transition-all shadow-sm ${
-                  isReached
-                    ? "bg-gradient-to-b from-emerald-950/20 via-neutral-900/80 to-neutral-900/90 border-emerald-500/30 hover:border-emerald-500/50"
-                    : progressPercent >= 70
-                    ? "bg-gradient-to-b from-amber-950/15 via-neutral-900/80 to-neutral-900/90 border-amber-500/30 hover:border-amber-500/50"
-                    : "bg-neutral-900/80 border-neutral-800 hover:border-neutral-700"
-                }`}
+                className={`relative overflow-hidden rounded-2xl p-5 border transition-all shadow-xs ${cardBorder}`}
               >
                 {/* Card Header */}
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -456,14 +456,14 @@ export function MonthlyGoalsWidget({
                     </div>
                     <div>
                       {showEmployeeBadge && goal.employeeName && (
-                        <span className="text-[11px] font-bold text-indigo-400 mb-0.5 flex items-center gap-1">
+                        <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mb-0.5 flex items-center gap-1">
                           <span>👤</span> {goal.employeeName}
                         </span>
                       )}
-                      <h3 className="text-sm font-bold text-neutral-100">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-neutral-100">
                         {goal.metricLabel}
                       </h3>
-                      <span className="text-[11px] text-neutral-400 capitalize">
+                      <span className="text-[11px] text-slate-500 dark:text-neutral-400 capitalize">
                         {goal.unit}
                       </span>
                     </div>
@@ -472,23 +472,23 @@ export function MonthlyGoalsWidget({
                   {/* Status Badge */}
                   <div>
                     {isOverachieved ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
-                        <Flame className="w-3 h-3 text-emerald-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40">
+                        <Flame className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                         Dépassement 🚀
                       </span>
                     ) : isReached ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                         Atteint 🎯
                       </span>
                     ) : progressPercent >= 70 ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                        <Flame className="w-3 h-3 text-amber-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
+                        <Flame className="w-3 h-3 text-amber-600 dark:text-amber-400" />
                         En très bonne voie 🔥
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
-                        <Clock className="w-3 h-3 text-neutral-400" />
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 dark:bg-neutral-800 dark:text-neutral-300 dark:border-neutral-700">
+                        <Clock className="w-3 h-3 text-slate-500 dark:text-neutral-400" />
                         En cours ⏳
                       </span>
                     )}
@@ -502,19 +502,19 @@ export function MonthlyGoalsWidget({
                       <span
                         className={`text-2xl font-black font-mono tracking-tight ${
                           isReached
-                            ? "text-emerald-400"
+                            ? "text-emerald-600 dark:text-emerald-400"
                             : progressPercent >= 70
-                            ? "text-amber-400"
-                            : "text-neutral-100"
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-slate-900 dark:text-neutral-100"
                         }`}
                       >
                         {isCA ? formatCurrency(goal.achievedValue) : goal.achievedValue}
                       </span>
-                      <span className="text-xs text-neutral-500 font-mono">
+                      <span className="text-xs text-slate-500 dark:text-neutral-500 font-mono">
                         / {isCA ? formatCurrency(goal.targetValue) : goal.targetValue} {goal.unit}
                       </span>
                     </div>
-                    <span className="text-[11px] text-neutral-400 font-medium">
+                    <span className="text-[11px] text-slate-500 dark:text-neutral-400 font-medium">
                       Réalisé ce mois
                     </span>
                   </div>
@@ -523,10 +523,10 @@ export function MonthlyGoalsWidget({
                     <span
                       className={`text-xl font-black font-mono ${
                         isReached
-                          ? "text-emerald-400"
+                          ? "text-emerald-600 dark:text-emerald-400"
                           : progressPercent >= 70
-                          ? "text-amber-400"
-                          : "text-neutral-200"
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-slate-800 dark:text-neutral-200"
                       }`}
                     >
                       {progressPercent}%
@@ -535,35 +535,35 @@ export function MonthlyGoalsWidget({
                 </div>
 
                 {/* Progress Bar */}
-                <div className="w-full bg-neutral-950 h-2.5 rounded-full overflow-hidden border border-neutral-800/80 p-0.5">
+                <div className="w-full bg-slate-100 dark:bg-neutral-950 h-2.5 rounded-full overflow-hidden border border-slate-200 dark:border-neutral-800/80 p-0.5">
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       isReached
-                        ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-xs"
                         : progressPercent >= 70
-                        ? "bg-gradient-to-r from-amber-500 to-yellow-400"
-                        : "bg-gradient-to-r from-indigo-600 to-blue-500"
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-xs"
+                        : "bg-gradient-to-r from-indigo-600 to-blue-500 shadow-xs"
                     }`}
                     style={{ width: `${barWidth}%` }}
                   />
                 </div>
 
                 {/* Motivational Footer */}
-                <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px]">
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-neutral-800/60 flex items-center justify-between text-[11px]">
                   {isReached ? (
-                    <span className="text-emerald-400 font-medium flex items-center gap-1">
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                       {isOverachieved
                         ? `Objectif validé ! +${surplus} ${goal.unit} au-delà de la cible.`
                         : "Bravo ! Objectif mensuel parfaitement validé."}
                     </span>
                   ) : (
-                    <span className="text-neutral-400 font-medium">
-                      Plus que <strong className="text-neutral-200">{remaining} {goal.unit}</strong> pour valider la cible.
+                    <span className="text-slate-500 dark:text-neutral-400 font-medium">
+                      Plus que <strong className="text-slate-800 dark:text-neutral-200 font-bold">{remaining} {goal.unit}</strong> pour valider la cible.
                     </span>
                   )}
 
-                  <span className="text-[10px] text-neutral-500 font-mono">
+                  <span className="text-[10px] text-slate-400 dark:text-neutral-500 font-mono font-medium">
                     {goal.metric}
                   </span>
                 </div>

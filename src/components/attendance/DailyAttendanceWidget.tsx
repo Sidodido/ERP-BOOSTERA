@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   Clock,
   CheckCircle2,
@@ -21,6 +22,17 @@ import {
   startBreakAction,
   endBreakAction,
 } from "@/actions/attendance";
+
+function broadcastAttendanceSync() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("crm:attendance-updated"));
+    try {
+      const bc = new BroadcastChannel("crm_attendance_sync");
+      bc.postMessage({ timestamp: Date.now() });
+      bc.close();
+    } catch {}
+  }
+}
 
 interface AttendanceState {
   authenticated: boolean;
@@ -58,29 +70,42 @@ interface AttendanceState {
 }
 
 export function DailyAttendanceWidget() {
+  const router = useRouter();
   const [data, setData] = useState<AttendanceState | null>(null);
   const [currentTime, setCurrentTime] = useState<string>("");
   const [currentDateStr, setCurrentDateStr] = useState<string>("");
-  const [showHistory, setShowHistory] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isPending, startTransition] = useTransition();
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
 
-  // Load attendance data
   const loadAttendance = async () => {
     try {
       const res = await getMyAttendanceAction();
-      setData(res);
+      if (res && res.authenticated) {
+        setData(res as AttendanceState);
+      }
     } catch {
       // Ignored
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     loadAttendance();
-  }, []);
 
-  // Real-time digital clock
-  useEffect(() => {
+    const handleSync = () => loadAttendance();
+    window.addEventListener("crm:attendance-updated", handleSync);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("crm_attendance_sync");
+      bc.onmessage = handleSync;
+    } catch {}
+
+    const intervalAtt = setInterval(loadAttendance, 30000);
+
     const updateTime = () => {
       const now = new Date();
       setCurrentTime(
@@ -101,7 +126,12 @@ export function DailyAttendanceWidget() {
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(intervalAtt);
+      window.removeEventListener("crm:attendance-updated", handleSync);
+      if (bc) bc.close();
+    };
   }, []);
 
   const handleClockIn = () => {
@@ -110,6 +140,8 @@ export function DailyAttendanceWidget() {
         const res = await clockInAction();
         setFeedbackMessage(res.message);
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
         setTimeout(() => setFeedbackMessage(null), 5000);
       } catch (err: any) {
         alert(err.message || "Erreur de pointage");
@@ -123,6 +155,8 @@ export function DailyAttendanceWidget() {
         const res = await clockOutAction();
         setFeedbackMessage(res.message);
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
         setTimeout(() => setFeedbackMessage(null), 5000);
       } catch (err: any) {
         alert(err.message || "Erreur de pointage");
@@ -139,6 +173,8 @@ export function DailyAttendanceWidget() {
         const res = await startBreakAction(reason);
         setFeedbackMessage(res.message);
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
         setTimeout(() => setFeedbackMessage(null), 5000);
       } catch (err: any) {
         alert(err.message || "Erreur lors du démarrage de la pause");
@@ -152,6 +188,8 @@ export function DailyAttendanceWidget() {
         const res = await endBreakAction();
         setFeedbackMessage(res.message);
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
         setTimeout(() => setFeedbackMessage(null), 5000);
       } catch (err: any) {
         alert(err.message || "Erreur lors de la fin de pause");

@@ -49,7 +49,24 @@ interface Props {
 
 export function FollowUpsClient({ initialFollowUps }: Props) {
   const [followUps, setFollowUps] = useState<FollowUpItem[]>(initialFollowUps);
-  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("list");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_followups_view_mode");
+      if (saved === "cards" || saved === "list") {
+        setViewMode(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleSetViewMode = (mode: "cards" | "list") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("crm_followups_view_mode", mode);
+    } catch {}
+  };
+
   const [selectedFilter, setSelectedFilter] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -297,11 +314,23 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
           </p>
         </div>
 
-        {/* View Mode Toggle: Cartes / Liste */}
+        {/* View Mode Toggle: Liste / Cartes */}
         <div className="flex items-center gap-2 self-start md:self-auto">
           <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
-              onClick={() => setViewMode("cards")}
+              onClick={() => handleSetViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-lg transition-colors cursor-pointer ${
+                viewMode === "list"
+                  ? "bg-neutral-800 text-white shadow-xs"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+              title="Affichage en tableau / liste (Défaut)"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Vue Liste</span>
+            </button>
+            <button
+              onClick={() => handleSetViewMode("cards")}
               className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-lg transition-colors cursor-pointer ${
                 viewMode === "cards"
                   ? "bg-neutral-800 text-white shadow-xs"
@@ -311,18 +340,6 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               <span>Vue Cartes</span>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-lg transition-colors cursor-pointer ${
-                viewMode === "list"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-              title="Affichage en tableau / liste"
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>Vue Liste</span>
             </button>
           </div>
         </div>

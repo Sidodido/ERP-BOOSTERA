@@ -4,6 +4,9 @@
  * "Cycle du 10 au 10 : la période de calcul prend en compte exactement du 10 du mois au 10 du mois suivant"
  */
 
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
 export interface PayrollCycleInfo {
   month: number;
   year: number;
@@ -143,4 +146,171 @@ export function getAvailablePayrollCycles(referenceDate: Date = new Date(), past
   }
 
   return cycles;
+}
+
+/**
+ * Calcule et synchronise automatiquement les salaires et retenues pour le cycle donné.
+ * Règle RH & Droit du travail :
+ * - Salaire journalier de référence = Salaire de base / 30 jours
+ * - Toute absence non justifiée (non pointée / ABSENT) = Retenue automatique de 1 jour de salaire
+ * - Congé Maladie (SICK) ou Permission non rémunérée = Retenue automatique de 1 jour par jour de congé
+ * - Congé Annuel (ANNUAL) & Événement Familial (SPECIAL) = Chômé et payé à 100% (0 DA retenu)
+ * - Commissions commerciales du cycle (du 10 au 10) = Ajoutées automatiquement
+ */
+export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: number) {
+  const now = new Date();
+  const defaultCycle = getPayrollCycleForDate(now);
+  const month = monthParam || defaultCycle.month;
+  const year = yearParam || defaultCycle.year;
+
+  const cycleInfo = getPayrollCycleDates(month, year);
+  if (!cycleInfo.isUnlocked) {
+    return { success: false, reason: "Cycle not unlocked yet", count: 0 };
+  }
+
+  const { startDate, endDate } = cycleInfo;
+
+  // 1. Tous les collaborateurs actifs
+  const employees = await prisma.employee.findMany({
+    where: { isActive: true },
+  });
+
+  let syncedCount = 0;
+
+  for (const emp of employees) {
+    // A. Commissions validées dans ce cycle (du 10 au 10)
+    const empCommissions = await prisma.commission.aggregate({
+      where: {
+        employeeId: emp.id,
+        earnedDate: { gte: startDate, lt: endDate },
+      },
+      _sum: { amount: true },
+    });
+
+    const commAmount = Number(empCommissions._sum.amount || 0);
+    const base = Number(emp.baseSalary);
+
+    // Taux journalier standard (Base mensuelle / 30 jours)
+    const workingDaysDivisor = 30;
+    const dailyRate = base > 0 ? base / workingDaysDivisor : 0;
+
+    // B. Congés approuvés dans ce cycle
+    const approvedLeaves = await prisma.leaveRequest.findMany({
+      where: {
+        employeeId: emp.id,
+        status: { in: ["CONFIRMED_HR", "APPROVED_MANAGER"] },
+        startDate: { lt: endDate },
+        endDate: { gte: startDate },
+      },
+    });
+
+    let sickDays = 0;
+    let annualDays = 0;
+    let permissionDays = 0;
+
+    for (const leave of approvedLeaves) {
+      const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
+      const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime() - 1));
+
+      // Compte des jours ouvrables dans le cycle (en excluant le vendredi qui est chômé)
+      let count = 0;
+      const cur = new Date(leaveStart.getFullYear(), leaveStart.getMonth(), leaveStart.getDate());
+      const last = new Date(leaveEnd.getFullYear(), leaveEnd.getMonth(), leaveEnd.getDate());
+
+      while (cur <= last) {
+        if (cur.getDay() !== 5) { // 5 = Vendredi (repos hebdomadaire)
+          count++;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      const effectiveDays = Math.min(count, leave.daysCount);
+
+      if (leave.type === "SICK") {
+        sickDays += effectiveDays;
+      } else if (leave.type === "ANNUAL") {
+        annualDays += effectiveDays;
+      } else if (leave.type === "PERMISSION") {
+        permissionDays += effectiveDays;
+      }
+    }
+
+    // C. Pointages absents non justifiés (status === "ABSENT") dans ce cycle
+    const cycleStartDate = emp.hireDate
+      ? new Date(Math.max(new Date(emp.hireDate).getTime(), startDate.getTime()))
+      : startDate;
+
+    const absentAttendances = await prisma.attendance.findMany({
+      where: {
+        employeeId: emp.id,
+        date: { gte: cycleStartDate, lt: endDate },
+        status: "ABSENT",
+      },
+      select: { date: true },
+    });
+
+    // Évite le double comptage si une fiche d'absence coïncide avec un congé approuvé
+    let unexcusedAbsences = 0;
+    for (const att of absentAttendances) {
+      const attTime = new Date(att.date).getTime();
+      const hasOverlap = approvedLeaves.some((l) => {
+        const lStart = new Date(l.startDate).getTime();
+        const lEnd = new Date(l.endDate).getTime();
+        return attTime >= lStart && attTime <= lEnd;
+      });
+      if (!hasOverlap) {
+        unexcusedAbsences++;
+      }
+    }
+
+    // D. Calcul des déductions automatiques
+    const deductibleDays = sickDays + permissionDays + unexcusedAbsences;
+    const deductions = Math.min(base, Math.round(deductibleDays * dailyRate));
+    const net = Math.max(0, Math.round(base + commAmount - deductions));
+
+    // E. Upsert dans la table SalaryPayment
+    const existingPayment = await prisma.salaryPayment.findUnique({
+      where: {
+        employeeId_month_year: {
+          employeeId: emp.id,
+          month,
+          year,
+        },
+      },
+    });
+
+    await prisma.salaryPayment.upsert({
+      where: {
+        employeeId_month_year: {
+          employeeId: emp.id,
+          month,
+          year,
+        },
+      },
+      create: {
+        employeeId: emp.id,
+        month,
+        year,
+        baseSalary: new Prisma.Decimal(emp.baseSalary),
+        commissions: new Prisma.Decimal(commAmount),
+        primes: new Prisma.Decimal(0),
+        bonuses: new Prisma.Decimal(0),
+        deductions: new Prisma.Decimal(deductions),
+        netSalary: new Prisma.Decimal(net),
+        status: "DRAFT",
+      },
+      update: {
+        baseSalary: new Prisma.Decimal(emp.baseSalary),
+        commissions: new Prisma.Decimal(commAmount),
+        deductions: new Prisma.Decimal(deductions),
+        netSalary: new Prisma.Decimal(net),
+        // Conserver le statut s'il a été préalablement marqué PAID
+        status: existingPayment?.status || "DRAFT",
+      },
+    });
+
+    syncedCount++;
+  }
+
+  return { success: true, count: syncedCount };
 }

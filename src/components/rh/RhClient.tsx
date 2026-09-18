@@ -15,20 +15,24 @@ import {
   FileSpreadsheet,
   X,
   Edit2,
+  Trash2,
   Briefcase,
   ChevronRight,
   Lock,
+  RefreshCw,
 } from "lucide-react";
 import {
   createEmployeeAction,
   updateEmployeeAction,
+  deleteEmployeeAction,
   recordAttendanceAction,
   submitLeaveRequestAction,
   updateLeaveStatusAction,
   generatePayrollAction,
   markSalaryPaidAction,
+  getTodayAttendancesAction,
 } from "@/actions/rh";
-import { DepartmentType, AttendanceStatus, LeaveType, LeaveStatus } from "@prisma/client";
+import { DepartmentType, AttendanceStatus, LeaveType, LeaveStatus, Role } from "@prisma/client";
 
 interface EmployeeItem {
   id: string;
@@ -80,6 +84,8 @@ interface SalaryItem {
   deductions: number;
   netSalary: number;
   status: string;
+  dailyRate?: number;
+  deductedDays?: number;
   paidAt?: Date | string | null;
   employee: { id: string; firstName: string; lastName: string; position: string; baseSalary: number };
 }
@@ -139,14 +145,91 @@ interface RhClientProps {
 
 const DEPARTMENTS: { key: DepartmentType; label: string }[] = [
   { key: "COMMERCIAL", label: "Commercial & Ventes" },
-  { key: "VIDEO", label: "Pôle Vidéo & Tournage" },
-  { key: "DESIGN", label: "Pôle Design UI/UX" },
   { key: "DEVELOPMENT", label: "Pôle Développement Web" },
-  { key: "MARKETING", label: "Pôle Marketing & Media Buying" },
   { key: "ADMINISTRATION", label: "Direction & Administration" },
   { key: "FINANCE", label: "Finance & Comptabilité" },
   { key: "HR", label: "Ressources Humaines" },
 ];
+
+export const AVAILABLE_ROLES = [
+  {
+    key: "COMMERCIAL",
+    role: "SALES_REP" as Role,
+    position: "Commercial B2B",
+    label: "Commercial B2B / Ventes",
+    department: "COMMERCIAL" as DepartmentType,
+  },
+  {
+    key: "DIRECTEUR_COMMERCIAL",
+    role: "SALES_DIRECTOR" as Role,
+    position: "Directeur Commercial",
+    label: "Directeur Commercial",
+    department: "COMMERCIAL" as DepartmentType,
+  },
+  {
+    key: "DEVELOPPEUR",
+    role: "DEVELOPER" as Role,
+    position: "Développeur Web & Tech",
+    label: "Développeur Web & Tech",
+    department: "DEVELOPMENT" as DepartmentType,
+  },
+  {
+    key: "TECH_LEAD",
+    role: "TECH_LEAD" as Role,
+    position: "Tech Lead / Responsable Technique",
+    label: "Tech Lead / Responsable Technique",
+    department: "DEVELOPMENT" as DepartmentType,
+  },
+  {
+    key: "TECHNICIEN",
+    role: "DEVELOPER" as Role,
+    position: "TECHNICIEN",
+    label: "Technicien / Support",
+    department: "DEVELOPMENT" as DepartmentType,
+  },
+  {
+    key: "DESIGNER",
+    role: "DESIGNER" as Role,
+    position: "Designer Graphique / UI-UX",
+    label: "Designer Graphique / UI-UX",
+    department: "DEVELOPMENT" as DepartmentType,
+  },
+  {
+    key: "VIDEO_EDITOR",
+    role: "VIDEO_EDITOR" as Role,
+    position: "Vidéaste / Monteur Vidéo",
+    label: "Vidéaste / Monteur Vidéo",
+    department: "DEVELOPMENT" as DepartmentType,
+  },
+  {
+    key: "HR",
+    role: "HR" as Role,
+    position: "Responsable RH",
+    label: "Responsable RH",
+    department: "ADMINISTRATION" as DepartmentType,
+  },
+  {
+    key: "ACCOUNTANT",
+    role: "ACCOUNTANT" as Role,
+    position: "Comptable / Finance",
+    label: "Comptable / Finance",
+    department: "ADMINISTRATION" as DepartmentType,
+  },
+  {
+    key: "DIRECTEUR_GENERAL",
+    role: "ADMIN" as Role,
+    position: "Directeur Général",
+    label: "Directeur Général",
+    department: "ADMINISTRATION" as DepartmentType,
+  },
+  {
+    key: "CUSTOM",
+    role: "SALES_REP" as Role,
+    position: "",
+    label: "✏️ Autre rôle personnalisé...",
+    department: "COMMERCIAL" as DepartmentType,
+  },
+] as const;
 
 export function RhClient({
   month,
@@ -174,6 +257,70 @@ export function RhClient({
     getInitialTab()
   );
   const [isPending, startTransition] = useTransition();
+
+  // État local réactif pour la synchronisation automatique en temps réel des pointages
+  const [attendancesList, setAttendancesList] = useState<AttendanceItem[]>(attendances);
+  const [kpisState, setKpisState] = useState(kpis);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    setAttendancesList(attendances);
+    setKpisState(kpis);
+  }, [attendances, kpis]);
+
+  const syncAttendances = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await getTodayAttendancesAction();
+      if (res.success) {
+        setAttendancesList(res.attendances as any);
+        setKpisState((prev) => ({
+          ...prev,
+          presentToday: res.kpis.presentToday,
+          absentToday: res.kpis.absentToday,
+        }));
+      }
+    } catch (err) {
+      console.error("Erreur auto-sync pointages:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleSync = () => {
+      syncAttendances();
+    };
+
+    window.addEventListener("crm:attendance-updated", handleSync);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("crm_attendance_sync");
+      bc.onmessage = handleSync;
+    } catch {}
+
+    // Polling automatique dynamique : toutes les 4s sur l'onglet Pointage Quotidien, 15s sinon
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        syncAttendances();
+      }
+    }, activeTab === "ATTENDANCE" ? 4000 : 15000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        syncAttendances();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("crm:attendance-updated", handleSync);
+      if (bc) bc.close();
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [activeTab]);
 
   // Conserver l'onglet actif lors des actions et rafraîchissements
   useEffect(() => {
@@ -206,9 +353,23 @@ export function RhClient({
   const [newLastName, setNewLastName] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [selectedRoleKey, setSelectedRoleKey] = useState<string>("COMMERCIAL");
   const [newPosition, setNewPosition] = useState("Commercial B2B");
   const [newDept, setNewDept] = useState<DepartmentType>("COMMERCIAL");
+  const [newUserRole, setNewUserRole] = useState<Role>("SALES_REP");
   const [newSalary, setNewSalary] = useState<number>(45000);
+
+  const handleSelectRole = (key: string) => {
+    setSelectedRoleKey(key);
+    const found = AVAILABLE_ROLES.find((r) => r.key === key);
+    if (found && key !== "CUSTOM") {
+      setNewPosition(found.position);
+      setNewDept(found.department);
+      setNewUserRole(found.role);
+    } else if (key === "CUSTOM") {
+      setNewPosition("");
+    }
+  };
 
   // New Leave Form
   const [leaveEmpId, setLeaveEmpId] = useState("");
@@ -236,11 +397,44 @@ export function RhClient({
           position: newPosition,
           department: newDept,
           baseSalary: newSalary,
+          userRole: newUserRole,
         });
         setShowAddEmpModal(false);
+        // Reset form
+        setNewFirstName("");
+        setNewLastName("");
+        setNewPhone("");
+        setNewEmail("");
+        setNewUserId("");
+        setSelectedRoleKey("COMMERCIAL");
+        setNewPosition("Commercial B2B");
+        setNewDept("COMMERCIAL");
+        setNewUserRole("SALES_REP");
+        setNewSalary(45000);
         router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur lors de la création");
+      }
+    });
+  };
+
+  const handleDeleteEmployee = async (emp: EmployeeItem) => {
+    const confirmed = window.confirm(
+      `Êtes-vous sûr de vouloir supprimer définitivement le collaborateur "${emp.firstName} ${emp.lastName}" (${emp.position}) ?\n\nToutes ses données associées (pointages, congés, salaires, commissions) seront également supprimées.`
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      try {
+        const res = await deleteEmployeeAction(emp.id);
+        if (res.success) {
+          if (editingEmployee?.id === emp.id) {
+            setEditingEmployee(null);
+          }
+          router.refresh();
+        }
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la suppression du collaborateur.");
       }
     });
   };
@@ -272,6 +466,15 @@ export function RhClient({
     startTransition(async () => {
       try {
         await recordAttendanceAction({ employeeId, status });
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("crm:attendance-updated"));
+          try {
+            const bc = new BroadcastChannel("crm_attendance_sync");
+            bc.postMessage({ timestamp: Date.now() });
+            bc.close();
+          } catch {}
+        }
+        await syncAttendances();
         router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur de pointage");
@@ -409,11 +612,11 @@ export function RhClient({
             </span>
           </div>
           <div className="text-2xl font-black text-emerald-400 mt-2 font-mono">
-            {kpis.presentToday} / {kpis.activeEmployees}
+            {kpisState.presentToday} / {kpisState.activeEmployees}
           </div>
           <p className="text-xs text-neutral-400 mt-1">
-            {kpis.activeEmployees > 0
-              ? Math.round((kpis.presentToday / kpis.activeEmployees) * 100)
+            {kpisState.activeEmployees > 0
+              ? Math.round((kpisState.presentToday / kpisState.activeEmployees) * 100)
               : 0}% de présence au poste
           </p>
         </div>
@@ -520,7 +723,7 @@ export function RhClient({
                     </td>
                     <td className="py-3 px-4 text-neutral-300">{emp.position}</td>
                     <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950/50 text-indigo-400 border border-indigo-800/30">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800/30">
                         {DEPARTMENTS.find((d) => d.key === emp.department)?.label ||
                           emp.department}
                       </span>
@@ -536,21 +739,30 @@ export function RhClient({
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
                           emp.isActive
-                            ? "bg-emerald-950/50 text-emerald-400 border border-emerald-800/30"
-                            : "bg-neutral-800 text-neutral-400"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
+                            : "bg-neutral-100 text-neutral-600 border border-neutral-200 dark:bg-neutral-800 dark:text-neutral-400"
                         }`}
                       >
                         {emp.isActive ? "Actif" : "Inactif"}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setEditingEmployee(emp)}
-                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
-                        title="Modifier"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setEditingEmployee(emp)}
+                          className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:hover:text-white dark:border-transparent transition"
+                          title="Modifier"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEmployee(emp)}
+                          className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 dark:border-rose-800/40 transition"
+                          title="Supprimer ce collaborateur"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -563,16 +775,29 @@ export function RhClient({
       {/* TAB 2: DAILY ATTENDANCE */}
       {activeTab === "ATTENDANCE" && (
         <div className="space-y-4">
-          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between">
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-indigo-400" />
               <span className="text-sm font-semibold text-neutral-200">
                 Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
               </span>
             </div>
-            <span className="text-xs text-neutral-400">
-              Pointage direct par collaborateur
-            </span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800/40 dark:text-emerald-400 text-[11px] font-medium">
+                <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? "animate-ping" : "animate-pulse"}`} />
+                <span>Synchronisé en direct</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => syncAttendances()}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:border-transparent text-xs font-medium transition cursor-pointer disabled:opacity-50"
+                title="Actualiser maintenant"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-indigo-400" : ""}`} />
+                <span>Actualiser</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
@@ -585,14 +810,13 @@ export function RhClient({
                     <th className="py-3.5 px-4">Statut Aujourd'hui</th>
                     <th className="py-3.5 px-4">Heure d'Entrée</th>
                     <th className="py-3.5 px-4">Heure de Sortie</th>
-                    <th className="py-3.5 px-4 text-right">Pointer en 1 Clic</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800/60">
                   {employees
                     .filter((e) => e.isActive)
                     .map((emp) => {
-                      const att = attendances.find((a) => a.employeeId === emp.id);
+                      const att = attendancesList.find((a) => a.employeeId === emp.id);
                       const status = att ? att.status : "ABSENT";
                       return (
                         <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
@@ -606,12 +830,12 @@ export function RhClient({
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                                 status === "PRESENT"
-                                  ? "bg-emerald-950/50 text-emerald-400 border border-emerald-800/30"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
                                   : status === "LATE"
-                                  ? "bg-amber-950/50 text-amber-400 border border-amber-800/30"
+                                  ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
                                   : status === "ON_LEAVE"
-                                  ? "bg-blue-950/50 text-blue-400 border border-blue-800/30"
-                                  : "bg-rose-950/40 text-rose-400 border border-rose-800/30"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                  : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
                               }`}
                             >
                               {status === "PRESENT"
@@ -620,7 +844,7 @@ export function RhClient({
                                 ? "En retard"
                                 : status === "ON_LEAVE"
                                 ? "En congé"
-                                : "Absent"}
+                                : "Absent (-1j paye)"}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-mono text-xs text-neutral-400">
@@ -638,28 +862,6 @@ export function RhClient({
                                   minute: "2-digit",
                                 })
                               : "—"}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleQuickAttendance(emp.id, "PRESENT")}
-                                className="px-2.5 py-1 rounded bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 text-xs font-semibold border border-emerald-800/40 transition"
-                              >
-                                Présent
-                              </button>
-                              <button
-                                onClick={() => handleQuickAttendance(emp.id, "LATE")}
-                                className="px-2.5 py-1 rounded bg-amber-950/50 hover:bg-amber-900 text-amber-400 text-xs font-semibold border border-amber-800/40 transition"
-                              >
-                                Retard
-                              </button>
-                              <button
-                                onClick={() => handleQuickAttendance(emp.id, "ABSENT")}
-                                className="px-2.5 py-1 rounded bg-rose-950/40 hover:bg-rose-900 text-rose-400 text-xs font-semibold border border-rose-800/30 transition"
-                              >
-                                Absent
-                              </button>
-                            </div>
                           </td>
                         </tr>
                       );
@@ -748,10 +950,10 @@ export function RhClient({
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
                             l.status === "CONFIRMED_HR" || l.status === "APPROVED_MANAGER"
-                              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800/40"
                               : l.status === "REJECTED"
-                              ? "bg-rose-950/60 text-rose-400 border border-rose-800/40"
-                              : "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+                              ? "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800/40"
+                              : "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-800/40"
                           }`}
                         >
                           {l.status === "CONFIRMED_HR" || l.status === "APPROVED_MANAGER"
@@ -768,7 +970,7 @@ export function RhClient({
                               onClick={() =>
                                 handleUpdateLeaveStatus(l.id, LeaveStatus.CONFIRMED_HR)
                               }
-                              className="p-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40 transition"
+                              className="p-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 dark:text-emerald-400 dark:border-emerald-800/40 transition"
                               title="Approuver"
                             >
                               <CheckCircle2 className="w-4 h-4" />
@@ -777,7 +979,7 @@ export function RhClient({
                               onClick={() =>
                                 handleUpdateLeaveStatus(l.id, LeaveStatus.REJECTED)
                               }
-                              className="p-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-800/40 transition"
+                              className="p-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950 dark:hover:bg-rose-900 dark:text-rose-400 dark:border-rose-800/40 transition"
                               title="Refuser"
                             >
                               <XCircle className="w-4 h-4" />
@@ -834,6 +1036,10 @@ export function RhClient({
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/40 text-[11px] font-medium">
                   <span>⚠️ Retenues maladie / absences :</span>
                   <strong className="text-amber-200">Prix exact de la journée (Base / 30j)</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/60 text-rose-300 border border-rose-800/40 text-[11px] font-medium">
+                  <span>⚡ Déduction Automatique :</span>
+                  <strong className="text-rose-200">-1 jour (Base ÷ 30j) par absence</strong>
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-950/60 text-teal-300 border border-teal-800/40 text-[11px] font-medium">
                   <span>🤝 Signature Client :</span>
@@ -907,7 +1113,7 @@ export function RhClient({
                   {salaryPayments.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-neutral-400">
-                        Aucun bulletin calculé pour ce mois. Cliquez sur "Calculer la Paie" pour générer les montants.
+                        Aucun collaborateur trouvé pour ce cycle.
                       </td>
                     </tr>
                   ) : (
@@ -919,17 +1125,33 @@ export function RhClient({
                         <td className="py-3 px-4 text-xs text-neutral-400">
                           {sp.employee.position}
                         </td>
-                        <td className="py-3 px-4 text-right font-mono text-neutral-300">
-                          {sp.baseSalary.toLocaleString("fr-FR")} DA
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex flex-col items-end">
+                            <span className="font-mono text-neutral-300">
+                              {sp.baseSalary.toLocaleString("fr-FR")} DA
+                            </span>
+                            {sp.baseSalary > 0 && (
+                              <span className="text-[10px] text-neutral-500 font-normal">
+                                ~{Math.round(sp.baseSalary / 30).toLocaleString("fr-FR")} DA / j
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-right font-mono text-emerald-400 font-semibold">
                           +{sp.commissions.toLocaleString("fr-FR")} DA
                         </td>
-                        <td className="py-3 px-4 text-right font-mono">
+                        <td className="py-3 px-4 text-right">
                           {sp.deductions > 0 ? (
-                            <span className="font-bold text-rose-400">
-                              -{sp.deductions.toLocaleString("fr-FR")} DA
-                            </span>
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-rose-400 font-mono">
+                                -{sp.deductions.toLocaleString("fr-FR")} DA
+                              </span>
+                              <span className="text-[10px] text-rose-300/80 font-medium">
+                                {sp.deductedDays && sp.deductedDays > 0
+                                  ? `${sp.deductedDays} j. déduit${sp.deductedDays > 1 ? "s" : ""} (-1j/abs)`
+                                  : "Retenue appliquée"}
+                              </span>
+                            </div>
                           ) : (
                             <span className="text-neutral-500 text-xs">
                               0 DA <span className="text-[10px] text-emerald-400 font-semibold">(100% payé)</span>
@@ -943,8 +1165,8 @@ export function RhClient({
                           <span
                             className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${
                               sp.status === "PAID"
-                                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
-                                : "bg-neutral-800 text-neutral-300"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800/40"
+                                : "bg-neutral-100 text-neutral-600 border border-neutral-200 dark:bg-neutral-800 dark:text-neutral-300"
                             }`}
                           >
                             {sp.status === "PAID" ? "Viré / Payé" : "Brouillon"}
@@ -1027,7 +1249,7 @@ export function RhClient({
                           +{Number(comm.amount).toLocaleString("fr-FR")} DA
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800/40">
                             Validé
                           </span>
                         </td>
@@ -1120,16 +1342,19 @@ export function RhClient({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Poste / Rôle *
+                    Rôle / Poste existant *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Commercial, Vidéaste, Monteur..."
-                    value={newPosition}
-                    onChange={(e) => setNewPosition(e.target.value)}
+                  <select
+                    value={selectedRoleKey}
+                    onChange={(e) => handleSelectRole(e.target.value)}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                  />
+                  >
+                    {AVAILABLE_ROLES.map((r) => (
+                      <option key={r.key} value={r.key}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
@@ -1148,6 +1373,22 @@ export function RhClient({
                   </select>
                 </div>
               </div>
+
+              {selectedRoleKey === "CUSTOM" && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Intitulé du poste personnalisé *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Responsable logistique, Social media manager..."
+                    value={newPosition}
+                    onChange={(e) => setNewPosition(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1219,15 +1460,42 @@ export function RhClient({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Poste
+                    Rôle / Poste
                   </label>
+                  <select
+                    value={
+                      AVAILABLE_ROLES.some((r) => r.position === editingEmployee.position)
+                        ? editingEmployee.position
+                        : "CUSTOM"
+                    }
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val !== "CUSTOM") {
+                        const found = AVAILABLE_ROLES.find((r) => r.position === val);
+                        setEditingEmployee({
+                          ...editingEmployee,
+                          position: val,
+                          department: found?.department || editingEmployee.department,
+                        });
+                      }
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500 mb-2"
+                  >
+                    {AVAILABLE_ROLES.filter((r) => r.key !== "CUSTOM").map((r) => (
+                      <option key={r.key} value={r.position}>
+                        {r.label}
+                      </option>
+                    ))}
+                    <option value="CUSTOM">✏️ Autre rôle personnalisé...</option>
+                  </select>
                   <input
                     type="text"
                     value={editingEmployee.position}
                     onChange={(e) =>
                       setEditingEmployee({ ...editingEmployee, position: e.target.value })
                     }
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200"
+                    placeholder="Intitulé exact du poste"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-xs text-neutral-200"
                   />
                 </div>
                 <div>
@@ -1242,7 +1510,7 @@ export function RhClient({
                         department: e.target.value as DepartmentType,
                       })
                     }
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
                   >
                     {DEPARTMENTS.map((d) => (
                       <option key={d.key} value={d.key}>
@@ -1290,21 +1558,32 @@ export function RhClient({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4">
+              <div className="flex items-center justify-between gap-3 pt-4 border-t border-neutral-800">
                 <button
                   type="button"
-                  onClick={() => setEditingEmployee(null)}
-                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
+                  onClick={() => handleDeleteEmployee(editingEmployee)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 dark:border-rose-800/40 text-xs font-semibold transition cursor-pointer"
+                  title="Supprimer ce collaborateur"
                 >
-                  Annuler
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Supprimer</span>
                 </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
-                >
-                  Mettre à jour
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditingEmployee(null)}
+                    className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+                  >
+                    Mettre à jour
+                  </button>
+                </div>
               </div>
             </form>
           </div>

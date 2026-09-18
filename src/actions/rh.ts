@@ -7,6 +7,7 @@ import {
   AttendanceStatus,
   LeaveType,
   LeaveStatus,
+  Role,
   Prisma,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -15,6 +16,7 @@ import {
   getPayrollCycleDates,
   getPayrollCycleForDate,
   getAvailablePayrollCycles,
+  calculateAndSyncPayroll,
 } from "@/lib/payroll";
 
 export async function getRhDataAction(monthParam?: number, yearParam?: number) {
@@ -23,18 +25,19 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
     throw new Error("Accès réservé aux Administrateurs et aux RH");
   }
 
-  // Auto-sync absences
-  try {
-    await syncDailyAbsences({ daysBack: 3, includeToday: true });
-  } catch (err) {
-    console.error("Erreur auto-sync absences RH:", err);
-  }
-
   const now = new Date();
   const defaultCycle = getPayrollCycleForDate(now);
   const currentMonth = monthParam || defaultCycle.month;
   const currentYear = yearParam || defaultCycle.year;
   const cycleInfo = getPayrollCycleDates(currentMonth, currentYear);
+
+  // Auto-sync absences & payroll deductions (-1 jour de salaire par absence non pointée)
+  try {
+    await syncDailyAbsences({ daysBack: 35, includeToday: true });
+    await calculateAndSyncPayroll(currentMonth, currentYear);
+  } catch (err) {
+    console.error("Erreur auto-sync absences et paie RH:", err);
+  }
 
   // 1. Employees Directory
   const employees = await prisma.employee.findMany({
@@ -46,8 +49,8 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
     orderBy: { lastName: "asc" },
   });
 
-  // 2. Today's Attendances
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // 2. Today's Attendances (UTC midnight normalisé pour correspondre au champ @db.Date de PostgreSQL)
+  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
   const attendances = await prisma.attendance.findMany({
     where: {
       date: todayStart,
@@ -141,19 +144,27 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
       breakMinutes: Number(att.breakMinutes),
     })),
     leaveRequests,
-    salaryPayments: salaryPayments.map((sp) => ({
-      ...sp,
-      baseSalary: Number(sp.baseSalary),
-      primes: Number(sp.primes),
-      commissions: Number(sp.commissions),
-      bonuses: Number(sp.bonuses),
-      deductions: Number(sp.deductions),
-      netSalary: Number(sp.netSalary),
-      employee: {
-        ...sp.employee,
-        baseSalary: Number(sp.employee.baseSalary),
-      },
-    })),
+    salaryPayments: salaryPayments.map((sp) => {
+      const base = Number(sp.baseSalary);
+      const dailyRate = base > 0 ? Math.round(base / 30) : 0;
+      const ded = Number(sp.deductions);
+      const deductedDays = dailyRate > 0 ? Math.round(ded / dailyRate) : 0;
+      return {
+        ...sp,
+        baseSalary: base,
+        primes: Number(sp.primes),
+        commissions: Number(sp.commissions),
+        bonuses: Number(sp.bonuses),
+        deductions: ded,
+        netSalary: Number(sp.netSalary),
+        dailyRate,
+        deductedDays,
+        employee: {
+          ...sp.employee,
+          baseSalary: Number(sp.employee.baseSalary),
+        },
+      };
+    }),
     commissions: commissions.map((c) => ({
       ...c,
       amount: Number(c.amount),
@@ -183,6 +194,7 @@ export async function createEmployeeAction(data: {
   position: string;
   department: DepartmentType;
   baseSalary: number;
+  userRole?: Role;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Non authentifié");
@@ -195,21 +207,32 @@ export async function createEmployeeAction(data: {
     });
     if (existing) {
       targetUserId = existing.id;
+      if (data.userRole) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: { role: data.userRole },
+        });
+      }
     } else {
       const generatedEmail =
         data.email?.trim().toLowerCase() ||
-        `${data.firstName.toLowerCase()}.${data.lastName.toLowerCase()}@boostera.dz`;
+        `${data.firstName.toLowerCase().replace(/[^a-z0-9]/g, "")}.${data.lastName.toLowerCase().replace(/[^a-z0-9]/g, "")}@boostera.dz`;
       const newUser = await prisma.user.create({
         data: {
           name: `${data.firstName} ${data.lastName}`,
           email: generatedEmail,
           passwordHash: "$2b$10$dummyhashchangeonlogin",
-          role: "SALES_REP",
+          role: data.userRole || "SALES_REP",
           phone: data.phone || null,
         },
       });
       targetUserId = newUser.id;
     }
+  } else if (data.userRole) {
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: data.userRole },
+    });
   }
 
   const employee = await prisma.employee.create({
@@ -230,6 +253,65 @@ export async function createEmployeeAction(data: {
   revalidatePath("/rh");
   revalidatePath("/equipes");
   return { success: true, employeeId: employee.id };
+}
+
+export async function deleteEmployeeAction(id: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const emp = await prisma.employee.findUnique({
+    where: { id },
+    include: {
+      user: {
+        include: {
+          _count: {
+            select: {
+              assignedProspects: true,
+              managedClients: true,
+              loggedCalls: true,
+              conductedAppointments: true,
+              managedProjects: true,
+              assignedTasks: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!emp) throw new Error("Collaborateur introuvable");
+
+  const userId = emp.userId;
+  const userCounts = emp.user?._count;
+  const hasUserActivity = Boolean(
+    userCounts &&
+      (userCounts.assignedProspects > 0 ||
+        userCounts.managedClients > 0 ||
+        userCounts.loggedCalls > 0 ||
+        userCounts.conductedAppointments > 0 ||
+        userCounts.managedProjects > 0 ||
+        userCounts.assignedTasks > 0)
+  );
+
+  // Supprimer l'employé (Prisma supprime en cascade attendances, leaveRequests, salaryPayments, commissions, goals, reviews)
+  await prisma.employee.delete({
+    where: { id },
+  });
+
+  // Si le compte utilisateur autonome n'a pas d'autres données CRM actives, le nettoyer
+  if (userId && !hasUserActivity) {
+    try {
+      await prisma.user.delete({
+        where: { id: userId },
+      });
+    } catch (e) {
+      console.warn("Compte utilisateur conservé:", e);
+    }
+  }
+
+  revalidatePath("/rh");
+  revalidatePath("/equipes");
+  return { success: true };
 }
 
 export async function updateEmployeeAction(
@@ -277,12 +359,12 @@ export async function recordAttendanceAction(data: {
   if (!user) throw new Error("Non authentifié");
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
   let clockInDate: Date | null = null;
   if (data.clockInTime) {
     const [hours, minutes] = data.clockInTime.split(":").map(Number);
-    clockInDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+    clockInDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes));
   } else if (data.status === "PRESENT" || data.status === "LATE") {
     clockInDate = now;
   }
@@ -298,18 +380,67 @@ export async function recordAttendanceAction(data: {
       employeeId: data.employeeId,
       date: today,
       status: data.status,
-      clockIn: clockInDate,
-      notes: data.notes || null,
+      clockIn: data.status === "ABSENT" ? null : clockInDate,
+      notes: data.notes || (data.status === "ABSENT" ? "Marqué absent par la direction" : null),
     },
     update: {
       status: data.status,
-      clockIn: clockInDate || undefined,
-      notes: data.notes || undefined,
+      clockIn: data.status === "ABSENT" ? null : (clockInDate || undefined),
+      clockOut: data.status === "ABSENT" ? null : undefined,
+      notes: data.notes || (data.status === "ABSENT" ? "Marqué absent par la direction" : undefined),
     },
   });
 
   revalidatePath("/rh");
+  revalidatePath("/dashboard");
   return { success: true, attendanceId: attendance.id };
+}
+
+/**
+ * Récupère en temps réel les pointages du jour pour synchronisation automatique
+ */
+export async function getTodayAttendancesAction() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  // Synchroniser les absences automatiques pour aujourd'hui et les jours récents
+  try {
+    await syncDailyAbsences({ daysBack: 3, includeToday: true });
+  } catch (err) {
+    console.error("Erreur syncDailyAbsences dans getTodayAttendancesAction:", err);
+  }
+
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      date: todayStart,
+    },
+    include: {
+      employee: {
+        select: { id: true, firstName: true, lastName: true, position: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const presentToday = attendances.filter(
+    (a) => (a.status === "PRESENT" || a.status === "LATE") && a.clockIn !== null
+  ).length;
+  const absentToday = attendances.filter((a) => a.status === "ABSENT").length;
+
+  return {
+    success: true,
+    attendances: attendances.map((att) => ({
+      ...att,
+      breakMinutes: Number(att.breakMinutes),
+    })),
+    kpis: {
+      presentToday,
+      absentToday,
+    },
+  };
 }
 
 export async function submitLeaveRequestAction(data: {
@@ -351,6 +482,13 @@ export async function updateLeaveStatusAction(id: string, status: LeaveStatus) {
     },
   });
 
+  try {
+    await syncDailyAbsences({ daysBack: 35, includeToday: true });
+    await calculateAndSyncPayroll();
+  } catch (err) {
+    console.error("Erreur auto-sync après décision de congé:", err);
+  }
+
   revalidatePath("/rh");
   return { success: true };
 }
@@ -366,144 +504,27 @@ export async function generatePayrollAction(month: number, year: number) {
     );
   }
 
-  const employees = await prisma.employee.findMany({
-    where: { isActive: true },
-  });
+  // 1. Synchroniser les absences non pointées
+  await syncDailyAbsences({ daysBack: 35, includeToday: true });
 
-  const { startDate, endDate } = cycleInfo;
-
-  let generatedCount = 0;
-
-  for (const emp of employees) {
-    // 1. Sum commissions for this employee in this cycle (du 10 au 10)
-    const empCommissions = await prisma.commission.aggregate({
-      where: {
-        employeeId: emp.id,
-        earnedDate: { gte: startDate, lt: endDate },
-      },
-      _sum: { amount: true },
-    });
-
-    const commAmount = Number(empCommissions._sum.amount || 0);
-    const base = Number(emp.baseSalary);
-
-    // Taux journalier de référence : exactement le prix de la journée (Base mensuelle / 30 jours)
-    const workingDaysDivisor = 30;
-    const dailyRate = base > 0 ? base / workingDaysDivisor : 0;
-
-    // 2. Fetch approved leaves overlapping this cycle
-    const approvedLeaves = await prisma.leaveRequest.findMany({
-      where: {
-        employeeId: emp.id,
-        status: { in: ["CONFIRMED_HR", "APPROVED_MANAGER"] },
-        startDate: { lt: endDate },
-        endDate: { gte: startDate },
-      },
-    });
-
-    let sickDays = 0;
-    let annualDays = 0;
-    let permissionDays = 0;
-
-    for (const leave of approvedLeaves) {
-      const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
-      const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime() - 1));
-
-      // Count working days in overlap (excluding Friday rest day)
-      let count = 0;
-      const cur = new Date(leaveStart.getFullYear(), leaveStart.getMonth(), leaveStart.getDate());
-      const last = new Date(leaveEnd.getFullYear(), leaveEnd.getMonth(), leaveEnd.getDate());
-
-      while (cur <= last) {
-        if (cur.getDay() !== 5) { // 5 = Friday
-          count++;
-        }
-        cur.setDate(cur.getDate() + 1);
-      }
-
-      const effectiveDays = Math.min(count, leave.daysCount);
-
-      if (leave.type === "SICK") {
-        // Congé Maladie : Non payé par l'employeur (couvert par la CNAS) -> Déduit au prix exact de la journée
-        sickDays += effectiveDays;
-      } else if (leave.type === "ANNUAL") {
-        // Congé Annuel : Chômé et Payé à 100% -> 0 DA déduit (maintien intégral du salaire)
-        annualDays += effectiveDays;
-      } else if (leave.type === "PERMISSION") {
-        // Permission courte non rémunérée -> Déduit au prix exact de la journée
-        permissionDays += effectiveDays;
-      }
-    }
-
-    // 3. Count unexcused absences from Attendance (status === "ABSENT") in this cycle (strictly after hireDate)
-    const cycleStartDate = emp.hireDate
-      ? new Date(Math.max(new Date(emp.hireDate).getTime(), startDate.getTime()))
-      : startDate;
-
-    const absentAttendances = await prisma.attendance.findMany({
-      where: {
-        employeeId: emp.id,
-        date: { gte: cycleStartDate, lt: endDate },
-        status: "ABSENT",
-      },
-      select: { date: true },
-    });
-
-    // Prevent double counting if an absence record coincides with an approved leave
-    let unexcusedAbsences = 0;
-    for (const att of absentAttendances) {
-      const attTime = new Date(att.date).getTime();
-      const hasOverlap = approvedLeaves.some((l) => {
-        const lStart = new Date(l.startDate).getTime();
-        const lEnd = new Date(l.endDate).getTime();
-        return attTime >= lStart && attTime <= lEnd;
-      });
-      if (!hasOverlap) {
-        unexcusedAbsences++;
-      }
-    }
-
-    // Règle RH & Droit du Travail :
-    // - Congé Annuel : Chômé & Payé -> 0 DA de retenue (salaire fixe 100% maintenu)
-    // - Congé Maladie : Déduit exactement au prix de la journée (Salaire de base / 30j)
-    // - Permissions et Absences non justifiées -> Déduites au prix de la journée (Salaire de base / 30j)
-    const deductibleDays = sickDays + permissionDays + unexcusedAbsences;
-    const deductions = Math.min(base, Math.round(deductibleDays * dailyRate));
-    const net = Math.max(0, Math.round(base + commAmount - deductions));
-
-    await prisma.salaryPayment.upsert({
-      where: {
-        employeeId_month_year: {
-          employeeId: emp.id,
-          month,
-          year,
-        },
-      },
-      create: {
-        employeeId: emp.id,
-        month,
-        year,
-        baseSalary: emp.baseSalary,
-        commissions: new Prisma.Decimal(commAmount),
-        primes: new Prisma.Decimal(0),
-        bonuses: new Prisma.Decimal(0),
-        deductions: new Prisma.Decimal(deductions),
-        netSalary: new Prisma.Decimal(net),
-        status: "DRAFT",
-      },
-      update: {
-        baseSalary: emp.baseSalary,
-        commissions: new Prisma.Decimal(commAmount),
-        deductions: new Prisma.Decimal(deductions),
-        netSalary: new Prisma.Decimal(net),
-      },
-    });
-
-    generatedCount++;
-  }
+  // 2. Calculer et synchroniser les salaires avec déduction automatique (-1 jour par absence)
+  const result = await calculateAndSyncPayroll(month, year);
 
   revalidatePath("/rh");
-  return { success: true, count: generatedCount };
+  return { success: true, count: result.count };
+}
+
+export async function syncPayrollDeductionsAction(month?: number, year?: number) {
+  const user = await getCurrentUser();
+  if (!user || (user.role !== "ADMIN" && user.role !== "SALES_DIRECTOR" && user.role !== "HR")) {
+    throw new Error("Accès réservé aux Administrateurs et aux RH");
+  }
+
+  await syncDailyAbsences({ daysBack: 35, includeToday: true });
+  const result = await calculateAndSyncPayroll(month, year);
+
+  revalidatePath("/rh");
+  return result;
 }
 
 export async function markSalaryPaidAction(id: string) {

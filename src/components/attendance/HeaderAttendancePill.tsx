@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LogIn, LogOut, CheckCircle2, Clock, Coffee, Play } from "lucide-react";
 import {
   getMyAttendanceAction,
@@ -9,7 +10,19 @@ import {
   endBreakAction,
 } from "@/actions/attendance";
 
+function broadcastAttendanceSync() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("crm:attendance-updated"));
+    try {
+      const bc = new BroadcastChannel("crm_attendance_sync");
+      bc.postMessage({ timestamp: Date.now() });
+      bc.close();
+    } catch {}
+  }
+}
+
 export function HeaderAttendancePill() {
+  const router = useRouter();
   const [data, setData] = useState<{
     clockIn: string | null;
     clockOut: string | null;
@@ -38,8 +51,22 @@ export function HeaderAttendancePill() {
 
   useEffect(() => {
     loadAttendance();
-    const interval = setInterval(loadAttendance, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadAttendance, 15000);
+
+    const handleSync = () => loadAttendance();
+    window.addEventListener("crm:attendance-updated", handleSync);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("crm_attendance_sync");
+      bc.onmessage = handleSync;
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("crm:attendance-updated", handleSync);
+      if (bc) bc.close();
+    };
   }, []);
 
   const handleClockIn = (e: React.MouseEvent) => {
@@ -48,6 +75,8 @@ export function HeaderAttendancePill() {
       try {
         await clockInAction();
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur de pointage");
       }
@@ -60,6 +89,8 @@ export function HeaderAttendancePill() {
       try {
         await clockOutAction();
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur de pointage");
       }
@@ -72,6 +103,8 @@ export function HeaderAttendancePill() {
       try {
         await endBreakAction();
         await loadAttendance();
+        broadcastAttendanceSync();
+        router.refresh();
       } catch (err: any) {
         alert(err.message || "Erreur de fin de pause");
       }

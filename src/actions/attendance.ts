@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { AttendanceStatus, DepartmentType, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { calculateAndSyncPayroll } from "@/lib/payroll";
 
 /**
  * Helper to ensure a User has an associated Employee profile
@@ -253,6 +254,7 @@ export async function clockInAction() {
     },
     update: {
       clockIn: now,
+      clockOut: null,
       status,
       notes: isLate ? "Pointage en retard validé" : null,
     },
@@ -271,6 +273,13 @@ export async function clockInAction() {
       }),
     },
   });
+
+  // Recalculer automatiquement les retenues du cycle pour lever la déduction d'absence d'aujourd'hui
+  try {
+    await calculateAndSyncPayroll();
+  } catch (err) {
+    console.error("Erreur auto-sync payroll après clockIn:", err);
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/rh");
@@ -346,6 +355,13 @@ export async function clockOutAction() {
       }),
     },
   });
+
+  // Recalculer automatiquement les retenues du cycle
+  try {
+    await calculateAndSyncPayroll();
+  } catch (err) {
+    console.error("Erreur auto-sync payroll après clockOut:", err);
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/rh");
@@ -574,7 +590,7 @@ export async function syncDailyAbsences(options: {
   daysBack?: number;
   includeToday?: boolean;
 } = {}) {
-  const daysBack = options.daysBack ?? 7;
+  const daysBack = options.daysBack ?? 35;
   const includeToday = options.includeToday ?? true;
 
   const now = new Date();
@@ -601,7 +617,7 @@ export async function syncDailyAbsences(options: {
     }
   }
 
-  if (includeToday) {
+  if (includeToday && today.getDay() !== 5) {
     datesToEvaluate.push(today);
   }
 
@@ -685,6 +701,13 @@ export async function syncDailyAbsences(options: {
         }
       }
     }
+  }
+
+  // Synchroniser automatiquement les salaires et retenues du cycle de paie en cours (-1 jour / absence)
+  try {
+    await calculateAndSyncPayroll();
+  } catch (err) {
+    console.error("Erreur auto-sync paie après sync absences:", err);
   }
 
   return {

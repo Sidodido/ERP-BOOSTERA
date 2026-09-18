@@ -68,27 +68,9 @@ export async function getTeamsDataAction(monthParam?: number, yearParam?: number
       members: [],
       activeTasksCount: 0,
     },
-    VIDEO: {
-      name: "VIDEO",
-      label: "Pôle Vidéo & Tournage",
-      members: [],
-      activeTasksCount: 0,
-    },
-    DESIGN: {
-      name: "DESIGN",
-      label: "Pôle Graphisme & Design UI/UX",
-      members: [],
-      activeTasksCount: 0,
-    },
     DEVELOPMENT: {
       name: "DEVELOPMENT",
       label: "Pôle Développement Web & Tech",
-      members: [],
-      activeTasksCount: 0,
-    },
-    MARKETING: {
-      name: "MARKETING",
-      label: "Pôle Marketing & Media Buying",
       members: [],
       activeTasksCount: 0,
     },
@@ -229,6 +211,19 @@ export async function updateEmployeeGoalAction(id: string, achievedValue: number
     data: {
       achievedValue: new Prisma.Decimal(Number(achievedValue)),
     },
+  });
+
+  revalidatePath("/equipes");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function deleteEmployeeGoalAction(id: string) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  await prisma.employeeGoal.delete({
+    where: { id },
   });
 
   revalidatePath("/equipes");

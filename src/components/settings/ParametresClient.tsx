@@ -40,6 +40,7 @@ import {
 } from "@/actions/settings";
 import { autoSyncDailyAbsencesAction } from "@/actions/attendance";
 import { Role, CommissionRuleType, AttendanceStatus, DepartmentType } from "@prisma/client";
+import { SystemUpdatesTab } from "./SystemUpdatesTab";
 
 interface UserItem {
   id: string;
@@ -173,29 +174,30 @@ export function ParametresClient({
   initialTab,
 }: ParametresClientProps) {
   const router = useRouter();
-  const getInitialTab = (): "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE" => {
-    if (initialTab && ["USERS", "COMMISSIONS", "AGENCY", "AUDIT", "ATTENDANCE"].includes(initialTab)) {
-      return initialTab as any;
+  type TabType = "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE" | "UPDATES";
+  const validTabs: TabType[] = ["ATTENDANCE", "USERS", "COMMISSIONS", "AGENCY", "AUDIT", "UPDATES"];
+
+  const getInitialTab = (): TabType => {
+    if (initialTab && validTabs.includes(initialTab as TabType)) {
+      return initialTab as TabType;
     }
     return "ATTENDANCE";
   };
 
-  const [activeTab, setActiveTab] = useState<
-    "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE"
-  >(getInitialTab());
+  const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const tabFromUrl = params.get("tab") as any;
-      if (tabFromUrl && ["USERS", "COMMISSIONS", "AGENCY", "AUDIT", "ATTENDANCE"].includes(tabFromUrl)) {
+      if (tabFromUrl && validTabs.includes(tabFromUrl)) {
         setActiveTab(tabFromUrl);
       }
     } catch {}
   }, []);
 
-  const handleSelectTab = (tab: "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE") => {
+  const handleSelectTab = (tab: TabType) => {
     setActiveTab(tab);
     try {
       const url = new URL(window.location.href);
@@ -597,6 +599,17 @@ export function ParametresClient({
         >
           <History className="w-4 h-4" />
           Journal d'Audit ({auditLogs.length})
+        </button>
+        <button
+          onClick={() => handleSelectTab("UPDATES")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
+            activeTab === "UPDATES"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          <RefreshCw className="w-4 h-4" />
+          Mises à jour & Déploiement
         </button>
       </div>
 
@@ -1198,6 +1211,9 @@ export function ParametresClient({
           </div>
         </div>
       )}
+
+      {/* TAB 5: SYSTEM UPDATES & DEPLOYMENT */}
+      {activeTab === "UPDATES" && <SystemUpdatesTab />}
 
       {/* MODAL: CREATE USER */}
       {showUserModal && (

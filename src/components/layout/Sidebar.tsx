@@ -29,6 +29,7 @@ import {
   Database,
   Activity,
   CalendarDays,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,7 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
     items: [
       { label: "Reporting", href: "/reporting", icon: BarChart3 },
       { label: "Paramètres", href: "/parametres", icon: Settings },
+      { label: "Mises à jour", href: "/parametres?tab=UPDATES", icon: RefreshCw, badge: "Deploy" },
     ],
   },
 ];

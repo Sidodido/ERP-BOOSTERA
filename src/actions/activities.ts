@@ -266,7 +266,9 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
       },
     }),
     prisma.attendance.findMany({
-      where: { date: todayStart },
+      where: {
+        date: kpiDateLt ? { gte: kpiDateGte, lt: kpiDateLt } : { gte: kpiDateGte },
+      },
       include: {
         employee: {
           include: {
@@ -438,12 +440,18 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     const uid = att.employee.userId;
     if (!uid) continue;
     const clockIn = att.clockIn ? new Date(att.clockIn) : null;
-    const clockOut = att.clockOut ? new Date(att.clockOut) : null;
-    attendanceByUserId.set(uid, {
-      clockIn,
-      clockOut,
-      isCurrentlyIn: !!clockIn && !clockOut,
-    });
+    let clockOut = att.clockOut ? new Date(att.clockOut) : null;
+    if (clockIn && clockOut && clockOut <= clockIn) {
+      clockOut = null;
+    }
+    const isToday = att.date.toISOString().split("T")[0] === todayStart.toISOString().split("T")[0];
+    if (isToday || !attendanceByUserId.has(uid)) {
+      attendanceByUserId.set(uid, {
+        clockIn,
+        clockOut,
+        isCurrentlyIn: !!clockIn && !clockOut,
+      });
+    }
   }
 
   // Fetch today's actions for CLOCKED-IN users only — after their clockIn time
@@ -613,15 +621,61 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
 
   // Initialize with all active users
   for (const u of usersList) {
-    const todayAtt = todayAttendanceRecords.find((a) => a.employee.userId === u.id);
+    const userAtts = todayAttendanceRecords.filter((a) => a.employee.userId === u.id);
+    const todayAtt = userAtts.find(
+      (a) => a.date.toISOString().split("T")[0] === todayStart.toISOString().split("T")[0]
+    );
+
     let workMinutes = 0;
-    if (todayAtt?.clockIn) {
-      const end = todayAtt.clockOut ? new Date(todayAtt.clockOut) : now;
-      workMinutes = Math.max(
-        0,
-        Math.floor((end.getTime() - new Date(todayAtt.clockIn).getTime()) / 60000)
-      );
+    let isCurrentlyClockedIn = false;
+
+    // 1. Calcul du temps de travail basé sur les pointages de présence
+    for (const att of userAtts) {
+      if (att.clockIn) {
+        const clockIn = new Date(att.clockIn);
+        let clockOut = att.clockOut ? new Date(att.clockOut) : null;
+        if (clockOut && clockOut <= clockIn) {
+          clockOut = null;
+        }
+
+        const isToday =
+          att.date.toISOString().split("T")[0] === todayStart.toISOString().split("T")[0];
+        if (isToday && !clockOut) {
+          isCurrentlyClockedIn = true;
+        }
+
+        const end =
+          clockOut || (isToday ? now : new Date(clockIn.getTime() + 8 * 60 * 60 * 1000));
+        const diffMs = end.getTime() - clockIn.getTime();
+        if (diffMs > 0) {
+          workMinutes += Math.max(1, Math.round(diffMs / 60000));
+        }
+      }
     }
+
+    // 2. Calcul d'activité CRM réelle (fallback dynamique si pointage non fait ou test court)
+    const userLogs = logsByUser[u.id] || [];
+    if (userLogs.length > 0) {
+      const firstAction = new Date(userLogs[0].createdAt).getTime();
+      const lastAction = new Date(userLogs[userLogs.length - 1].createdAt).getTime();
+      const spanMinutes = Math.round((lastAction - firstAction) / 60000);
+      const actionsMinTime = userLogs.length * 2;
+      const activityWorkTime = Math.max(spanMinutes, actionsMinTime);
+
+      workMinutes = Math.max(workMinutes, activityWorkTime);
+    }
+
+    // 3. Calcul des pauses réelles (manuelles ou détectées par inactivité)
+    const userBreaksFromHistory = breakToursHistory
+      .filter((b) => b.userId === u.id)
+      .reduce((sum, b) => sum + (b.durationMinutes || 0), 0);
+
+    const userBreaksFromAtt = userAtts.reduce(
+      (sum, a) => sum + Number(a.breakMinutes || 0),
+      0
+    );
+
+    const breakMinutes = Math.max(userBreaksFromAtt, userBreaksFromHistory);
 
     const isOnBreak = currentlyOnBreakUsers.some((b) => b.userId === u.id);
 
@@ -638,9 +692,9 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
       appointments: 0,
       clientsSigned: 0,
       pausesCount: 0,
-      breakMinutes: todayAtt?.breakMinutes || 0,
+      breakMinutes,
       workMinutes,
-      isCurrentlyClockedIn: !!todayAtt?.clockIn && !todayAtt?.clockOut,
+      isCurrentlyClockedIn,
       isCurrentlyOnBreak: isOnBreak,
     };
   }

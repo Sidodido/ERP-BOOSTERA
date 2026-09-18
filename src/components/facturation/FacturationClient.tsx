@@ -92,39 +92,39 @@ const STATUS_CONFIG: Record<
 > = {
   DRAFT: {
     label: "Brouillon",
-    bg: "bg-neutral-800/60",
-    text: "text-neutral-300",
-    border: "border-neutral-700",
+    bg: "bg-neutral-100 dark:bg-neutral-800/60",
+    text: "text-neutral-700 dark:text-neutral-300",
+    border: "border-neutral-200 dark:border-neutral-700",
   },
   SENT: {
     label: "Émise",
-    bg: "bg-blue-950/40",
-    text: "text-blue-400",
-    border: "border-blue-800/50",
+    bg: "bg-blue-50 dark:bg-blue-950/40",
+    text: "text-blue-700 dark:text-blue-400",
+    border: "border-blue-200 dark:border-blue-800/50",
   },
   PARTIAL: {
     label: "Partielle",
-    bg: "bg-amber-950/40",
-    text: "text-amber-400",
-    border: "border-amber-800/50",
+    bg: "bg-amber-50 dark:bg-amber-950/40",
+    text: "text-amber-700 dark:text-amber-400",
+    border: "border-amber-200 dark:border-amber-800/50",
   },
   PAID: {
     label: "Payée",
-    bg: "bg-emerald-950/40",
-    text: "text-emerald-400",
-    border: "border-emerald-800/50",
+    bg: "bg-emerald-50 dark:bg-emerald-950/40",
+    text: "text-emerald-700 dark:text-emerald-400",
+    border: "border-emerald-200 dark:border-emerald-800/50",
   },
   OVERDUE: {
     label: "En retard",
-    bg: "bg-rose-950/40",
-    text: "text-rose-400",
-    border: "border-rose-800/50",
+    bg: "bg-rose-50 dark:bg-rose-950/40",
+    text: "text-rose-700 dark:text-rose-400",
+    border: "border-rose-200 dark:border-rose-800/50",
   },
   CANCELLED: {
     label: "Annulée",
-    bg: "bg-neutral-900/60",
-    text: "text-neutral-500",
-    border: "border-neutral-800",
+    bg: "bg-neutral-100 dark:bg-neutral-900/60",
+    text: "text-neutral-500 dark:text-neutral-500",
+    border: "border-neutral-200 dark:border-neutral-800",
   },
 };
 
@@ -509,7 +509,7 @@ export function FacturationClient({
                               setShowPrintModal(true);
                             }}
                             title="Aperçu & Impression Facture"
-                            className="p-1.5 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
+                            className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:hover:text-white dark:border-transparent transition"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -519,7 +519,7 @@ export function FacturationClient({
                             <button
                               onClick={() => handleOpenPayment(inv)}
                               title="Encaisser un paiement"
-                              className="p-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-800/50 transition"
+                              className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-400 dark:border-emerald-800/50 transition"
                             >
                               <CreditCard className="w-4 h-4" />
                             </button>
@@ -530,7 +530,7 @@ export function FacturationClient({
                             <button
                               onClick={() => handleDelete(inv.id)}
                               title="Supprimer"
-                              className="p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-800/40 transition"
+                              className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 dark:border-rose-800/40 transition"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
