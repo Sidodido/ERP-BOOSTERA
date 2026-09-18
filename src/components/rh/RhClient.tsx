@@ -17,6 +17,7 @@ import {
   Edit2,
   Briefcase,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import {
   createEmployeeAction,
@@ -96,9 +97,28 @@ interface CommissionItem {
   client?: { id: string; companyName: string } | null;
 }
 
+export interface PayrollCycleInfoClient {
+  startDate: string;
+  endDate: string;
+  displayStartDate: string;
+  displayEndDate: string;
+  label: string;
+  isUnlocked: boolean;
+}
+
+export interface AvailablePayrollCycleClient {
+  month: number;
+  year: number;
+  label: string;
+  displayPeriod: string;
+  isCurrent: boolean;
+}
+
 interface RhClientProps {
   month: number;
   year: number;
+  cycleInfo?: PayrollCycleInfoClient;
+  availableCycles?: AvailablePayrollCycleClient[];
   employees: EmployeeItem[];
   attendances: AttendanceItem[];
   leaveRequests: LeaveItem[];
@@ -114,6 +134,7 @@ interface RhClientProps {
     totalCommissions: number;
     totalDeductions?: number;
   };
+  initialTab?: string;
 }
 
 const DEPARTMENTS: { key: DepartmentType; label: string }[] = [
@@ -130,6 +151,8 @@ const DEPARTMENTS: { key: DepartmentType; label: string }[] = [
 export function RhClient({
   month,
   year,
+  cycleInfo,
+  availableCycles = [],
   employees,
   attendances,
   leaveRequests,
@@ -137,10 +160,18 @@ export function RhClient({
   commissions = [],
   usersWithoutEmployee,
   kpis,
+  initialTab,
 }: RhClientProps) {
   const router = useRouter();
+  const getInitialTab = (): "DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL" => {
+    if (initialTab && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(initialTab)) {
+      return initialTab as any;
+    }
+    return "DIRECTORY";
+  };
+
   const [activeTab, setActiveTab] = useState<"DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL">(
-    "DIRECTORY"
+    getInitialTab()
   );
   const [isPending, startTransition] = useTransition();
 
@@ -151,11 +182,6 @@ export function RhClient({
       const tabFromUrl = params.get("tab") as any;
       if (tabFromUrl && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(tabFromUrl)) {
         setActiveTab(tabFromUrl);
-        return;
-      }
-      const saved = localStorage.getItem("rh_active_tab") as any;
-      if (saved && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(saved)) {
-        setActiveTab(saved);
       }
     } catch {}
   }, []);
@@ -163,7 +189,6 @@ export function RhClient({
   const handleSelectTab = (tab: "DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL") => {
     setActiveTab(tab);
     try {
-      localStorage.setItem("rh_active_tab", tab);
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
       window.history.replaceState(null, "", url.toString());
@@ -290,7 +315,21 @@ export function RhClient({
     });
   };
 
+  const handleSelectCycle = (selectedMonth: number, selectedYear: number) => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "PAYROLL");
+      url.searchParams.set("month", selectedMonth.toString());
+      url.searchParams.set("year", selectedYear.toString());
+      router.replace(url.toString(), { scroll: false });
+    } catch {}
+  };
+
   const handleGeneratePayroll = () => {
+    if (cycleInfo && !cycleInfo.isUnlocked) {
+      alert(`Le calcul de la paie pour ce cycle sera accessible à partir du ${cycleInfo.displayStartDate}.`);
+      return;
+    }
     startTransition(async () => {
       try {
         await generatePayrollAction(month, year);
@@ -758,42 +797,95 @@ export function RhClient({
       {/* TAB 4: PAYROLL */}
       {activeTab === "PAYROLL" && (
         <div className="space-y-4">
-          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1.5">
-              <h3 className="text-sm font-semibold text-neutral-200 flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-indigo-400" />
-                Fiches de Paie & Commissions du Mois ({month}/{year})
-              </h3>
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-indigo-400" />
+                  Bulletins de Paie & Commissions
+                </h3>
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-950/70 text-indigo-300 border border-indigo-800/50 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                  {cycleInfo?.label || `Cycle du 10 au 10 : du 10/${month.toString().padStart(2, "0")}/${year} au 10`}
+                </span>
+                {cycleInfo && !cycleInfo.isUnlocked && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/70 text-amber-300 border border-amber-800/50 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    Calcul débloqué le {cycleInfo.displayStartDate}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-neutral-400">
                 Formule : <span className="font-mono text-neutral-200 font-semibold">Salaire Net = Salaire Fixe + Commissions - Déductions (Maladie / Absences)</span>
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 text-[11px] font-medium">
+                  <span>🗓️ Règle Entreprise :</span>
+                  <strong className="text-indigo-200">Cycle exact du 10 au 10</strong>
+                </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 text-[11px] font-medium">
                   <span>🌴 Congé Annuel :</span>
                   <strong className="text-emerald-200">Chômé & 100% Payé</strong>
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/60 text-rose-300 border border-rose-800/40 text-[11px] font-medium">
                   <span>🩺 Arrêt Maladie :</span>
-                  <strong className="text-rose-200">Non Rémunéré (Pris en charge CNAS, Déduit)</strong>
+                  <strong className="text-rose-200">Non Rémunéré (CNAS, Déduit)</strong>
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/40 text-[11px] font-medium">
                   <span>⚠️ Absences injustifiées :</span>
                   <strong className="text-amber-200">Déduites (Base / 22j)</strong>
                 </span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 text-[11px] font-medium">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-950/60 text-teal-300 border border-teal-800/40 text-[11px] font-medium">
                   <span>🤝 Signature Client :</span>
-                  <strong className="text-indigo-200">+500 DA / contrat signé dans le mois</strong>
+                  <strong className="text-teal-200">+500 DA / contrat signé dans le cycle</strong>
                 </span>
               </div>
             </div>
-            <button
-              onClick={handleGeneratePayroll}
-              disabled={isPending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/20 disabled:opacity-50 shrink-0"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Calculer / Recalculer la Paie
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              {availableCycles && availableCycles.length > 0 && (
+                <div className="flex items-center gap-2 bg-neutral-950/60 border border-neutral-800 rounded-xl px-3 py-1.5">
+                  <span className="text-xs text-neutral-400 whitespace-nowrap">Cycle :</span>
+                  <select
+                    value={`${month}-${year}`}
+                    onChange={(e) => {
+                      const [m, y] = e.target.value.split("-").map(Number);
+                      handleSelectCycle(m, y);
+                    }}
+                    className="bg-transparent text-neutral-200 text-xs font-semibold outline-none cursor-pointer"
+                  >
+                    {availableCycles.map((c) => (
+                      <option key={`${c.month}-${c.year}`} value={`${c.month}-${c.year}`} className="bg-neutral-900 text-white">
+                        {c.label} ({c.displayPeriod}){c.isCurrent ? " • En cours" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button
+                onClick={handleGeneratePayroll}
+                disabled={isPending || (cycleInfo ? !cycleInfo.isUnlocked : false)}
+                title={cycleInfo && !cycleInfo.isUnlocked ? `Calcul disponible à partir du ${cycleInfo.displayStartDate}` : "Calculer ou recalculer la paie de ce cycle"}
+                className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition shadow-md shrink-0 ${
+                  cycleInfo && !cycleInfo.isUnlocked
+                    ? "bg-neutral-800/80 text-neutral-500 border border-neutral-700/40 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20"
+                } disabled:opacity-50`}
+              >
+                {cycleInfo && !cycleInfo.isUnlocked ? (
+                  <>
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                    Disponible le {cycleInfo.displayStartDate}
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Calculer / Recalculer la Paie
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
@@ -885,10 +977,10 @@ export function RhClient({
                 </span>
                 <div>
                   <h4 className="text-sm font-semibold text-neutral-200">
-                    Détail des Commissions Commerciales du Mois ({commissions.length})
+                    Détail des Commissions Commerciales du Cycle ({commissions.length})
                   </h4>
                   <p className="text-xs text-neutral-400">
-                    Primes automatiques de signature client (+500 DA) et commissions sur ventes.
+                    Primes de signature client (+500 DA) et commissions comptabilisées dans le cycle (du 10 au 10).
                   </p>
                 </div>
               </div>

@@ -195,10 +195,16 @@ export function Sidebar({ userRole, rawRole, userName }: SidebarProps) {
         navRef.current.scrollTop = saved;
       }
 
-      // Ensure the active menu item stays in view if it would otherwise be hidden
+      // Ensure the active menu item stays in view within the sidebar without scrolling the window
       const activeEl = navRef.current.querySelector<HTMLElement>("[data-active='true']");
-      if (activeEl) {
-        activeEl.scrollIntoView({ block: "nearest", behavior: "instant" as ScrollBehavior });
+      if (activeEl && navRef.current) {
+        const navRect = navRef.current.getBoundingClientRect();
+        const elRect = activeEl.getBoundingClientRect();
+        if (elRect.top < navRect.top) {
+          navRef.current.scrollTop -= (navRect.top - elRect.top) + 12;
+        } else if (elRect.bottom > navRect.bottom) {
+          navRef.current.scrollTop += (elRect.bottom - navRect.bottom) + 12;
+        }
       }
     };
 

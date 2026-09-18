@@ -81,6 +81,8 @@ interface TeamsClientProps {
   goals: GoalItem[];
   recentReviews: ReviewItem[];
   employeesList: { id: string; name: string; position: string }[];
+  initialTab?: string;
+  userRole?: string;
 }
 
 export function TeamsClient({
@@ -90,39 +92,45 @@ export function TeamsClient({
   goals,
   recentReviews,
   employeesList,
+  initialTab,
+  userRole = "ADMIN",
 }: TeamsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tabFromUrl = searchParams.get("tab") as "DEPARTMENTS" | "GOALS" | "REVIEWS" | null;
 
-  const [activeTab, setActiveTabState] = useState<"DEPARTMENTS" | "GOALS" | "REVIEWS">(() => {
-    if (tabFromUrl && ["DEPARTMENTS", "GOALS", "REVIEWS"].includes(tabFromUrl)) {
-      return tabFromUrl;
-    }
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("teams_active_tab");
-      if (saved && ["DEPARTMENTS", "GOALS", "REVIEWS"].includes(saved)) {
-        return saved as any;
-      }
-    }
+  const validTab = (t?: string | null): "DEPARTMENTS" | "GOALS" | "REVIEWS" => {
+    if (!t) return "DEPARTMENTS";
+    const upper = t.toUpperCase();
+    if (upper === "GOALS" || upper === "OBJECTIFS") return "GOALS";
+    if (upper === "REVIEWS" || upper === "EVALUATIONS") return "REVIEWS";
     return "DEPARTMENTS";
-  });
+  };
+
+  const [activeTab, setActiveTabState] = useState<"DEPARTMENTS" | "GOALS" | "REVIEWS">(
+    validTab(initialTab || searchParams.get("tab"))
+  );
 
   const setActiveTab = (tab: "DEPARTMENTS" | "GOALS" | "REVIEWS") => {
     setActiveTabState(tab);
     if (typeof window !== "undefined") {
-      localStorage.setItem("teams_active_tab", tab);
       const url = new URL(window.location.href);
-      url.searchParams.set("tab", tab);
+      if (tab === "DEPARTMENTS") {
+        url.searchParams.delete("tab");
+      } else {
+        url.searchParams.set("tab", tab);
+      }
       window.history.replaceState({}, "", url.toString());
     }
   };
 
   useEffect(() => {
-    if (tabFromUrl && ["DEPARTMENTS", "GOALS", "REVIEWS"].includes(tabFromUrl)) {
-      setActiveTabState(tabFromUrl);
+    const tabParam = searchParams.get("tab");
+    if (tabParam) {
+      setActiveTabState(validTab(tabParam));
     }
-  }, [tabFromUrl]);
+  }, [searchParams]);
+
+  const isPrivileged = userRole === "ADMIN" || userRole === "SALES_DIRECTOR";
 
   const [isPending, startTransition] = useTransition();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -407,13 +415,13 @@ export function TeamsClient({
                   <th className="py-3.5 px-4 text-center">Cible</th>
                   <th className="py-3.5 px-4 text-center">Réalisé en Direct ⚡</th>
                   <th className="py-3.5 px-4">Progression & Statut</th>
-                  <th className="py-3.5 px-4 text-right">Ajuster Manuel</th>
+                  {isPrivileged && <th className="py-3.5 px-4 text-right">Ajuster Manuel</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
                 {goals.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-neutral-400">
+                    <td colSpan={isPrivileged ? 6 : 5} className="py-12 text-center text-neutral-400">
                       Aucun objectif fixé pour ce mois.
                     </td>
                   </tr>
@@ -478,37 +486,39 @@ export function TeamsClient({
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() =>
-                                handleUpdateGoalProgress(g.id, g.achievedValue, -1)
-                              }
-                              title="Diminuer manuellement (-1)"
-                              className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold cursor-pointer"
-                            >
-                              -1
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleUpdateGoalProgress(g.id, g.achievedValue, 1)
-                              }
-                              title="Augmenter manuellement (+1)"
-                              className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
-                            >
-                              +1
-                            </button>
-                            <button
-                              onClick={() =>
-                                handleUpdateGoalProgress(g.id, g.achievedValue, 5)
-                              }
-                              title="Augmenter manuellement (+5)"
-                              className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
-                            >
-                              +5
-                            </button>
-                          </div>
-                        </td>
+                        {isPrivileged && (
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() =>
+                                  handleUpdateGoalProgress(g.id, g.achievedValue, -1)
+                                }
+                                title="Diminuer manuellement (-1)"
+                                className="px-2 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-bold cursor-pointer"
+                              >
+                                -1
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleUpdateGoalProgress(g.id, g.achievedValue, 1)
+                                }
+                                title="Augmenter manuellement (+1)"
+                                className="px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold cursor-pointer"
+                              >
+                                +1
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleUpdateGoalProgress(g.id, g.achievedValue, 5)
+                                }
+                                title="Augmenter manuellement (+5)"
+                                className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                              >
+                                +5
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })

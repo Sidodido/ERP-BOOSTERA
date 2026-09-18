@@ -237,6 +237,8 @@ export async function updateTaskStatusAction(id: string, status: TaskStatus) {
   revalidatePath("/production");
   revalidatePath("/projets");
   revalidatePath(`/projets/${task.projectId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/equipes");
 
   return { success: true, task };
 }

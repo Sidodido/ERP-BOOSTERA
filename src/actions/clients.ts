@@ -215,6 +215,8 @@ export async function createClientAction(data: {
   }
 
   revalidatePath("/clients");
+  revalidatePath("/dashboard");
+  revalidatePath("/equipes");
   return { success: true, client };
 }
 

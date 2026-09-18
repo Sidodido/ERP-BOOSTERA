@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import { getSettingsDataAction } from "@/actions/settings";
 import { ParametresClient } from "@/components/settings/ParametresClient";
 
-export default async function ParametresPage() {
+export default async function ParametresPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -14,6 +18,7 @@ export default async function ParametresPage() {
     redirect("/dashboard");
   }
 
+  const resolvedSearchParams = searchParams ? await searchParams : {};
   const data = await getSettingsDataAction();
 
   return (
@@ -26,6 +31,7 @@ export default async function ParametresPage() {
         attendances={data.attendances as any}
         employees={data.employees}
         attendanceStats={data.attendanceStats}
+        initialTab={resolvedSearchParams?.tab}
       />
     </AppShell>
   );

@@ -121,6 +121,7 @@ interface ParametresClientProps {
   attendances?: AttendanceItem[];
   employees?: EmployeeOption[];
   attendanceStats?: AttendanceStats;
+  initialTab?: string;
 }
 
 const ROLES: { key: Role; label: string }[] = [
@@ -169,11 +170,19 @@ export function ParametresClient({
   attendances = [],
   employees = [],
   attendanceStats = { totalRecorded: 0, todayCount: 0, todayCompleted: 0, todayLates: 0 },
+  initialTab,
 }: ParametresClientProps) {
   const router = useRouter();
+  const getInitialTab = (): "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE" => {
+    if (initialTab && ["USERS", "COMMISSIONS", "AGENCY", "AUDIT", "ATTENDANCE"].includes(initialTab)) {
+      return initialTab as any;
+    }
+    return "ATTENDANCE";
+  };
+
   const [activeTab, setActiveTab] = useState<
     "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE"
-  >("ATTENDANCE");
+  >(getInitialTab());
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -182,11 +191,6 @@ export function ParametresClient({
       const tabFromUrl = params.get("tab") as any;
       if (tabFromUrl && ["USERS", "COMMISSIONS", "AGENCY", "AUDIT", "ATTENDANCE"].includes(tabFromUrl)) {
         setActiveTab(tabFromUrl);
-        return;
-      }
-      const saved = localStorage.getItem("parametres_active_tab") as any;
-      if (saved && ["USERS", "COMMISSIONS", "AGENCY", "AUDIT", "ATTENDANCE"].includes(saved)) {
-        setActiveTab(saved);
       }
     } catch {}
   }, []);
@@ -194,7 +198,6 @@ export function ParametresClient({
   const handleSelectTab = (tab: "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE") => {
     setActiveTab(tab);
     try {
-      localStorage.setItem("parametres_active_tab", tab);
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
       window.history.replaceState(null, "", url.toString());

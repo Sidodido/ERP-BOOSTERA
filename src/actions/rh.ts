@@ -11,6 +11,11 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { syncDailyAbsences } from "./attendance";
+import {
+  getPayrollCycleDates,
+  getPayrollCycleForDate,
+  getAvailablePayrollCycles,
+} from "@/lib/payroll";
 
 export async function getRhDataAction(monthParam?: number, yearParam?: number) {
   const user = await getCurrentUser();
@@ -26,8 +31,10 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
   }
 
   const now = new Date();
-  const currentMonth = monthParam || now.getMonth() + 1;
-  const currentYear = yearParam || now.getFullYear();
+  const defaultCycle = getPayrollCycleForDate(now);
+  const currentMonth = monthParam || defaultCycle.month;
+  const currentYear = yearParam || defaultCycle.year;
+  const cycleInfo = getPayrollCycleDates(currentMonth, currentYear);
 
   // 1. Employees Directory
   const employees = await prisma.employee.findMany({
@@ -66,7 +73,7 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
     take: 50,
   });
 
-  // 4. Payroll for current month/year
+  // 4. Payroll for current cycle (month/year)
   const salaryPayments = await prisma.salaryPayment.findMany({
     where: {
       month: currentMonth,
@@ -79,13 +86,10 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
     },
   });
 
-  // 5. Commissions for current month
-  const startOfMonth = new Date(currentYear, currentMonth - 1, 1);
-  const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59);
-
+  // 5. Commissions for current cycle (du 10 au 10)
   const commissions = await prisma.commission.findMany({
     where: {
-      earnedDate: { gte: startOfMonth, lte: endOfMonth },
+      earnedDate: { gte: cycleInfo.startDate, lt: cycleInfo.endDate },
     },
     include: {
       employee: {
@@ -119,6 +123,15 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
   return {
     month: currentMonth,
     year: currentYear,
+    cycleInfo: {
+      startDate: cycleInfo.startDate.toISOString(),
+      endDate: cycleInfo.endDate.toISOString(),
+      displayStartDate: cycleInfo.displayStartDate,
+      displayEndDate: cycleInfo.displayEndDate,
+      label: cycleInfo.label,
+      isUnlocked: cycleInfo.isUnlocked,
+    },
+    availableCycles: getAvailablePayrollCycles(now),
     employees: employees.map((emp) => ({
       ...emp,
       baseSalary: Number(emp.baseSalary),
@@ -346,21 +359,27 @@ export async function generatePayrollAction(month: number, year: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Non authentifié");
 
+  const cycleInfo = getPayrollCycleDates(month, year);
+  if (!cycleInfo.isUnlocked) {
+    throw new Error(
+      `Le calcul de la paie pour ce cycle est accessible uniquement à partir du ${cycleInfo.displayStartDate}.`
+    );
+  }
+
   const employees = await prisma.employee.findMany({
     where: { isActive: true },
   });
 
-  const startOfMonth = new Date(year, month - 1, 1);
-  const endOfMonth = new Date(year, month, 0, 23, 59, 59);
+  const { startDate, endDate } = cycleInfo;
 
   let generatedCount = 0;
 
   for (const emp of employees) {
-    // 1. Sum commissions for this employee in this month
+    // 1. Sum commissions for this employee in this cycle (du 10 au 10)
     const empCommissions = await prisma.commission.aggregate({
       where: {
         employeeId: emp.id,
-        earnedDate: { gte: startOfMonth, lte: endOfMonth },
+        earnedDate: { gte: startDate, lt: endDate },
       },
       _sum: { amount: true },
     });
@@ -372,13 +391,13 @@ export async function generatePayrollAction(month: number, year: number) {
     const workingDaysDivisor = 22;
     const dailyRate = base > 0 ? base / workingDaysDivisor : 0;
 
-    // 2. Fetch approved leaves overlapping this month
+    // 2. Fetch approved leaves overlapping this cycle
     const approvedLeaves = await prisma.leaveRequest.findMany({
       where: {
         employeeId: emp.id,
         status: { in: ["CONFIRMED_HR", "APPROVED_MANAGER"] },
-        startDate: { lte: endOfMonth },
-        endDate: { gte: startOfMonth },
+        startDate: { lt: endDate },
+        endDate: { gte: startDate },
       },
     });
 
@@ -387,8 +406,8 @@ export async function generatePayrollAction(month: number, year: number) {
     let permissionDays = 0;
 
     for (const leave of approvedLeaves) {
-      const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), startOfMonth.getTime()));
-      const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endOfMonth.getTime()));
+      const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
+      const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime() - 1));
 
       // Count working days in overlap (excluding Friday rest day)
       let count = 0;
@@ -416,11 +435,11 @@ export async function generatePayrollAction(month: number, year: number) {
       }
     }
 
-    // 3. Count unexcused absences from Attendance (status === "ABSENT")
+    // 3. Count unexcused absences from Attendance (status === "ABSENT") in this cycle
     const absentAttendances = await prisma.attendance.findMany({
       where: {
         employeeId: emp.id,
-        date: { gte: startOfMonth, lte: endOfMonth },
+        date: { gte: startDate, lt: endDate },
         status: "ABSENT",
       },
       select: { date: true },
@@ -594,8 +613,11 @@ export async function awardClientSigningCommissionAction(params: {
     rawDate = new Date();
   }
 
-  const signingMonth = rawDate.getMonth() + 1; // 1 to 12
-  const signingYear = rawDate.getFullYear();
+  // Déterminer le cycle de paie correspondant (règle : cycle du 10 au 10)
+  const cycle = getPayrollCycleForDate(rawDate);
+  const signingMonth = cycle.month;
+  const signingYear = cycle.year;
+  const cycleInfo = getPayrollCycleDates(signingMonth, signingYear);
 
   // 4. Créer la commission de 500 DA
   const commissionAmount = 500;
@@ -611,14 +633,11 @@ export async function awardClientSigningCommissionAction(params: {
     },
   });
 
-  // 5. Intégrer directement dans la paie du mois où le contrat a été signé
-  const startOfMonth = new Date(signingYear, signingMonth - 1, 1);
-  const endOfMonth = new Date(signingYear, signingMonth, 0, 23, 59, 59);
-
+  // 5. Intégrer directement dans la paie du cycle de paie (du 10 au 10)
   const empCommissions = await prisma.commission.aggregate({
     where: {
       employeeId: employee.id,
-      earnedDate: { gte: startOfMonth, lte: endOfMonth },
+      earnedDate: { gte: cycleInfo.startDate, lt: cycleInfo.endDate },
     },
     _sum: { amount: true },
   });
