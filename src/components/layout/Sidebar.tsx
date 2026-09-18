@@ -28,6 +28,7 @@ import {
   Repeat,
   Database,
   Activity,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
       { label: "Projets", href: "/projets", icon: Briefcase },
       { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
       { label: "Production", href: "/production", icon: Kanban },
+      { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
       { label: "Documents", href: "/documents", icon: FileText },
     ],
   },
@@ -173,7 +175,8 @@ export function Sidebar({ userRole, rawRole, userName }: SidebarProps) {
             (item) =>
               item.href === "/projets" ||
               item.href === "/abonnements" ||
-              item.href === "/production"
+              item.href === "/production" ||
+              item.href === "/calendrier-technicien"
           ),
         };
       }

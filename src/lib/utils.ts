@@ -90,7 +90,23 @@ export function buildWhatsAppUrl(
   if (!formattedPhone) return "#";
 
   const targetName = contactName?.trim() || companyName?.trim() || "Bonjour";
-  const message = `Bonjour ${targetName},\n\nJ'espère que vous allez bien.\n\nJe suis de l'agence BOOSTERA. Nous accompagnons les entreprises et professionnels pour développer leur visibilité, attirer plus de clients et gérer leur communication sur les réseaux sociaux & digital.\n\nSeriez-vous disponible aujourd'hui ou demain pour un court échange de 5 minutes concernant votre activité ?\n\nBien cordialement,\nL'équipe BOOSTERA Agency\ncontact@boostera.dz`;
+  const message = `Bonjour ${targetName},
+
+Suite à notre échange téléphonique, je vous transmets comme convenu un récapitulatif de nos services chez BOOSTERA Agency.
+
+Nous accompagnons les professionnels et entreprises dans le développement de leur visibilité et l'acquisition de nouveaux clients :
+🎬 Production vidéo & Reels percutants (tournage pro sur site & montage dynamique)
+🎨 Création graphique & identité visuelle (Carrousels, Maquettes et visuels réseaux)
+📱 Gestion complète & Campagnes sponsorisées Meta (Facebook Ads / Instagram Ads)
+💻 Conception de sites web professionnels & référencement Google
+
+Nous proposons des formules complètes clé en main adaptées à vos besoins (Pack Starter, Silver, Gold ou Sur-mesure).
+
+N'hésitez pas si vous avez des questions ou pour convenir d'un rendez-vous de présentation.
+
+Bien cordialement,
+L'équipe BOOSTERA Agency
+contact@boostera.dz`;
 
   return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
 }

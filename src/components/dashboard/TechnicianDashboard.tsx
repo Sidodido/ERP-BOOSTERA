@@ -16,6 +16,7 @@ import {
   Layers,
   Flame,
   FileCheck,
+  Calendar,
 } from "lucide-react";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Button } from "@/components/ui/Button";
@@ -70,9 +71,15 @@ export function TechnicianDashboard({ metrics, userName }: TechnicianDashboardPr
 
         {/* Quick Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <Link href="/production">
+          <Link href="/calendrier-technicien">
             <Button size="sm" className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25 cursor-pointer">
-              <Kanban className="w-3.5 h-3.5" />
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Calendrier Tâches</span>
+            </Button>
+          </Link>
+          <Link href="/production">
+            <Button variant="secondary" size="sm" className="gap-1.5 border-neutral-700 cursor-pointer">
+              <Kanban className="w-3.5 h-3.5 text-emerald-400" />
               <span>Tableau Kanban</span>
             </Button>
           </Link>
