@@ -45,8 +45,11 @@ import {
   Flame,
   ArrowUpRight,
   Loader2,
+  Mail,
+  Sparkles,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { ProspectAiEmailModal } from "@/components/prospection/ProspectAiEmailModal";
 
 interface ProspectItem {
   id: string;
@@ -139,6 +142,7 @@ export function ProspectsClient({
   const [isSyncingRelances, setIsSyncingRelances] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
+  const [aiEmailProspect, setAiEmailProspect] = useState<ProspectItem | null>(null);
 
   // Edit Prospect Form State
   const [editForm, setEditForm] = useState({
@@ -1036,7 +1040,7 @@ export function ProspectsClient({
                 <tr>
                   <th className="py-3 px-3">CLIENT</th>
                   <th className="py-3 px-3">NUMERO</th>
-                  <th className="py-3 px-2 text-center text-emerald-400 w-12" title="WhatsApp direct">WA</th>
+                  <th className="py-3 px-2 text-center text-emerald-400 w-20" title="WhatsApp standard post-appel & Email IA de recommandation">CONTACT</th>
                   <th className="py-3 px-3">DATE</th>
                   <th className="py-3 px-3">TYPE</th>
                   <th className="py-3 px-3">ADRESS</th>
@@ -1096,30 +1100,41 @@ export function ProspectsClient({
                         </a>
                       </td>
 
-                      {/* WHATSAPP DIRECT (Automatique après la colonne NUMERO) */}
+                      {/* WHATSAPP DIRECT & EMAIL IA (Automatique après la colonne NUMERO) */}
                       <td className="py-2.5 px-2 text-center">
-                        {prospect.phone ? (
-                          <a
-                            href={buildWhatsAppUrl(prospect.phone, prospect.companyName, prospect.contactName)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => {
-                              trackCommunicationClick({
-                                type: "WHATSAPP",
-                                targetName: prospect.companyName || prospect.contactName,
-                                phone: prospect.phone,
-                                entityType: "PROSPECT",
-                                entityId: prospect.id,
-                              });
-                            }}
-                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] transition-all shadow-xs hover:scale-110 cursor-pointer"
-                            title={`Envoyer un message WhatsApp standard à ${prospect.companyName}`}
+                        <div className="inline-flex items-center justify-center gap-1.5">
+                          {prospect.phone ? (
+                            <a
+                              href={buildWhatsAppUrl(prospect.phone, prospect.companyName, prospect.contactName)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => {
+                                trackCommunicationClick({
+                                  type: "WHATSAPP",
+                                  targetName: prospect.companyName || prospect.contactName,
+                                  phone: prospect.phone,
+                                  entityType: "PROSPECT",
+                                  entityId: prospect.id,
+                                });
+                              }}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] transition-all shadow-xs hover:scale-110 cursor-pointer"
+                              title={`Envoyer un message WhatsApp standard après appel à ${prospect.companyName}`}
+                            >
+                              <WhatsAppIcon className="w-4 h-4" />
+                            </a>
+                          ) : (
+                            <span className="text-neutral-600 text-xs">—</span>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setAiEmailProspect(prospect)}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-600 transition-all shadow-xs hover:scale-110 cursor-pointer"
+                            title={`Email IA : Proposition commerciale & Recommandation de pack pour ${prospect.companyName}`}
                           >
-                            <WhatsAppIcon className="w-4 h-4" />
-                          </a>
-                        ) : (
-                          <span className="text-neutral-600 text-xs">—</span>
-                        )}
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
 
                       {/* 3. DATE (Vide au début, se marque automatiquement à la date du jour lors du contact) */}
@@ -1407,12 +1422,22 @@ export function ProspectsClient({
                         });
                       }}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] text-[10px] font-semibold transition-all shadow-xs hover:scale-105"
-                      title={`Envoyer un message WhatsApp standard à ${prospect.companyName}`}
+                      title={`Envoyer un message WhatsApp standard après appel à ${prospect.companyName}`}
                     >
                       <WhatsAppIcon className="w-3.5 h-3.5" />
                       <span>WhatsApp</span>
                     </a>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => setAiEmailProspect(prospect)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-600 text-[10px] font-semibold transition-all shadow-xs hover:scale-105 cursor-pointer"
+                    title="Générer Email IA de proposition commerciale"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email IA</span>
+                  </button>
                 </div>
 
                 {prospect.response && (
@@ -2081,11 +2106,22 @@ export function ProspectsClient({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
-                  title="Envoyer un message WhatsApp standard"
+                  title="Envoyer un message WhatsApp standard après appel"
                 >
                   <WhatsAppIcon className="w-3.5 h-3.5" />
                   <span>WhatsApp</span>
                 </a>
+              )}
+              {activeProspect && (
+                <button
+                  type="button"
+                  onClick={() => setAiEmailProspect(activeProspect)}
+                  className="px-2.5 py-1 bg-indigo-500/15 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 hover:border-indigo-600 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  title="Générer Email IA avec recommandation de pack"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Email IA</span>
+                </button>
               )}
               {(() => {
                 const hasAppointment =
@@ -2301,6 +2337,13 @@ export function ProspectsClient({
           </div>
         </form>
       </Modal>
+
+      {/* MODAL EMAIL IA DE PROPOSITION COMMERCIALE */}
+      <ProspectAiEmailModal
+        isOpen={Boolean(aiEmailProspect)}
+        onClose={() => setAiEmailProspect(null)}
+        prospect={aiEmailProspect}
+      />
     </div>
   );
 }

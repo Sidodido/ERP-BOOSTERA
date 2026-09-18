@@ -50,8 +50,11 @@ import {
   Check,
   Clock,
   Briefcase,
+  Mail,
+  Sparkles,
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { ProspectAiEmailModal } from "@/components/prospection/ProspectAiEmailModal";
 
 interface ProspectItem {
   id: string;
@@ -166,6 +169,7 @@ export function BaseProspectsClient({
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncingRelances, setIsSyncingRelances] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [aiEmailProspect, setAiEmailProspect] = useState<ProspectItem | null>(null);
 
   // Edit Prospect Form State
   const [editForm, setEditForm] = useState({
@@ -1287,10 +1291,19 @@ export function BaseProspectsClient({
                                 });
                               }}
                               className="text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 p-0.5 rounded hover:bg-emerald-500/10"
-                              title="Discuter sur WhatsApp"
+                              title="Envoyer un message WhatsApp standard après appel"
                             >
                               <WhatsAppIcon className="w-3.5 h-3.5" />
                             </a>
+
+                            <button
+                              type="button"
+                              onClick={() => setAiEmailProspect(prospect)}
+                              className="text-indigo-400 hover:text-indigo-300 transition-colors shrink-0 p-0.5 rounded hover:bg-indigo-500/10 cursor-pointer"
+                              title={`Email IA : Proposition commerciale & Recommandation de pack pour ${prospect.companyName}`}
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       </td>
@@ -1839,6 +1852,13 @@ export function BaseProspectsClient({
           </div>
         </div>
       </Modal>
+
+      {/* MODAL EMAIL IA DE PROPOSITION COMMERCIALE */}
+      <ProspectAiEmailModal
+        isOpen={Boolean(aiEmailProspect)}
+        onClose={() => setAiEmailProspect(null)}
+        prospect={aiEmailProspect}
+      />
     </div>
   );
 }
