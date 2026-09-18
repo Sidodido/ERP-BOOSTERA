@@ -1,0 +1,1390 @@
+"use client";
+
+import React, { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import {
+  UserCheck,
+  Users,
+  Calendar,
+  Clock,
+  DollarSign,
+  Plus,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  FileSpreadsheet,
+  X,
+  Edit2,
+  Briefcase,
+  ChevronRight,
+} from "lucide-react";
+import {
+  createEmployeeAction,
+  updateEmployeeAction,
+  recordAttendanceAction,
+  submitLeaveRequestAction,
+  updateLeaveStatusAction,
+  generatePayrollAction,
+  markSalaryPaidAction,
+} from "@/actions/rh";
+import { DepartmentType, AttendanceStatus, LeaveType, LeaveStatus } from "@prisma/client";
+
+interface EmployeeItem {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  phone?: string | null;
+  email?: string | null;
+  position: string;
+  department: DepartmentType;
+  baseSalary: number;
+  isActive: boolean;
+  user?: { name: string; email: string; role: string } | null;
+}
+
+interface AttendanceItem {
+  id: string;
+  employeeId: string;
+  status: AttendanceStatus;
+  clockIn?: Date | string | null;
+  clockOut?: Date | string | null;
+  breakMinutes: number;
+  notes?: string | null;
+  employee: { id: string; firstName: string; lastName: string; position: string };
+}
+
+interface LeaveItem {
+  id: string;
+  employeeId: string;
+  type: LeaveType;
+  startDate: Date | string;
+  endDate: Date | string;
+  daysCount: number;
+  reason?: string | null;
+  status: LeaveStatus;
+  employee: { id: string; firstName: string; lastName: string; position: string; department: DepartmentType };
+  approvedBy?: { id: string; name: string } | null;
+}
+
+interface SalaryItem {
+  id: string;
+  employeeId: string;
+  month: number;
+  year: number;
+  baseSalary: number;
+  primes: number;
+  commissions: number;
+  bonuses: number;
+  deductions: number;
+  netSalary: number;
+  status: string;
+  paidAt?: Date | string | null;
+  employee: { id: string; firstName: string; lastName: string; position: string; baseSalary: number };
+}
+
+interface CommissionItem {
+  id: string;
+  employeeId: string;
+  clientId?: string | null;
+  amount: number;
+  rateApplied: number;
+  status: string;
+  notes?: string | null;
+  earnedDate: Date | string;
+  employee?: { id: string; firstName: string; lastName: string } | null;
+  client?: { id: string; companyName: string } | null;
+}
+
+interface RhClientProps {
+  month: number;
+  year: number;
+  employees: EmployeeItem[];
+  attendances: AttendanceItem[];
+  leaveRequests: LeaveItem[];
+  salaryPayments: SalaryItem[];
+  commissions: CommissionItem[];
+  usersWithoutEmployee: { id: string; name: string; email: string; role: string }[];
+  kpis: {
+    totalEmployees: number;
+    activeEmployees: number;
+    presentToday: number;
+    pendingLeaves: number;
+    totalBaseSalaries: number;
+    totalCommissions: number;
+    totalDeductions?: number;
+  };
+}
+
+const DEPARTMENTS: { key: DepartmentType; label: string }[] = [
+  { key: "COMMERCIAL", label: "Commercial & Ventes" },
+  { key: "VIDEO", label: "Pôle Vidéo & Tournage" },
+  { key: "DESIGN", label: "Pôle Design UI/UX" },
+  { key: "DEVELOPMENT", label: "Pôle Développement Web" },
+  { key: "MARKETING", label: "Pôle Marketing & Media Buying" },
+  { key: "ADMINISTRATION", label: "Direction & Administration" },
+  { key: "FINANCE", label: "Finance & Comptabilité" },
+  { key: "HR", label: "Ressources Humaines" },
+];
+
+export function RhClient({
+  month,
+  year,
+  employees,
+  attendances,
+  leaveRequests,
+  salaryPayments,
+  commissions = [],
+  usersWithoutEmployee,
+  kpis,
+}: RhClientProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL">(
+    "DIRECTORY"
+  );
+  const [isPending, startTransition] = useTransition();
+
+  // Conserver l'onglet actif lors des actions et rafraîchissements
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabFromUrl = params.get("tab") as any;
+      if (tabFromUrl && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(tabFromUrl)) {
+        setActiveTab(tabFromUrl);
+        return;
+      }
+      const saved = localStorage.getItem("rh_active_tab") as any;
+      if (saved && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(saved)) {
+        setActiveTab(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleSelectTab = (tab: "DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL") => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem("rh_active_tab", tab);
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState(null, "", url.toString());
+    } catch {}
+  };
+
+  // Modals
+  const [showAddEmpModal, setShowAddEmpModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<EmployeeItem | null>(null);
+
+  // New Employee Form
+  const [newUserId, setNewUserId] = useState("");
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPosition, setNewPosition] = useState("Commercial B2B");
+  const [newDept, setNewDept] = useState<DepartmentType>("COMMERCIAL");
+  const [newSalary, setNewSalary] = useState<number>(45000);
+
+  // New Leave Form
+  const [leaveEmpId, setLeaveEmpId] = useState("");
+  const [leaveType, setLeaveType] = useState<LeaveType>("ANNUAL");
+  const [leaveStart, setLeaveStart] = useState(() => new Date().toISOString().split("T")[0]);
+  const [leaveEnd, setLeaveEnd] = useState(() => new Date().toISOString().split("T")[0]);
+  const [leaveDays, setLeaveDays] = useState<number>(1);
+  const [leaveReason, setLeaveReason] = useState("");
+
+  const handleCreateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFirstName || !newLastName || !newPosition) {
+      alert("Prénom, nom et poste sont requis.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await createEmployeeAction({
+          userId: newUserId || undefined,
+          firstName: newFirstName,
+          lastName: newLastName,
+          phone: newPhone,
+          email: newEmail,
+          position: newPosition,
+          department: newDept,
+          baseSalary: newSalary,
+        });
+        setShowAddEmpModal(false);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la création");
+      }
+    });
+  };
+
+  const handleUpdateEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEmployee) return;
+
+    startTransition(async () => {
+      try {
+        await updateEmployeeAction(editingEmployee.id, {
+          firstName: editingEmployee.firstName,
+          lastName: editingEmployee.lastName,
+          phone: editingEmployee.phone || undefined,
+          position: editingEmployee.position,
+          department: editingEmployee.department,
+          baseSalary: editingEmployee.baseSalary,
+          isActive: editingEmployee.isActive,
+        });
+        setEditingEmployee(null);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la modification");
+      }
+    });
+  };
+
+  const handleQuickAttendance = (employeeId: string, status: AttendanceStatus) => {
+    startTransition(async () => {
+      try {
+        await recordAttendanceAction({ employeeId, status });
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur de pointage");
+      }
+    });
+  };
+
+  const handleSubmitLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leaveEmpId) {
+      alert("Veuillez sélectionner un collaborateur.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await submitLeaveRequestAction({
+          employeeId: leaveEmpId,
+          type: leaveType,
+          startDate: leaveStart,
+          endDate: leaveEnd,
+          daysCount: leaveDays,
+          reason: leaveReason,
+        });
+        setShowLeaveModal(false);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur de demande de congé");
+      }
+    });
+  };
+
+  const handleUpdateLeaveStatus = (id: string, status: LeaveStatus) => {
+    startTransition(async () => {
+      try {
+        await updateLeaveStatusAction(id, status);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur");
+      }
+    });
+  };
+
+  const handleGeneratePayroll = () => {
+    startTransition(async () => {
+      try {
+        await generatePayrollAction(month, year);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la génération de la paie");
+      }
+    });
+  };
+
+  const handleMarkPaid = (id: string) => {
+    startTransition(async () => {
+      try {
+        await markSalaryPaidAction(id);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur");
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2.5">
+            <UserCheck className="w-7 h-7 text-indigo-400" />
+            Ressources Humaines, Pointage & Salaires
+          </h1>
+          <p className="text-sm text-neutral-400 mt-1">
+            Gestion du personnel, feuilles d'émargement quotidiennes, congés et bulletins de paie.
+          </p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm font-medium transition"
+          >
+            <Calendar className="w-4 h-4" /> Demander Congé
+          </button>
+          <button
+            onClick={() => setShowAddEmpModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+          >
+            <Plus className="w-4 h-4" /> Nouveau Collaborateur
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+              Effectif Total
+            </span>
+            <span className="p-2 rounded-xl bg-indigo-950/60 text-indigo-400 border border-indigo-800/40">
+              <Users className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-black text-neutral-100 mt-2 font-mono">
+            {kpis.totalEmployees}
+          </div>
+          <p className="text-xs text-neutral-400 mt-1">
+            {kpis.activeEmployees} actifs sous contrat
+          </p>
+        </div>
+
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+              Présents Aujourd'hui
+            </span>
+            <span className="p-2 rounded-xl bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+              <CheckCircle2 className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-black text-emerald-400 mt-2 font-mono">
+            {kpis.presentToday} / {kpis.activeEmployees}
+          </div>
+          <p className="text-xs text-neutral-400 mt-1">
+            {kpis.activeEmployees > 0
+              ? Math.round((kpis.presentToday / kpis.activeEmployees) * 100)
+              : 0}% de présence au poste
+          </p>
+        </div>
+
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">
+              Congés en Attente
+            </span>
+            <span className="p-2 rounded-xl bg-amber-950/60 text-amber-400 border border-amber-800/40">
+              <Calendar className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-black text-amber-400 mt-2 font-mono">
+            {kpis.pendingLeaves}
+          </div>
+          <p className="text-xs text-neutral-400 mt-1">À valider par la direction</p>
+        </div>
+
+        <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+              Masse Salariale Base
+            </span>
+            <span className="p-2 rounded-xl bg-indigo-950/60 text-indigo-400 border border-indigo-800/40">
+              <DollarSign className="w-4 h-4" />
+            </span>
+          </div>
+          <div className="text-2xl font-black text-neutral-100 mt-2 font-mono">
+            {kpis.totalBaseSalaries.toLocaleString("fr-FR")}{" "}
+            <span className="text-sm font-normal text-neutral-400">DA</span>
+          </div>
+          <p className="text-xs text-neutral-400 mt-1">
+            + {kpis.totalCommissions.toLocaleString("fr-FR")} DA de commissions
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+        <button
+          onClick={() => handleSelectTab("DIRECTORY")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === "DIRECTORY"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Annuaire Collaborateurs ({employees.length})
+        </button>
+        <button
+          onClick={() => handleSelectTab("ATTENDANCE")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === "ATTENDANCE"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Pointage Quotidien
+        </button>
+        <button
+          onClick={() => handleSelectTab("LEAVES")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === "LEAVES"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Demandes de Congés ({leaveRequests.length})
+        </button>
+        <button
+          onClick={() => handleSelectTab("PAYROLL")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            activeTab === "PAYROLL"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Salaires & Commissions ({month}/{year})
+        </button>
+      </div>
+
+      {/* TAB 1: DIRECTORY */}
+      {activeTab === "DIRECTORY" && (
+        <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                  <th className="py-3.5 px-4">Collaborateur</th>
+                  <th className="py-3.5 px-4">Poste</th>
+                  <th className="py-3.5 px-4">Pôle / Département</th>
+                  <th className="py-3.5 px-4">Contact</th>
+                  <th className="py-3.5 px-4 text-right">Salaire Base</th>
+                  <th className="py-3.5 px-4 text-center">Statut</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                {employees.map((emp) => (
+                  <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
+                    <td className="py-3 px-4 font-semibold text-neutral-200">
+                      {emp.firstName} {emp.lastName}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-300">{emp.position}</td>
+                    <td className="py-3 px-4">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950/50 text-indigo-400 border border-indigo-800/30">
+                        {DEPARTMENTS.find((d) => d.key === emp.department)?.label ||
+                          emp.department}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-xs text-neutral-400 font-mono">
+                      <div>{emp.phone || "—"}</div>
+                      <div className="text-neutral-500">{emp.email || emp.user?.email}</div>
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono font-bold text-neutral-200">
+                      {emp.baseSalary.toLocaleString("fr-FR")} DA
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                          emp.isActive
+                            ? "bg-emerald-950/50 text-emerald-400 border border-emerald-800/30"
+                            : "bg-neutral-800 text-neutral-400"
+                        }`}
+                      >
+                        {emp.isActive ? "Actif" : "Inactif"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setEditingEmployee(emp)}
+                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
+                        title="Modifier"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: DAILY ATTENDANCE */}
+      {activeTab === "ATTENDANCE" && (
+        <div className="space-y-4">
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-indigo-400" />
+              <span className="text-sm font-semibold text-neutral-200">
+                Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
+              </span>
+            </div>
+            <span className="text-xs text-neutral-400">
+              Pointage direct par collaborateur
+            </span>
+          </div>
+
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                    <th className="py-3.5 px-4">Collaborateur</th>
+                    <th className="py-3.5 px-4">Poste</th>
+                    <th className="py-3.5 px-4">Statut Aujourd'hui</th>
+                    <th className="py-3.5 px-4">Heure d'Entrée</th>
+                    <th className="py-3.5 px-4">Heure de Sortie</th>
+                    <th className="py-3.5 px-4 text-right">Pointer en 1 Clic</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800/60">
+                  {employees
+                    .filter((e) => e.isActive)
+                    .map((emp) => {
+                      const att = attendances.find((a) => a.employeeId === emp.id);
+                      const status = att ? att.status : "ABSENT";
+                      return (
+                        <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
+                          <td className="py-3 px-4 font-semibold text-neutral-200">
+                            {emp.firstName} {emp.lastName}
+                          </td>
+                          <td className="py-3 px-4 text-neutral-400 text-xs">
+                            {emp.position}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                status === "PRESENT"
+                                  ? "bg-emerald-950/50 text-emerald-400 border border-emerald-800/30"
+                                  : status === "LATE"
+                                  ? "bg-amber-950/50 text-amber-400 border border-amber-800/30"
+                                  : status === "ON_LEAVE"
+                                  ? "bg-blue-950/50 text-blue-400 border border-blue-800/30"
+                                  : "bg-rose-950/40 text-rose-400 border border-rose-800/30"
+                              }`}
+                            >
+                              {status === "PRESENT"
+                                ? "Présent"
+                                : status === "LATE"
+                                ? "En retard"
+                                : status === "ON_LEAVE"
+                                ? "En congé"
+                                : "Absent"}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs text-neutral-400">
+                            {att?.clockIn
+                              ? new Date(att.clockIn).toLocaleTimeString("fr-FR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-xs text-amber-400">
+                            {att?.clockOut
+                              ? new Date(att.clockOut).toLocaleTimeString("fr-FR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleQuickAttendance(emp.id, "PRESENT")}
+                                className="px-2.5 py-1 rounded bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 text-xs font-semibold border border-emerald-800/40 transition"
+                              >
+                                Présent
+                              </button>
+                              <button
+                                onClick={() => handleQuickAttendance(emp.id, "LATE")}
+                                className="px-2.5 py-1 rounded bg-amber-950/50 hover:bg-amber-900 text-amber-400 text-xs font-semibold border border-amber-800/40 transition"
+                              >
+                                Retard
+                              </button>
+                              <button
+                                onClick={() => handleQuickAttendance(emp.id, "ABSENT")}
+                                className="px-2.5 py-1 rounded bg-rose-950/40 hover:bg-rose-900 text-rose-400 text-xs font-semibold border border-rose-800/30 transition"
+                              >
+                                Absent
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: LEAVES */}
+      {activeTab === "LEAVES" && (
+        <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                  <th className="py-3.5 px-4">Collaborateur</th>
+                  <th className="py-3.5 px-4">Type de Congé</th>
+                  <th className="py-3.5 px-4">Période Demandée</th>
+                  <th className="py-3.5 px-4 text-center">Durée</th>
+                  <th className="py-3.5 px-4">Motif</th>
+                  <th className="py-3.5 px-4 text-center">Statut</th>
+                  <th className="py-3.5 px-4 text-right">Décision</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                {leaveRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-neutral-400">
+                      Aucune demande de congé enregistrée.
+                    </td>
+                  </tr>
+                ) : (
+                  leaveRequests.map((l) => (
+                    <tr key={l.id} className="hover:bg-neutral-800/30 transition">
+                      <td className="py-3 px-4 font-semibold text-neutral-200">
+                        {l.employee.firstName} {l.employee.lastName}
+                      </td>
+                      <td className="py-3 px-4">
+                        {l.type === "ANNUAL" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
+                            <span>🌴 Annuel</span>
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-emerald-900/80 text-emerald-200 uppercase font-bold tracking-tight">
+                              Chômé & Payé
+                            </span>
+                          </span>
+                        )}
+                        {l.type === "SICK" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-950/60 text-rose-300 border border-rose-800/40">
+                            <span>🩺 Maladie</span>
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-rose-900/80 text-rose-200 uppercase font-bold tracking-tight">
+                              Non Payé (CNAS)
+                            </span>
+                          </span>
+                        )}
+                        {l.type === "PERMISSION" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/40">
+                            <span>⏱️ Permission</span>
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-900/80 text-amber-200 uppercase font-bold tracking-tight">
+                              Non Rémunéré
+                            </span>
+                          </span>
+                        )}
+                        {l.type === "SPECIAL" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-950/60 text-blue-300 border border-blue-800/40">
+                            <span>🎉 Spécial</span>
+                            <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-900/80 text-blue-200 uppercase font-bold tracking-tight">
+                              Payé
+                            </span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-xs text-neutral-300">
+                        {new Date(l.startDate).toLocaleDateString("fr-FR")} →{" "}
+                        {new Date(l.endDate).toLocaleDateString("fr-FR")}
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-neutral-200">
+                        {l.daysCount} jour{l.daysCount > 1 ? "s" : ""}
+                      </td>
+                      <td className="py-3 px-4 text-xs text-neutral-400 max-w-xs truncate">
+                        {l.reason || "—"}
+                      </td>
+                      <td className="py-3 px-4 text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                            l.status === "CONFIRMED_HR" || l.status === "APPROVED_MANAGER"
+                              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                              : l.status === "REJECTED"
+                              ? "bg-rose-950/60 text-rose-400 border border-rose-800/40"
+                              : "bg-amber-950/60 text-amber-400 border border-amber-800/40"
+                          }`}
+                        >
+                          {l.status === "CONFIRMED_HR" || l.status === "APPROVED_MANAGER"
+                            ? "Validé"
+                            : l.status === "REJECTED"
+                            ? "Refusé"
+                            : "En attente"}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {l.status === "PENDING" && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() =>
+                                handleUpdateLeaveStatus(l.id, LeaveStatus.CONFIRMED_HR)
+                              }
+                              className="p-1 rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40 transition"
+                              title="Approuver"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleUpdateLeaveStatus(l.id, LeaveStatus.REJECTED)
+                              }
+                              className="p-1 rounded bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-800/40 transition"
+                              title="Refuser"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PAYROLL */}
+      {activeTab === "PAYROLL" && (
+        <div className="space-y-4">
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-semibold text-neutral-200 flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-indigo-400" />
+                Fiches de Paie & Commissions du Mois ({month}/{year})
+              </h3>
+              <p className="text-xs text-neutral-400">
+                Formule : <span className="font-mono text-neutral-200 font-semibold">Salaire Net = Salaire Fixe + Commissions - Déductions (Maladie / Absences)</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-300 border border-emerald-800/40 text-[11px] font-medium">
+                  <span>🌴 Congé Annuel :</span>
+                  <strong className="text-emerald-200">Chômé & 100% Payé</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/60 text-rose-300 border border-rose-800/40 text-[11px] font-medium">
+                  <span>🩺 Arrêt Maladie :</span>
+                  <strong className="text-rose-200">Non Rémunéré (Pris en charge CNAS, Déduit)</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/40 text-[11px] font-medium">
+                  <span>⚠️ Absences injustifiées :</span>
+                  <strong className="text-amber-200">Déduites (Base / 22j)</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 text-[11px] font-medium">
+                  <span>🤝 Signature Client :</span>
+                  <strong className="text-indigo-200">+500 DA / contrat signé dans le mois</strong>
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleGeneratePayroll}
+              disabled={isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-600/20 disabled:opacity-50 shrink-0"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Calculer / Recalculer la Paie
+            </button>
+          </div>
+
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                    <th className="py-3.5 px-4">Collaborateur</th>
+                    <th className="py-3.5 px-4">Poste</th>
+                    <th className="py-3.5 px-4 text-right">Salaire Fixe</th>
+                    <th className="py-3.5 px-4 text-right">Commissions</th>
+                    <th className="py-3.5 px-4 text-right">Déductions (Maladie/Abs.)</th>
+                    <th className="py-3.5 px-4 text-right">Total Net à Payer</th>
+                    <th className="py-3.5 px-4 text-center">Statut</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800/60">
+                  {salaryPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-neutral-400">
+                        Aucun bulletin calculé pour ce mois. Cliquez sur "Calculer la Paie" pour générer les montants.
+                      </td>
+                    </tr>
+                  ) : (
+                    salaryPayments.map((sp) => (
+                      <tr key={sp.id} className="hover:bg-neutral-800/30 transition">
+                        <td className="py-3 px-4 font-semibold text-neutral-200">
+                          {sp.employee.firstName} {sp.employee.lastName}
+                        </td>
+                        <td className="py-3 px-4 text-xs text-neutral-400">
+                          {sp.employee.position}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-neutral-300">
+                          {sp.baseSalary.toLocaleString("fr-FR")} DA
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-emerald-400 font-semibold">
+                          +{sp.commissions.toLocaleString("fr-FR")} DA
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono">
+                          {sp.deductions > 0 ? (
+                            <span className="font-bold text-rose-400">
+                              -{sp.deductions.toLocaleString("fr-FR")} DA
+                            </span>
+                          ) : (
+                            <span className="text-neutral-500 text-xs">
+                              0 DA <span className="text-[10px] text-emerald-400 font-semibold">(100% payé)</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-black text-indigo-400">
+                          {sp.netSalary.toLocaleString("fr-FR")} DA
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-semibold ${
+                              sp.status === "PAID"
+                                ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                                : "bg-neutral-800 text-neutral-300"
+                            }`}
+                          >
+                            {sp.status === "PAID" ? "Viré / Payé" : "Brouillon"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {sp.status !== "PAID" && (
+                            <button
+                              onClick={() => handleMarkPaid(sp.id)}
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
+                            >
+                              Marquer Payé
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Détail des Commissions Commerciales du Mois */}
+          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/40">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                  <DollarSign className="w-4 h-4" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-semibold text-neutral-200">
+                    Détail des Commissions Commerciales du Mois ({commissions.length})
+                  </h4>
+                  <p className="text-xs text-neutral-400">
+                    Primes automatiques de signature client (+500 DA) et commissions sur ventes.
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/40 px-3 py-1 rounded-xl">
+                Total : +{kpis.totalCommissions.toLocaleString("fr-FR")} DA
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-neutral-800 bg-neutral-950/30 text-neutral-400 text-xs uppercase font-semibold">
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Collaborateur Bénéficiaire</th>
+                    <th className="py-3 px-4">Client Signé</th>
+                    <th className="py-3 px-4">Motif de Commission</th>
+                    <th className="py-3 px-4 text-right">Montant Commission</th>
+                    <th className="py-3 px-4 text-center">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-800/60">
+                  {commissions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-neutral-400">
+                        Aucune commission enregistrée pour ce mois. Les commissions de signature (+500 DA par contrat signé) s'ajouteront automatiquement à la signature d'un client.
+                      </td>
+                    </tr>
+                  ) : (
+                    commissions.map((comm) => (
+                      <tr key={comm.id} className="hover:bg-neutral-800/30 transition text-xs">
+                        <td className="py-3 px-4 font-mono text-neutral-400">
+                          {new Date(comm.earnedDate).toLocaleDateString("fr-FR")}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-neutral-200">
+                          {comm.employee?.firstName} {comm.employee?.lastName}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-300 font-medium">
+                          {comm.client?.companyName || "—"}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-400">
+                          {comm.notes || "Prime de signature client"}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
+                          +{Number(comm.amount).toLocaleString("fr-FR")} DA
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">
+                            Validé
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD EMPLOYEE */}
+      {showAddEmpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
+              <div className="flex items-center gap-2.5">
+                <Users className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-lg font-bold text-neutral-100">
+                  Nouveau Collaborateur BOOSTERA
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAddEmpModal(false)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateEmployee} className="p-6 space-y-4">
+              {usersWithoutEmployee.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Lier à un compte utilisateur existant (Optionnel)
+                  </label>
+                  <select
+                    value={newUserId}
+                    onChange={(e) => {
+                      setNewUserId(e.target.value);
+                      const u = usersWithoutEmployee.find((usr) => usr.id === e.target.value);
+                      if (u) {
+                        const parts = u.name.split(" ");
+                        setNewFirstName(parts[0] || "");
+                        setNewLastName(parts.slice(1).join(" ") || "");
+                        setNewEmail(u.email);
+                      }
+                    }}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Nouveau profil autonome...</option>
+                    {usersWithoutEmployee.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email} - {u.role})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Prénom *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newFirstName}
+                    onChange={(e) => setNewFirstName(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Nom *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newLastName}
+                    onChange={(e) => setNewLastName(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Poste / Rôle *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Commercial, Vidéaste, Monteur..."
+                    value={newPosition}
+                    onChange={(e) => setNewPosition(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Département *
+                  </label>
+                  <select
+                    value={newDept}
+                    onChange={(e) => setNewDept(e.target.value as DepartmentType)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d.key} value={d.key}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Téléphone
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="05 / 06 / 07..."
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Salaire Fixe de Base (DA) *
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5000"
+                    required
+                    value={newSalary}
+                    onChange={(e) => setNewSalary(Number(e.target.value))}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEmpModal(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {isPending ? "Création..." : "Enregistrer Collaborateur"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT EMPLOYEE */}
+      {editingEmployee && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
+              <h3 className="text-lg font-bold text-neutral-100">
+                Modifier Collaborateur : {editingEmployee.firstName} {editingEmployee.lastName}
+              </h3>
+              <button
+                onClick={() => setEditingEmployee(null)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEmployee} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Poste
+                  </label>
+                  <input
+                    type="text"
+                    value={editingEmployee.position}
+                    onChange={(e) =>
+                      setEditingEmployee({ ...editingEmployee, position: e.target.value })
+                    }
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Département
+                  </label>
+                  <select
+                    value={editingEmployee.department}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        department: e.target.value as DepartmentType,
+                      })
+                    }
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200"
+                  >
+                    {DEPARTMENTS.map((d) => (
+                      <option key={d.key} value={d.key}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Salaire Base (DA)
+                  </label>
+                  <input
+                    type="number"
+                    value={editingEmployee.baseSalary}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        baseSalary: Number(e.target.value),
+                      })
+                    }
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Statut Actif
+                  </label>
+                  <select
+                    value={editingEmployee.isActive ? "true" : "false"}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        isActive: e.target.value === "true",
+                      })
+                    }
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200"
+                  >
+                    <option value="true">Actif</option>
+                    <option value="false">Inactif</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingEmployee(null)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  Mettre à jour
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW LEAVE */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-lg font-bold text-neutral-100">
+                  Demande de Congé / Absence
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitLeave} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Collaborateur *
+                </label>
+                <select
+                  value={leaveEmpId}
+                  onChange={(e) => setLeaveEmpId(e.target.value)}
+                  required
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Sélectionner...</option>
+                  {employees
+                    .filter((e) => e.isActive)
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.firstName} {e.lastName} ({e.position})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Type de Congé *
+                  </label>
+                  <select
+                    value={leaveType}
+                    onChange={(e) => setLeaveType(e.target.value as LeaveType)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500 font-medium"
+                  >
+                    <option value="ANNUAL">🌴 Annuel (Chômé & Payé)</option>
+                    <option value="SICK">🩺 Maladie (Non Payé / CNAS)</option>
+                    <option value="PERMISSION">⏱️ Permission (Non Payé)</option>
+                    <option value="SPECIAL">🎉 Événement Spécial (Payé)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Nombre de Jours *
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={leaveDays}
+                    onChange={(e) => setLeaveDays(Number(e.target.value))}
+                    required
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 text-center focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notice explicative de rémunération */}
+              {leaveType === "ANNUAL" && (
+                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/40 text-xs text-emerald-300 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Congé Annuel (Chômé & Payé) :</span> Le salaire fixe est maintenu à 100%. Zéro retenue ou déduction appliquée sur le bulletin de paie.
+                  </div>
+                </div>
+              )}
+              {leaveType === "SICK" && (
+                <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 text-xs text-rose-300 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Congé Maladie (Non Rémunéré par l'employeur) :</span> Les journées d'arrêt maladie sont déduites du salaire (base / 22 jours). L'indemnité journalière est prise en charge directement par la CNAS.
+                  </div>
+                </div>
+              )}
+              {leaveType === "PERMISSION" && (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/40 text-xs text-amber-300 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Permission Courte :</span> Absence autorisée non rémunérée, déduite du calcul de salaire mensuel.
+                  </div>
+                </div>
+              )}
+              {leaveType === "SPECIAL" && (
+                <div className="p-3 rounded-xl bg-blue-950/40 border border-blue-800/40 text-xs text-blue-300 flex items-start gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Événement Exceptionnel :</span> Congé pour événement familial rémunéré à 100% selon le cadre légal (mariage, naissance, etc.).
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Date Début *
+                  </label>
+                  <input
+                    type="date"
+                    value={leaveStart}
+                    onChange={(e) => setLeaveStart(e.target.value)}
+                    required
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Date Fin *
+                  </label>
+                  <input
+                    type="date"
+                    value={leaveEnd}
+                    onChange={(e) => setLeaveEnd(e.target.value)}
+                    required
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Motif / Justification
+                </label>
+                <textarea
+                  rows={2}
+                  value={leaveReason}
+                  onChange={(e) => setLeaveReason(e.target.value)}
+                  placeholder="Raison de la demande..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveModal(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {isPending ? "Envoi..." : "Envoyer Demande"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
