@@ -11,11 +11,15 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Coffee,
+  Play,
 } from "lucide-react";
 import {
   getMyAttendanceAction,
   clockInAction,
   clockOutAction,
+  startBreakAction,
+  endBreakAction,
 } from "@/actions/attendance";
 
 interface AttendanceState {
@@ -26,12 +30,19 @@ interface AttendanceState {
     position: string;
     department: string;
   };
+  activeBreak?: {
+    isOnBreak: boolean;
+    startTime: string | null;
+    reason: string | null;
+    elapsedMinutes: number;
+  };
   today: {
     id: string;
     date: string;
     clockIn: string | null;
     clockOut: string | null;
     status: string;
+    breakMinutes: number;
     durationMinutes: number;
     isClockedIn: boolean;
     isClockedOut: boolean;
@@ -119,6 +130,35 @@ export function DailyAttendanceWidget() {
     });
   };
 
+  const [showBreakPresets, setShowBreakPresets] = useState(false);
+
+  const handleStartBreak = (reason: string) => {
+    setShowBreakPresets(false);
+    startTransition(async () => {
+      try {
+        const res = await startBreakAction(reason);
+        setFeedbackMessage(res.message);
+        await loadAttendance();
+        setTimeout(() => setFeedbackMessage(null), 5000);
+      } catch (err: any) {
+        alert(err.message || "Erreur lors du démarrage de la pause");
+      }
+    });
+  };
+
+  const handleEndBreak = () => {
+    startTransition(async () => {
+      try {
+        const res = await endBreakAction();
+        setFeedbackMessage(res.message);
+        await loadAttendance();
+        setTimeout(() => setFeedbackMessage(null), 5000);
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la fin de pause");
+      }
+    });
+  };
+
   const isClockedIn = !!data?.today?.clockIn;
   const isClockedOut = !!data?.today?.clockOut;
 
@@ -153,6 +193,11 @@ export function DailyAttendanceWidget() {
               {isClockedOut ? (
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
                   Journée Terminée
+                </span>
+              ) : data?.activeBreak?.isOnBreak ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-950/70 text-amber-300 border border-amber-800/60 animate-pulse flex items-center gap-1">
+                  <Coffee className="w-3 h-3 text-amber-400" />
+                  <span>En Pause ({data.activeBreak.elapsedMinutes}m)</span>
                 </span>
               ) : isClockedIn ? (
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/50 animate-pulse">
@@ -308,6 +353,111 @@ export function DailyAttendanceWidget() {
           </button>
         </div>
       </div>
+
+      {/* Section Pause Collaborateur (Actif si pointé et journée non terminée) */}
+      {isClockedIn && !isClockedOut && (
+        <div
+          className={`p-4 rounded-xl border transition-all ${
+            data?.activeBreak?.isOnBreak
+              ? "bg-amber-950/30 border-amber-800/60 shadow-md shadow-amber-950/20"
+              : "bg-neutral-950/40 border-neutral-800/80"
+          }`}
+        >
+          {data?.activeBreak?.isOnBreak ? (
+            /* Mode Pause Active */
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                  <Coffee className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                      Pause en Cours : {data.activeBreak.reason || "Standard"}
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    Démarrée à {formatTimeOnly(data.activeBreak.startTime)} • Durée :{" "}
+                    <strong className="text-amber-300 font-mono">
+                      {data.activeBreak.elapsedMinutes} min
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleEndBreak}
+                disabled={isPending}
+                className="py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer self-stretch sm:self-auto"
+              >
+                <Play className="w-4 h-4 fill-white" />
+                <span>Reprendre le Travail</span>
+              </button>
+            </div>
+          ) : (
+            /* Mode Travail Actif (Peut prendre une pause) */
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 shrink-0">
+                  <Coffee className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-neutral-200">
+                    Pause & Repos Collaborateur
+                  </div>
+                  <p className="text-[11px] text-neutral-400">
+                    {data?.today?.breakMinutes && data.today.breakMinutes > 0
+                      ? `${data.today.breakMinutes} min de pause cumulées aujourd'hui`
+                      : "Aucune pause prise aujourd'hui"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {showBreakPresets ? (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { label: "Déjeuner 🍽️", reason: "Pause Déjeuner" },
+                      { label: "Café ☕", reason: "Pause Café" },
+                      { label: "Repos 🌿", reason: "Pause Détente" },
+                      { label: "Rapide ⏱️ (15m)", reason: "Pause Rapide" },
+                    ].map((p) => (
+                      <button
+                        key={p.reason}
+                        type="button"
+                        onClick={() => handleStartBreak(p.reason)}
+                        disabled={isPending}
+                        className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowBreakPresets(false)}
+                      className="px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowBreakPresets(true)}
+                    disabled={isPending}
+                    className="py-2 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-600/50 text-neutral-200 hover:text-amber-300 text-xs font-semibold transition flex items-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Prendre une Pause</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Feedback Alert if action just occurred */}
       {feedbackMessage && (

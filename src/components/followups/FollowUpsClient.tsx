@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { FOLLOWUP_STATUSES } from "@/lib/constants";
 import { FollowUpStatus } from "@prisma/client";
 import { formatDate, toLocalDateString } from "@/lib/utils";
+import { trackCommunicationClick } from "@/lib/tracking";
 import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -563,6 +564,15 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                       </span>
                       <a
                         href={`tel:${item.prospect.phone}`}
+                        onClick={() => {
+                          trackCommunicationClick({
+                            type: "PHONE",
+                            targetName: item.prospect.companyName || item.prospect.contactName,
+                            phone: item.prospect.phone,
+                            entityType: "PROSPECT",
+                            entityId: item.prospect.id,
+                          });
+                        }}
                         className="text-emerald-400 font-mono font-semibold hover:underline flex items-center gap-1"
                       >
                         {item.prospect.phone}
@@ -743,6 +753,15 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                       <td className="py-3 px-3 font-mono text-[11px]">
                         <a
                           href={`tel:${item.prospect.phone}`}
+                          onClick={() => {
+                            trackCommunicationClick({
+                              type: "PHONE",
+                              targetName: item.prospect.companyName || item.prospect.contactName,
+                              phone: item.prospect.phone,
+                              entityType: "PROSPECT",
+                              entityId: item.prospect.id,
+                            });
+                          }}
                           className="text-emerald-400 hover:underline flex items-center gap-1"
                         >
                           <Phone className="w-3 h-3" />

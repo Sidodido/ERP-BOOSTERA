@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { formatDateTime, formatDate, toLocalDateString, formatCurrency } from "@/lib/utils";
+import { trackCommunicationClick } from "@/lib/tracking";
 import {
   createAppointmentAction,
   updateAppointmentStatus,
@@ -1209,6 +1210,15 @@ export function AppointmentsClient({
                         <td className="py-2.5 px-3 font-mono text-[11px]">
                           <a
                             href={`tel:${prospect.phone}`}
+                            onClick={() => {
+                              trackCommunicationClick({
+                                type: "PHONE",
+                                targetName: prospect.companyName || prospect.contactName,
+                                phone: prospect.phone,
+                                entityType: "PROSPECT",
+                                entityId: prospect.id,
+                              });
+                            }}
                             className="text-emerald-400 hover:underline flex items-center gap-1"
                           >
                             <Phone className="w-3 h-3" />
@@ -1395,6 +1405,17 @@ export function AppointmentsClient({
                 {(selectedAppointment.prospect?.phone || selectedAppointment.client?.phone) && (
                   <a
                     href={`tel:${selectedAppointment.prospect?.phone || selectedAppointment.client?.phone}`}
+                    onClick={() => {
+                      const phone = selectedAppointment.prospect?.phone || selectedAppointment.client?.phone;
+                      const targetName = selectedAppointment.prospect?.companyName || selectedAppointment.client?.companyName;
+                      trackCommunicationClick({
+                        type: "PHONE",
+                        targetName,
+                        phone,
+                        entityType: selectedAppointment.client ? "CLIENT" : "PROSPECT",
+                        entityId: selectedAppointment.id,
+                      });
+                    }}
                     className="text-xs text-emerald-400 hover:underline flex items-center gap-1 mt-1 font-mono"
                   >
                     <Phone className="w-3 h-3" />

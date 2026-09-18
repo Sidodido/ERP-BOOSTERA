@@ -832,8 +832,8 @@ export function RhClient({
                   <strong className="text-rose-200">Non Rémunéré (CNAS, Déduit)</strong>
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-950/60 text-amber-300 border border-amber-800/40 text-[11px] font-medium">
-                  <span>⚠️ Absences injustifiées :</span>
-                  <strong className="text-amber-200">Déduites (Base / 22j)</strong>
+                  <span>⚠️ Retenues maladie / absences :</span>
+                  <strong className="text-amber-200">Prix exact de la journée (Base / 30j)</strong>
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-950/60 text-teal-300 border border-teal-800/40 text-[11px] font-medium">
                   <span>🤝 Signature Client :</span>
@@ -1396,7 +1396,7 @@ export function RhClient({
                 <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/40 text-xs text-rose-300 flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold">Congé Maladie (Non Rémunéré par l'employeur) :</span> Les journées d'arrêt maladie sont déduites du salaire (base / 22 jours). L'indemnité journalière est prise en charge directement par la CNAS.
+                    <span className="font-bold">Congé Maladie (Non Rémunéré par l'employeur) :</span> Les journées d'arrêt maladie sont déduites au prix exact de la journée (Salaire de base / 30 jours). L'indemnité journalière est prise en charge directement par la CNAS.
                   </div>
                 </div>
               )}

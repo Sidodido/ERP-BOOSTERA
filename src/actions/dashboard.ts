@@ -6,6 +6,7 @@ import { ProspectStatus, ClientStatus, TaskStatus, TaskPriority } from "@prisma/
 import {
   ensureEmployeeProfile,
   getUserMonthlyGoals,
+  syncAllGoalsForMonth,
   type MonthlyGoalDisplay,
 } from "@/lib/goals-sync";
 
@@ -17,6 +18,7 @@ export interface DashboardMetricsResult {
 
   // Objectifs Mensuels synchronisés en direct
   myMonthlyGoals: MonthlyGoalDisplay[];
+  allTeamGoals?: MonthlyGoalDisplay[];
 
   // Données Communes & Direction
   totalProspects: number;
@@ -469,12 +471,23 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
   await ensureEmployeeProfile(user);
   const myMonthlyGoals = await getUserMonthlyGoals(user.id);
 
+  let allTeamGoals: MonthlyGoalDisplay[] = [];
+  if (isAdmin || user.role === "SALES_DIRECTOR") {
+    try {
+      const now = new Date();
+      allTeamGoals = await syncAllGoalsForMonth(now.getMonth() + 1, now.getFullYear());
+    } catch (err) {
+      console.error("Erreur syncAllGoalsForMonth dans dashboard:", err);
+    }
+  }
+
   return {
     role: user.role,
     isCommercial,
     isTechnician,
     isAdmin,
     myMonthlyGoals,
+    allTeamGoals,
     totalProspects,
     newProspects,
     interestedProspects,

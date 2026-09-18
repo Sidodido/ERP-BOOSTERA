@@ -10,6 +10,7 @@ import {
   generateMeetingPrepAction,
   generateClientUpsellAction,
 } from "@/actions/commercialAi";
+import { trackCommunicationClick } from "@/lib/tracking";
 import {
   Bot,
   Sparkles,
@@ -1058,6 +1059,15 @@ Comment puis-je t'aider à maximiser tes signatures aujourd'hui ? Tu peux me pos
                         )}`}
                         target="_blank"
                         rel="noreferrer"
+                        onClick={() => {
+                          trackCommunicationClick({
+                            type: "WHATSAPP",
+                            targetName: selectedFollowUpObj.prospectName,
+                            phone: selectedFollowUpObj.phone,
+                            entityType: "PROSPECT",
+                            notes: "Relance IA 1-clic WhatsApp",
+                          });
+                        }}
                         className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
                       >
                         <ExternalLink className="w-3 h-3" />

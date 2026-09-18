@@ -213,6 +213,7 @@ export async function createTaskAction(data: {
   revalidatePath("/production");
   revalidatePath("/projets");
   revalidatePath(`/projets/${data.projectId}`);
+  revalidatePath("/calendrier-technicien");
 
   return { success: true, task };
 }
@@ -239,6 +240,7 @@ export async function updateTaskStatusAction(id: string, status: TaskStatus) {
   revalidatePath(`/projets/${task.projectId}`);
   revalidatePath("/dashboard");
   revalidatePath("/equipes");
+  revalidatePath("/calendrier-technicien");
 
   return { success: true, task };
 }
@@ -589,6 +591,199 @@ export async function createBatchTasksAction(data: {
   revalidatePath("/production");
   revalidatePath("/projets");
   revalidatePath(`/projets/${finalProjectId}`);
+  revalidatePath("/calendrier-technicien");
 
   return { success: true, count: createdTasks.length, tasks: createdTasks };
 }
+
+/**
+ * Récupère l'ensemble des tâches de production pour le calendrier mensuel du rôle technicien.
+ * Rassemble toutes les tâches du mois dans les packs signés (actifs ou en préparation)
+ * et les projets en production.
+ */
+export async function getTechnicianCalendarData(params?: {
+  month?: number;
+  year?: number;
+}) {
+  const user = await requireAuth();
+
+  const now = new Date();
+  const targetYear = params?.year || now.getFullYear();
+  const targetMonth = params?.month || now.getMonth() + 1;
+
+  // Calcul du premier et dernier jour du mois demandé
+  const startOfMonth = new Date(Date.UTC(targetYear, targetMonth - 1, 1, 0, 0, 0, 0));
+  const endOfMonth = new Date(Date.UTC(targetYear, targetMonth, 0, 23, 59, 59, 999));
+
+  // Récupérer les tâches liées aux clients ayant un pack signé (ACTIVE, IN_PREPARATION)
+  // ou aux projets en cours de réalisation
+  const tasks = await prisma.projectTask.findMany({
+    where: {
+      OR: [
+        // 1. Tâches dont la date d'échéance tombe dans le mois sélectionné
+        {
+          dueDate: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
+        },
+        // 2. Tâches créées dans le mois sans date d'échéance explicite
+        {
+          dueDate: null,
+          createdAt: {
+            gte: startOfMonth,
+            lte: endOfMonth,
+          },
+        },
+        // 3. Tâches actives non terminées dans un pack actif ou en préparation
+        {
+          status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+          project: {
+            client: {
+              status: { in: ["ACTIVE", "IN_PREPARATION"] },
+            },
+          },
+        },
+      ],
+      project: {
+        OR: [
+          {
+            client: {
+              status: { in: ["ACTIVE", "IN_PREPARATION"] },
+            },
+          },
+          {
+            status: {
+              in: [
+                "IN_PRODUCTION",
+                "PLANNING",
+                "NEW_REQUEST",
+                "CLIENT_VALIDATION",
+                "REVISION",
+              ],
+            },
+          },
+        ],
+      },
+    },
+    include: {
+      assignee: {
+        select: {
+          id: true,
+          name: true,
+          role: true,
+        },
+      },
+      project: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          status: true,
+          client: {
+            select: {
+              id: true,
+              companyName: true,
+              brandName: true,
+              sector: true,
+              offerType: true,
+              status: true,
+              phone: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { dueDate: "asc" },
+      { priority: "desc" },
+      { createdAt: "desc" },
+    ],
+  });
+
+  const serializedTasks = tasks.map((t) => ({
+    ...t,
+    timeSpentHours: Number(t.timeSpentHours || 0),
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+  }));
+
+  // Liste des techniciens / utilisateurs pour attribution et filtrage
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: {
+      id: true,
+      name: true,
+      role: true,
+    },
+    orderBy: { name: "asc" },
+  });
+
+  // Liste des clients actifs & en préparation avec leurs projets pour création rapide
+  const activeClients = await prisma.client.findMany({
+    where: {
+      status: { in: ["ACTIVE", "IN_PREPARATION"] },
+    },
+    select: {
+      id: true,
+      companyName: true,
+      brandName: true,
+      offerType: true,
+      status: true,
+      projects: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+    },
+    orderBy: { companyName: "asc" },
+  });
+
+  return {
+    tasks: serializedTasks,
+    users,
+    activeClients,
+    currentUserId: user.id,
+    currentUserRole: user.role,
+    month: targetMonth,
+    year: targetYear,
+  };
+}
+
+/**
+ * Mise à jour rapide de l'assignation d'une tâche
+ */
+export async function updateTaskAssigneeAction(taskId: string, assigneeId: string | null) {
+  const user = await requireAuth();
+
+  const task = await prisma.projectTask.update({
+    where: { id: taskId },
+    data: { assigneeId: assigneeId || null },
+    include: {
+      assignee: { select: { id: true, name: true } },
+      project: { select: { id: true, name: true, code: true } },
+    },
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "UPDATE_TASK_ASSIGNEE",
+    module: "PRODUCTION",
+    entityId: taskId,
+    details: {
+      taskTitle: task.title,
+      newAssigneeId: assigneeId,
+      newAssigneeName: task.assignee?.name || "Non assigné",
+    },
+  });
+
+  revalidatePath("/production");
+  revalidatePath("/calendrier-technicien");
+  revalidatePath("/dashboard");
+
+  return { success: true, task };
+}
+

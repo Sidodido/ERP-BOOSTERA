@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import Link from "next/link";
@@ -26,6 +26,9 @@ interface MonthlyGoalsWidgetProps {
   year?: number;
   userName?: string;
   showAdminLink?: boolean;
+  title?: string;
+  subtitle?: string;
+  showEmployeeBadge?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -49,13 +52,39 @@ export function MonthlyGoalsWidget({
   year,
   userName,
   showAdminLink = false,
+  title,
+  subtitle,
+  showEmployeeBadge = false,
 }: MonthlyGoalsWidgetProps) {
   const currentMonthNum = month || new Date().getMonth() + 1;
   const currentYearNum = year || new Date().getFullYear();
   const monthName = MONTH_NAMES[currentMonthNum - 1] || "";
 
-  const totalGoals = goals.length;
-  const completedGoals = goals.filter((g) => g.achievedValue >= g.targetValue).length;
+  const [selectedCollaborator, setSelectedCollaborator] = React.useState<string>("ALL");
+
+  // Extract distinct collaborators if showEmployeeBadge is true
+  const distinctEmployees = React.useMemo(() => {
+    if (!showEmployeeBadge) return [];
+    const map = new Map<string, { id: string; name: string; position?: string }>();
+    for (const g of goals) {
+      if (g.employeeName) {
+        map.set(g.employeeName, {
+          id: g.employeeId,
+          name: g.employeeName,
+          position: g.position,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [goals, showEmployeeBadge]);
+
+  const filteredGoals = React.useMemo(() => {
+    if (selectedCollaborator === "ALL") return goals;
+    return goals.filter((g) => g.employeeName === selectedCollaborator);
+  }, [goals, selectedCollaborator]);
+
+  const totalGoals = filteredGoals.length;
+  const completedGoals = filteredGoals.filter((g) => g.achievedValue >= g.targetValue).length;
 
   const getMetricIcon = (metric: string) => {
     switch (metric.toUpperCase()) {
@@ -141,7 +170,7 @@ export function MonthlyGoalsWidget({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-neutral-100">
-                Mes Objectifs du Mois
+                {title || "Mes Objectifs du Mois"}
               </h2>
               <span className="px-2 py-0.5 rounded-md bg-indigo-950/60 text-indigo-300 text-[11px] font-semibold border border-indigo-800/40">
                 {monthName} {currentYearNum}
@@ -152,7 +181,7 @@ export function MonthlyGoalsWidget({
               </span>
             </div>
             <p className="text-xs text-neutral-400 mt-0.5">
-              Progression calculée automatiquement d'après vos actions réelles enregistrées.
+              {subtitle || "Progression calculée automatiquement d'après vos actions réelles enregistrées."}
             </p>
           </div>
         </div>
@@ -174,9 +203,48 @@ export function MonthlyGoalsWidget({
         </div>
       </div>
 
+      {/* Collaborator Filter Pills (if multiple employees available) */}
+      {showEmployeeBadge && distinctEmployees.length > 1 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            type="button"
+            onClick={() => setSelectedCollaborator("ALL")}
+            className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 ${
+              selectedCollaborator === "ALL"
+                ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+                : "bg-neutral-900/80 text-neutral-400 hover:text-neutral-200 border border-neutral-800 hover:border-neutral-700"
+            }`}
+          >
+            Tous les collaborateurs ({distinctEmployees.length})
+          </button>
+          {distinctEmployees.map((emp) => {
+            const isSelected = selectedCollaborator === emp.name;
+            const empGoalsCount = goals.filter((g) => g.employeeName === emp.name).length;
+            return (
+              <button
+                key={emp.id || emp.name}
+                type="button"
+                onClick={() => setSelectedCollaborator(emp.name)}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold transition shrink-0 flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20"
+                    : "bg-neutral-900/80 text-neutral-400 hover:text-neutral-200 border border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <span>👤</span>
+                <span>{emp.name}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-indigo-700/60 text-indigo-100" : "bg-neutral-800 text-neutral-400"}`}>
+                  {empGoalsCount}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Grid of Goals Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {goals.map((goal) => {
+        {filteredGoals.map((goal) => {
           const isOverachieved = goal.achievedValue > goal.targetValue;
           const isReached = goal.achievedValue >= goal.targetValue;
           const progressPercent = goal.progressPercentage;
@@ -209,6 +277,11 @@ export function MonthlyGoalsWidget({
                     {getMetricIcon(goal.metric)}
                   </div>
                   <div>
+                    {showEmployeeBadge && goal.employeeName && (
+                      <span className="text-[11px] font-bold text-indigo-400 mb-0.5 flex items-center gap-1">
+                        <span>👤</span> {goal.employeeName}
+                      </span>
+                    )}
                     <h3 className="text-sm font-bold text-neutral-100">
                       {goal.metricLabel}
                     </h3>

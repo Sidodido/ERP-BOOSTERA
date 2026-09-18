@@ -82,11 +82,22 @@ export function ExecutiveDashboard({ metrics, userName }: ExecutiveDashboardProp
       {/* Pointage Quotidien */}
       <DailyAttendanceWidget />
 
-      {/* Mes Objectifs du Mois (Synchronisés en Direct) */}
+      {/* Objectifs Mensuels des Collaborateurs (Synchronisés en Direct pour l'Admin) */}
       <MonthlyGoalsWidget
-        goals={metrics.myMonthlyGoals || []}
+        goals={
+          metrics.allTeamGoals && metrics.allTeamGoals.length > 0
+            ? metrics.allTeamGoals
+            : metrics.myMonthlyGoals || []
+        }
         userName={userName}
         showAdminLink={metrics.isAdmin}
+        title={
+          metrics.allTeamGoals && metrics.allTeamGoals.length > 0
+            ? "Objectifs Mensuels des Collaborateurs (Équipe)"
+            : "Mes Objectifs du Mois"
+        }
+        subtitle="Suivi en direct des objectifs de chaque collaborateur synchronisés avec leurs actions réelles."
+        showEmployeeBadge={Boolean(metrics.allTeamGoals && metrics.allTeamGoals.length > 0)}
       />
 
       {/* Row 1: Executive KPI Cards */}

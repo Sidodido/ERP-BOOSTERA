@@ -21,6 +21,7 @@ import {
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Button } from "@/components/ui/Button";
 import { formatDateTime } from "@/lib/utils";
+import { trackCommunicationClick } from "@/lib/tracking";
 import type { DashboardMetricsResult } from "@/actions/dashboard";
 import { DailyAttendanceWidget } from "@/components/attendance/DailyAttendanceWidget";
 import { MonthlyGoalsWidget } from "@/components/dashboard/MonthlyGoalsWidget";
@@ -210,6 +211,15 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
                     {appt.phone && (
                       <a
                         href={`tel:${appt.phone}`}
+                        onClick={() => {
+                          trackCommunicationClick({
+                            type: "PHONE",
+                            targetName: appt.companyName || appt.contactName,
+                            phone: appt.phone,
+                            entityType: "APPOINTMENT",
+                            entityId: appt.id,
+                          });
+                        }}
                         className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
                         title={`Appeler ${appt.phone}`}
                       >
@@ -332,6 +342,15 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
                       {p.phone && (
                         <a
                           href={`tel:${p.phone}`}
+                          onClick={() => {
+                            trackCommunicationClick({
+                              type: "PHONE",
+                              targetName: p.companyName || p.contactName,
+                              phone: p.phone,
+                              entityType: "PROSPECT",
+                              entityId: p.id,
+                            });
+                          }}
                           className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
                           title={`Appeler ${p.phone}`}
                         >

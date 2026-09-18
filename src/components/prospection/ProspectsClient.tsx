@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, toLocalDateString, buildWhatsAppUrl, isVirginProspect } from "@/lib/utils";
 import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
+import { trackCommunicationClick } from "@/lib/tracking";
 import {
   createProspect,
   updateProspect,
@@ -1079,6 +1080,15 @@ export function ProspectsClient({
                       <td className="py-2.5 px-3 font-mono text-[11px]">
                         <a
                           href={`tel:${prospect.phone}`}
+                          onClick={() => {
+                            trackCommunicationClick({
+                              type: "PHONE",
+                              targetName: prospect.companyName || prospect.contactName,
+                              phone: prospect.phone,
+                              entityType: "PROSPECT",
+                              entityId: prospect.id,
+                            });
+                          }}
                           className="text-emerald-400 hover:underline flex items-center gap-1"
                         >
                           <Phone className="w-3 h-3" />
@@ -1093,6 +1103,15 @@ export function ProspectsClient({
                             href={buildWhatsAppUrl(prospect.phone, prospect.companyName, prospect.contactName)}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => {
+                              trackCommunicationClick({
+                                type: "WHATSAPP",
+                                targetName: prospect.companyName || prospect.contactName,
+                                phone: prospect.phone,
+                                entityType: "PROSPECT",
+                                entityId: prospect.id,
+                              });
+                            }}
                             className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] transition-all shadow-xs hover:scale-110 cursor-pointer"
                             title={`Envoyer un message WhatsApp standard à ${prospect.companyName}`}
                           >
@@ -1359,6 +1378,15 @@ export function ProspectsClient({
                 <div className="flex items-center justify-between gap-2">
                   <a
                     href={`tel:${prospect.phone}`}
+                    onClick={() => {
+                      trackCommunicationClick({
+                        type: "PHONE",
+                        targetName: prospect.companyName || prospect.contactName,
+                        phone: prospect.phone,
+                        entityType: "PROSPECT",
+                        entityId: prospect.id,
+                      });
+                    }}
                     className="text-emerald-400 font-mono text-xs hover:underline flex items-center gap-1.5"
                   >
                     <Phone className="w-3.5 h-3.5" />
@@ -1369,6 +1397,15 @@ export function ProspectsClient({
                       href={buildWhatsAppUrl(prospect.phone, prospect.companyName, prospect.contactName)}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={() => {
+                        trackCommunicationClick({
+                          type: "WHATSAPP",
+                          targetName: prospect.companyName || prospect.contactName,
+                          phone: prospect.phone,
+                          entityType: "PROSPECT",
+                          entityId: prospect.id,
+                        });
+                      }}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] text-[10px] font-semibold transition-all shadow-xs hover:scale-105"
                       title={`Envoyer un message WhatsApp standard à ${prospect.companyName}`}
                     >

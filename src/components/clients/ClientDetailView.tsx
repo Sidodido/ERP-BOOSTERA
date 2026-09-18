@@ -29,6 +29,7 @@ import {
   serializeClientBilling,
   type ClientBillingData,
 } from "@/lib/utils";
+import { trackCommunicationClick } from "@/lib/tracking";
 import {
   CallResult,
   ProjectStatus,
@@ -1088,7 +1089,19 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
           <div className="space-y-1">
             <span className="text-neutral-500">Contact Référent</span>
             <p className="text-neutral-200 font-medium">{clientData.contactName || "Non renseigné"}</p>
-            <a href={`tel:${clientData.phone}`} className="text-emerald-400 hover:underline flex items-center gap-1 font-mono">
+            <a
+              href={`tel:${clientData.phone}`}
+              onClick={() => {
+                trackCommunicationClick({
+                  type: "PHONE",
+                  targetName: clientData.companyName || clientData.contactName,
+                  phone: clientData.phone,
+                  entityType: "CLIENT",
+                  entityId: clientData.id,
+                });
+              }}
+              className="text-emerald-400 hover:underline flex items-center gap-1 font-mono"
+            >
               <Phone className="w-3 h-3" />
               <span>{clientData.phone}</span>
             </a>

@@ -18,7 +18,6 @@ import {
   UserCheck,
   Truck,
   ShoppingCart,
-  Boxes,
   TrendingUp,
   FileText,
   BarChart3,
@@ -28,6 +27,7 @@ import {
   ChevronRight,
   Repeat,
   Database,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +88,7 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
     items: [
       { label: "RH & Paie", href: "/rh", icon: UserCheck },
       { label: "Équipes", href: "/equipes", icon: Layers },
+      { label: "Activités", href: "/activites", icon: Activity },
     ],
   },
   {
@@ -95,7 +96,6 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
     items: [
       { label: "Fournisseurs", href: "/fournisseurs", icon: Truck },
       { label: "Achats", href: "/achats", icon: ShoppingCart },
-      { label: "Stocks", href: "/stocks", icon: Boxes },
     ],
   },
   {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { formatDate, toLocalDateString, buildWhatsAppUrl, isVirginProspect } from "@/lib/utils";
 import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
+import { trackCommunicationClick } from "@/lib/tracking";
 import {
   createProspect,
   updateProspect,
@@ -1256,13 +1257,35 @@ export function BaseProspectsClient({
                             </span>
                           )}
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono text-neutral-200 font-semibold w-24 shrink-0 tracking-tight">
+                            <a
+                              href={`tel:${prospect.phone}`}
+                              onClick={() => {
+                                trackCommunicationClick({
+                                  type: "PHONE",
+                                  targetName: prospect.companyName || prospect.contactName,
+                                  phone: prospect.phone,
+                                  entityType: "PROSPECT",
+                                  entityId: prospect.id,
+                                });
+                              }}
+                              className="font-mono text-neutral-200 hover:text-emerald-400 font-semibold w-24 shrink-0 tracking-tight transition-colors cursor-pointer"
+                              title="Appeler ce numéro"
+                            >
                               {prospect.phone}
-                            </span>
+                            </a>
                             <a
                               href={buildWhatsAppUrl(prospect.phone, prospect.contactName || prospect.companyName)}
                               target="_blank"
                               rel="noreferrer"
+                              onClick={() => {
+                                trackCommunicationClick({
+                                  type: "WHATSAPP",
+                                  targetName: prospect.contactName || prospect.companyName,
+                                  phone: prospect.phone,
+                                  entityType: "PROSPECT",
+                                  entityId: prospect.id,
+                                });
+                              }}
                               className="text-emerald-400 hover:text-emerald-300 transition-colors shrink-0 p-0.5 rounded hover:bg-emerald-500/10"
                               title="Discuter sur WhatsApp"
                             >

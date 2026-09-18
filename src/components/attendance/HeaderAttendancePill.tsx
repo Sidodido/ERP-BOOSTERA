@@ -1,17 +1,20 @@
 "use client";
 
 import React, { useState, useEffect, useTransition } from "react";
-import { LogIn, LogOut, CheckCircle2, Clock } from "lucide-react";
+import { LogIn, LogOut, CheckCircle2, Clock, Coffee, Play } from "lucide-react";
 import {
   getMyAttendanceAction,
   clockInAction,
   clockOutAction,
+  endBreakAction,
 } from "@/actions/attendance";
 
 export function HeaderAttendancePill() {
   const [data, setData] = useState<{
     clockIn: string | null;
     clockOut: string | null;
+    isOnBreak: boolean;
+    elapsedMinutes: number;
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -22,6 +25,8 @@ export function HeaderAttendancePill() {
         setData({
           clockIn: res.today.clockIn,
           clockOut: res.today.clockOut,
+          isOnBreak: !!res.activeBreak?.isOnBreak,
+          elapsedMinutes: res.activeBreak?.elapsedMinutes || 0,
         });
       } else {
         setData(null);
@@ -61,6 +66,18 @@ export function HeaderAttendancePill() {
     });
   };
 
+  const handleEndBreak = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    startTransition(async () => {
+      try {
+        await endBreakAction();
+        await loadAttendance();
+      } catch (err: any) {
+        alert(err.message || "Erreur de fin de pause");
+      }
+    });
+  };
+
   const formatTime = (iso?: string | null) => {
     if (!iso) return "";
     return new Date(iso).toLocaleTimeString("fr-FR", {
@@ -85,6 +102,27 @@ export function HeaderAttendancePill() {
   }
 
   if (data.clockIn && !data.clockOut) {
+    if (data.isOnBreak) {
+      return (
+        <div className="hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-amber-800/60 text-xs shadow-xs">
+          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-950/70 text-amber-300 font-medium text-[11px] animate-pulse">
+            <Coffee className="w-3 h-3 text-amber-400" />
+            <span>Pause ({data.elapsedMinutes}m)</span>
+          </span>
+          <button
+            type="button"
+            onClick={handleEndBreak}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition shadow-xs cursor-pointer disabled:opacity-50"
+            title="Reprendre le travail"
+          >
+            <Play className="w-2.5 h-2.5 fill-white" />
+            <span>Reprendre</span>
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
         <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/60 text-emerald-400 font-mono font-semibold text-[11px]">

@@ -387,8 +387,8 @@ export async function generatePayrollAction(month: number, year: number) {
     const commAmount = Number(empCommissions._sum.amount || 0);
     const base = Number(emp.baseSalary);
 
-    // Taux journalier de référence (standard légal de 22 jours ouvrables par mois)
-    const workingDaysDivisor = 22;
+    // Taux journalier de référence : exactement le prix de la journée (Base mensuelle / 30 jours)
+    const workingDaysDivisor = 30;
     const dailyRate = base > 0 ? base / workingDaysDivisor : 0;
 
     // 2. Fetch approved leaves overlapping this cycle
@@ -421,25 +421,29 @@ export async function generatePayrollAction(month: number, year: number) {
         cur.setDate(cur.getDate() + 1);
       }
 
-      const effectiveDays = Math.max(1, Math.min(count, leave.daysCount));
+      const effectiveDays = Math.min(count, leave.daysCount);
 
       if (leave.type === "SICK") {
-        // Congé Maladie : Non payé par l'employeur (couvert par la sécurité sociale CNAS) -> Déduit
+        // Congé Maladie : Non payé par l'employeur (couvert par la CNAS) -> Déduit au prix exact de la journée
         sickDays += effectiveDays;
       } else if (leave.type === "ANNUAL") {
         // Congé Annuel : Chômé et Payé à 100% -> 0 DA déduit (maintien intégral du salaire)
         annualDays += effectiveDays;
       } else if (leave.type === "PERMISSION") {
-        // Permission courte non rémunérée -> Déduit
+        // Permission courte non rémunérée -> Déduit au prix exact de la journée
         permissionDays += effectiveDays;
       }
     }
 
-    // 3. Count unexcused absences from Attendance (status === "ABSENT") in this cycle
+    // 3. Count unexcused absences from Attendance (status === "ABSENT") in this cycle (strictly after hireDate)
+    const cycleStartDate = emp.hireDate
+      ? new Date(Math.max(new Date(emp.hireDate).getTime(), startDate.getTime()))
+      : startDate;
+
     const absentAttendances = await prisma.attendance.findMany({
       where: {
         employeeId: emp.id,
-        date: { gte: startDate, lt: endDate },
+        date: { gte: cycleStartDate, lt: endDate },
         status: "ABSENT",
       },
       select: { date: true },
@@ -461,8 +465,8 @@ export async function generatePayrollAction(month: number, year: number) {
 
     // Règle RH & Droit du Travail :
     // - Congé Annuel : Chômé & Payé -> 0 DA de retenue (salaire fixe 100% maintenu)
-    // - Congé Maladie : Non rémunéré par l'employeur -> Déduit du salaire mensuel
-    // - Permissions et Absences non justifiées -> Déduites
+    // - Congé Maladie : Déduit exactement au prix de la journée (Salaire de base / 30j)
+    // - Permissions et Absences non justifiées -> Déduites au prix de la journée (Salaire de base / 30j)
     const deductibleDays = sickDays + permissionDays + unexcusedAbsences;
     const deductions = Math.min(base, Math.round(deductibleDays * dailyRate));
     const net = Math.max(0, Math.round(base + commAmount - deductions));

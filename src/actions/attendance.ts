@@ -143,6 +143,42 @@ export async function getMyAttendanceAction() {
     );
   }
 
+  // Check active break status
+  const recentBreakLogs = await prisma.auditLog.findMany({
+    where: {
+      userId: user.id,
+      action: { in: ["PAUSE_START", "PAUSE_END"] },
+      createdAt: { gte: today },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+  });
+
+  const activeBreak =
+    recentBreakLogs.length > 0 && recentBreakLogs[0].action === "PAUSE_START"
+      ? {
+          isOnBreak: true,
+          startTime: recentBreakLogs[0].createdAt.toISOString(),
+          reason: (() => {
+            try {
+              const d = JSON.parse(recentBreakLogs[0].details || "{}");
+              return d.reason || "Pause";
+            } catch {
+              return "Pause";
+            }
+          })(),
+          elapsedMinutes: Math.max(
+            0,
+            Math.floor((now.getTime() - new Date(recentBreakLogs[0].createdAt).getTime()) / 60000)
+          ),
+        }
+      : {
+          isOnBreak: false,
+          startTime: null,
+          reason: null,
+          elapsedMinutes: 0,
+        };
+
   return {
     authenticated: true,
     employee: {
@@ -151,6 +187,7 @@ export async function getMyAttendanceAction() {
       position: employee.position,
       department: employee.department,
     },
+    activeBreak,
     today: todayAttendance
       ? {
           id: todayAttendance.id,
@@ -313,11 +350,217 @@ export async function clockOutAction() {
   revalidatePath("/dashboard");
   revalidatePath("/rh");
   revalidatePath("/parametres");
+  revalidatePath("/activites");
   return {
     success: true,
     clockOut: now.toISOString(),
     durationMinutes,
     message: `Sortie enregistrée à ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} • Temps de présence : ${hours}h ${minutes}min`,
+  };
+}
+
+/**
+ * Start a break / pause (Prendre une pause)
+ */
+export async function startBreakAction(reason: string = "Pause standard") {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const employee = await ensureEmployeeForUser(user.id);
+  const now = new Date();
+  const today = getCalendarDateOnly(now);
+
+  const attendance = await prisma.attendance.findUnique({
+    where: {
+      employeeId_date: {
+        employeeId: employee.id,
+        date: today,
+      },
+    },
+  });
+
+  if (!attendance || !attendance.clockIn) {
+    throw new Error("Vous devez d'abord pointer votre arrivée pour prendre une pause.");
+  }
+
+  if (attendance.clockOut) {
+    throw new Error("Votre journée de travail est déjà terminée.");
+  }
+
+  // Verify not already on break
+  const lastBreakLog = await prisma.auditLog.findFirst({
+    where: {
+      userId: user.id,
+      action: { in: ["PAUSE_START", "PAUSE_END"] },
+      createdAt: { gte: today },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (lastBreakLog && lastBreakLog.action === "PAUSE_START") {
+    throw new Error("Vous êtes déjà en pause.");
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "PAUSE_START",
+      module: "HR",
+      entityId: attendance.id,
+      details: JSON.stringify({
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        reason,
+        startTime: now.toISOString(),
+      }),
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/rh");
+  revalidatePath("/activites");
+
+  return {
+    success: true,
+    startTime: now.toISOString(),
+    reason,
+    message: `Pause « ${reason} » commencée à ${now.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`,
+  };
+}
+
+/**
+ * End a break / pause (Reprendre le travail)
+ */
+export async function endBreakAction() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const employee = await ensureEmployeeForUser(user.id);
+  const now = new Date();
+  const today = getCalendarDateOnly(now);
+
+  const attendance = await prisma.attendance.findUnique({
+    where: {
+      employeeId_date: {
+        employeeId: employee.id,
+        date: today,
+      },
+    },
+  });
+
+  if (!attendance) {
+    throw new Error("Fiche de présence introuvable");
+  }
+
+  // Find latest PAUSE_START
+  const lastBreakStart = await prisma.auditLog.findFirst({
+    where: {
+      userId: user.id,
+      action: "PAUSE_START",
+      createdAt: { gte: today },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!lastBreakStart) {
+    throw new Error("Aucune pause en cours trouvée.");
+  }
+
+  // Verify not already ended
+  const lastBreakEnd = await prisma.auditLog.findFirst({
+    where: {
+      userId: user.id,
+      action: "PAUSE_END",
+      createdAt: { gt: lastBreakStart.createdAt },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (lastBreakEnd) {
+    throw new Error("Aucune pause active en cours.");
+  }
+
+  let reason = "Pause";
+  try {
+    const d = JSON.parse(lastBreakStart.details || "{}");
+    if (d.reason) reason = d.reason;
+  } catch {}
+
+  const durationMs = now.getTime() - new Date(lastBreakStart.createdAt).getTime();
+  const durationMinutes = Math.max(1, Math.floor(durationMs / 60000));
+
+  // Update attendance breakMinutes
+  await prisma.attendance.update({
+    where: { id: attendance.id },
+    data: {
+      breakMinutes: { increment: durationMinutes },
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "PAUSE_END",
+      module: "HR",
+      entityId: attendance.id,
+      details: JSON.stringify({
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        reason,
+        startTime: lastBreakStart.createdAt.toISOString(),
+        endTime: now.toISOString(),
+        durationMinutes,
+      }),
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/rh");
+  revalidatePath("/activites");
+
+  return {
+    success: true,
+    durationMinutes,
+    message: `Pause terminée (${durationMinutes} min). Bon retour au travail !`,
+  };
+}
+
+/**
+ * Get current break status for logged in user
+ */
+export async function getMyBreakStatusAction() {
+  const user = await getCurrentUser();
+  if (!user) return { isOnBreak: false, startTime: null, reason: null, elapsedMinutes: 0 };
+  const now = new Date();
+  const today = getCalendarDateOnly(now);
+
+  const lastBreakLog = await prisma.auditLog.findFirst({
+    where: {
+      userId: user.id,
+      action: { in: ["PAUSE_START", "PAUSE_END"] },
+      createdAt: { gte: today },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!lastBreakLog || lastBreakLog.action !== "PAUSE_START") {
+    return { isOnBreak: false, startTime: null, reason: null, elapsedMinutes: 0 };
+  }
+
+  let reason = "Pause";
+  try {
+    const d = JSON.parse(lastBreakLog.details || "{}");
+    if (d.reason) reason = d.reason;
+  } catch {}
+
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((now.getTime() - new Date(lastBreakLog.createdAt).getTime()) / 60000)
+  );
+
+  return {
+    isOnBreak: true,
+    startTime: lastBreakLog.createdAt.toISOString(),
+    reason,
+    elapsedMinutes,
   };
 }
 
@@ -340,7 +583,7 @@ export async function syncDailyAbsences(options: {
   // 1. Fetch all active employees
   const activeEmployees = await prisma.employee.findMany({
     where: { isActive: true },
-    select: { id: true, firstName: true, lastName: true },
+    select: { id: true, firstName: true, lastName: true, hireDate: true },
   });
 
   if (activeEmployees.length === 0) {
@@ -385,6 +628,11 @@ export async function syncDailyAbsences(options: {
     const attendanceMap = new Map(existingAttendances.map((a) => [a.employeeId, a]));
 
     for (const emp of activeEmployees) {
+      // Don't evaluate dates prior to employee hire date
+      if (emp.hireDate && targetDate < getCalendarDateOnly(new Date(emp.hireDate))) {
+        continue;
+      }
+
       const existing = attendanceMap.get(emp.id);
       const leaveType = leaveMap.get(emp.id);
       const isOnLeave = Boolean(leaveType);
