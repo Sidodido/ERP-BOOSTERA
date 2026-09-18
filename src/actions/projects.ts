@@ -16,27 +16,38 @@ export async function getProjects(params: {
 } = {}) {
   await requireAuth();
 
-  const whereClause: any = {};
+  const whereClause: any = {
+    AND: [
+      // Exclure strictement tous les abonnements et régies :
+      // La section Projets est 100% réservée aux projets de développement web, plateformes et applications mobiles
+      { code: { not: { startsWith: "ABN-" } } },
+      { name: { not: { startsWith: "Abonnement" } } },
+      { name: { not: { contains: "Abonnement Mensuel" } } },
+      { name: { not: { startsWith: "Régie & Tâches" } } },
+    ],
+  };
 
   if (params.status) {
-    whereClause.status = params.status;
+    whereClause.AND.push({ status: params.status });
   }
 
   if (params.clientId) {
-    whereClause.clientId = params.clientId;
+    whereClause.AND.push({ clientId: params.clientId });
   }
 
   if (params.managerId) {
-    whereClause.managerId = params.managerId;
+    whereClause.AND.push({ managerId: params.managerId });
   }
 
   if (params.search) {
-    whereClause.OR = [
-      { name: { contains: params.search, mode: "insensitive" } },
-      { code: { contains: params.search, mode: "insensitive" } },
-      { description: { contains: params.search, mode: "insensitive" } },
-      { client: { companyName: { contains: params.search, mode: "insensitive" } } },
-    ];
+    whereClause.AND.push({
+      OR: [
+        { name: { contains: params.search, mode: "insensitive" } },
+        { code: { contains: params.search, mode: "insensitive" } },
+        { description: { contains: params.search, mode: "insensitive" } },
+        { client: { companyName: { contains: params.search, mode: "insensitive" } } },
+      ],
+    });
   }
 
   const projects = await prisma.project.findMany({
@@ -184,8 +195,16 @@ export async function getProjectDetail(id: string) {
   const grossMargin = budgetNum - totalCosts;
   const marginPercentage = budgetNum > 0 ? Math.round((grossMargin / budgetNum) * 100) : 0;
 
+  const isAbonnement = Boolean(
+    project.code?.startsWith("ABN-") ||
+    project.name?.startsWith("Abonnement") ||
+    project.name?.includes("Abonnement Mensuel") ||
+    project.name?.startsWith("Régie & Tâches")
+  );
+
   return {
     ...project,
+    isAbonnement,
     budget: budgetNum,
     progress,
     totalSpentHours,
@@ -219,20 +238,32 @@ export async function createProjectAction(data: {
   startDate?: string;
   deadline?: string;
   budget?: number;
+  projectType?: "WEB_DEV" | "PLATFORM" | "MOBILE_APP" | "CUSTOM_DEV";
 }) {
   const user = await requireAuth();
 
-  // Generate unique code if not provided
+  // Generate unique code if not provided according to tech project type
   let code = data.code?.trim();
   if (!code) {
     const year = new Date().getFullYear();
     const count = await prisma.project.count();
     let seq = count + 1;
-    code = `PRJ-${year}-${String(seq).padStart(3, "0")}`;
+    let prefix = "PRJ";
+    if (data.projectType === "WEB_DEV") prefix = "WEB";
+    else if (data.projectType === "PLATFORM") prefix = "PLT";
+    else if (data.projectType === "MOBILE_APP") prefix = "APP";
+
+    code = `${prefix}-${year}-${String(seq).padStart(3, "0")}`;
     while (await prisma.project.findUnique({ where: { code } })) {
       seq++;
-      code = `PRJ-${year}-${String(seq).padStart(3, "0")}`;
+      code = `${prefix}-${year}-${String(seq).padStart(3, "0")}`;
     }
+  }
+
+  // Format description with projectType tag if provided
+  let formattedDescription = data.description?.trim() || "";
+  if (data.projectType && !formattedDescription.includes("[TYPE:")) {
+    formattedDescription = `[TYPE:${data.projectType}] ${formattedDescription}`.trim();
   }
 
   const project = await prisma.project.create({
@@ -240,7 +271,7 @@ export async function createProjectAction(data: {
       clientId: data.clientId,
       name: data.name.trim(),
       code,
-      description: data.description?.trim() || null,
+      description: formattedDescription || null,
       status: data.status || ProjectStatus.NEW_REQUEST,
       managerId: data.managerId || user.id,
       startDate: data.startDate ? new Date(data.startDate) : new Date(),
@@ -258,7 +289,7 @@ export async function createProjectAction(data: {
     action: "CREATE_PROJECT",
     module: "PROJECTS",
     entityId: project.id,
-    details: { code: project.code, name: project.name, clientId: data.clientId },
+    details: { code: project.code, name: project.name, clientId: data.clientId, projectType: data.projectType },
   });
 
   revalidatePath("/projets");

@@ -503,39 +503,51 @@ export async function sendWeeklyContentNotificationAction(params: {
     const notificationTitle = `📅 Planning Semaine ${params.weekNumber} : ${client.companyName} (${clientOffer})`;
     const notificationMessage = `Début de semaine : ${postCount} publication(s) à produire pour ${client.companyName} (Offre ${clientOffer} - Quota ${quotaInfo.weekly}/semaine). Sujets : ${postsSummary || "À générer via le Studio IA"}`;
 
-    // Collecte des destinataires : Chef de projet, Commercial du client, Direction
-    const recipientIds = new Set<string>();
+    // Collecte des destinataires : Chef de projet, Direction Technique, Admins et Equipe de production
+    // NOTE : Les rôles commerciaux (SALES_REP, SALES_DIRECTOR) ne doivent JAMAIS recevoir de notifications de publications
+    const candidateIds = new Set<string>();
 
     if (managerId) {
-      recipientIds.add(managerId);
-    }
-    if (client.assignedToId) {
-      recipientIds.add(client.assignedToId);
+      candidateIds.add(managerId);
     }
 
-    // Ajouter la Direction / Admins
-    const directionUsers = await prisma.user.findMany({
+    // Direction Technique, Admins et Profils de production technique
+    const techAndAdminUsers = await prisma.user.findMany({
       where: {
         OR: [
-          { role: "ADMIN" },
-          { role: "SALES_DIRECTOR" },
-          { role: "TECH_LEAD" },
+          { role: Role.ADMIN },
+          { role: Role.TECH_LEAD },
+          { role: Role.DEVELOPER },
+          { role: Role.DESIGNER },
+          { role: Role.VIDEO_EDITOR },
         ],
         isActive: true,
       },
       select: { id: true },
     });
 
-    for (const d of directionUsers) {
-      recipientIds.add(d.id);
+    for (const d of techAndAdminUsers) {
+      candidateIds.add(d.id);
     }
+
+    // Filtrage strict : éliminer formellement tout utilisateur ayant un rôle commercial
+    const validRecipients = await prisma.user.findMany({
+      where: {
+        id: { in: Array.from(candidateIds) },
+        role: {
+          notIn: [Role.SALES_REP, Role.SALES_DIRECTOR],
+        },
+        isActive: true,
+      },
+      select: { id: true },
+    });
 
     let sentCount = 0;
     const targetLink = params.projectId ? `/projets/${params.projectId}` : `/abonnements/${client.id}`;
-    for (const recipientId of recipientIds) {
+    for (const recipient of validRecipients) {
       await prisma.notification.create({
         data: {
-          userId: recipientId,
+          userId: recipient.id,
           title: notificationTitle,
           message: notificationMessage,
           type: "CONTENT_AI",

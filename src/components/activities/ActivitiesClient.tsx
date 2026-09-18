@@ -60,6 +60,7 @@ interface BreakTourItem {
   durationMinutes: number;
   reason: string;
   status: "EN_COURS" | "TERMINEE";
+  isAutoDetected?: boolean;
 }
 
 interface TeamPerformanceItem {
@@ -107,6 +108,7 @@ interface ActivitiesData {
     reason: string;
     startTime: string;
     elapsedMinutes: number;
+    isAutoDetected?: boolean;
   }[];
   breakToursHistory: BreakTourItem[];
   teamPerformance: TeamPerformanceItem[];
@@ -452,11 +454,24 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                 {data.currentlyOnBreakUsers.map((b) => (
                   <span
                     key={b.userId}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-900/60 border border-amber-700/60 text-amber-200 text-xs font-medium"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${
+                      b.isAutoDetected
+                        ? "bg-orange-950/60 border-orange-700/60 text-orange-200"
+                        : "bg-amber-900/60 border-amber-700/60 text-amber-200"
+                    }`}
                   >
                     <strong>{b.userName}</strong>
-                    <span className="text-amber-400/80">({b.reason})</span>
-                    <span className="text-[11px] font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.2 rounded">
+                    {b.isAutoDetected && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold">
+                        🤖 Auto
+                      </span>
+                    )}
+                    <span className={b.isAutoDetected ? "text-orange-400/80" : "text-amber-400/80"}>
+                      ({b.isAutoDetected ? "Inactivité" : b.reason})
+                    </span>
+                    <span className={`text-[11px] font-mono px-1.5 py-0.2 rounded ${
+                      b.isAutoDetected ? "text-orange-300 bg-orange-950/80" : "text-amber-300 bg-amber-950/80"
+                    }`}>
                       {b.elapsedMinutes} min
                     </span>
                   </span>
@@ -487,6 +502,7 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
           </span>
         </div>
       )}
+
 
       {/* 3. KPI CARDS BANNER */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -622,8 +638,8 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
       </div>
 
       {/* 5. SEARCH & FILTER TOOLBAR (for Timeline & Breaks) */}
-      <div className="bg-neutral-900/80 border border-neutral-800 p-4 rounded-2xl space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="bg-neutral-900/80 border border-neutral-800 p-4 rounded-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Search Query */}
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
@@ -666,44 +682,6 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
               ))}
             </select>
           </div>
-
-          {/* Action Category Filter */}
-          <div>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 transition cursor-pointer"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Quick Category Pill Filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1">
-          {CATEGORIES.map((c) => {
-            const Icon = c.icon;
-            const isSelected = selectedCategory === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setSelectedCategory(c.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30"
-                    : "bg-neutral-950/60 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800/80"
-                }`}
-              >
-                <Icon className="w-3 h-3" />
-                <span>{c.label}</span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -882,18 +860,28 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                 Aucun tour de pause enregistré aujourd'hui
               </h4>
               <p className="text-xs text-neutral-500">
-                Les pauses prises via le widget de pointage apparaîtront ici automatiquement en temps
-                réel.
+                Les pauses manuelles et les périodes d'inactivité (&gt;15 min) apparaissent ici en temps réel.
               </p>
             </div>
           ) : (
             <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl overflow-hidden shadow-xs">
+              {/* Legend */}
+              <div className="flex items-center gap-4 px-4 py-2.5 border-b border-neutral-800 bg-neutral-950/40 text-[11px] text-neutral-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-amber-500/50 border border-amber-500" />
+                  Pause manuelle déclarée
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-orange-500/50 border border-orange-500" />
+                  🤖 Inactivité auto-détectée (&gt;15 min sans action)
+                </span>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-neutral-800 bg-neutral-950/60 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Collaborateur</th>
-                      <th className="py-3 px-4">Motif de la pause</th>
+                      <th className="py-3 px-4">Motif / Type</th>
                       <th className="py-3 px-4">Heure de Début</th>
                       <th className="py-3 px-4">Heure de Fin</th>
                       <th className="py-3 px-4 text-center">Durée</th>
@@ -903,15 +891,22 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                   <tbody className="divide-y divide-neutral-800/60 text-xs">
                     {data.breakToursHistory.map((tour) => {
                       const isAlert = tour.durationMinutes > 45;
+                      const isAuto = tour.isAutoDetected;
                       return (
                         <tr
                           key={tour.id}
-                          className="hover:bg-neutral-850/50 transition-colors"
+                          className={`hover:bg-neutral-850/50 transition-colors ${
+                            isAuto ? "bg-orange-950/10" : ""
+                          }`}
                         >
                           {/* Collaborateur */}
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-xl bg-neutral-800 border border-neutral-700 flex items-center justify-center text-xs font-bold text-neutral-300 uppercase">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold uppercase border ${
+                                isAuto
+                                  ? "bg-orange-900/40 border-orange-700/60 text-orange-300"
+                                  : "bg-neutral-800 border-neutral-700 text-neutral-300"
+                              }`}>
                                 {tour.userName.substring(0, 2)}
                               </div>
                               <div>
@@ -921,9 +916,16 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                             </div>
                           </td>
 
-                          {/* Motif */}
-                          <td className="py-3.5 px-4 font-medium text-neutral-300">
-                            {tour.reason}
+                          {/* Motif / Type */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {isAuto && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 font-bold flex items-center gap-1">
+                                  🤖 Auto-détectée
+                                </span>
+                              )}
+                              <span className="font-medium text-neutral-300">{tour.reason}</span>
+                            </div>
                           </td>
 
                           {/* Heure Début */}
@@ -944,7 +946,9 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                                 second: "2-digit",
                               })
                             ) : (
-                              <span className="text-amber-400 italic">En cours...</span>
+                              <span className={isAuto ? "text-orange-400 italic" : "text-amber-400 italic"}>
+                                En cours...
+                              </span>
                             )}
                           </td>
 
@@ -954,6 +958,8 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                               className={`inline-block px-2.5 py-1 rounded-lg font-mono font-bold text-xs ${
                                 isAlert
                                   ? "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                                  : isAuto
+                                  ? "bg-orange-500/10 text-orange-300 border border-orange-500/20"
                                   : "bg-amber-500/10 text-amber-300 border border-amber-500/20"
                               }`}
                             >
@@ -964,9 +970,13 @@ export function ActivitiesClient({ initialData, currentUser }: ActivitiesClientP
                           {/* Statut */}
                           <td className="py-3.5 px-4 text-right">
                             {tour.status === "EN_COURS" ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 animate-pulse">
-                                <Coffee className="w-3 h-3" />
-                                <span>En Pause</span>
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border animate-pulse ${
+                                isAuto
+                                  ? "bg-orange-500/15 text-orange-300 border-orange-500/30"
+                                  : "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                              }`}>
+                                {isAuto ? <AlertTriangle className="w-3 h-3" /> : <Coffee className="w-3 h-3" />}
+                                <span>{isAuto ? "Inactif" : "En Pause"}</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

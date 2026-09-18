@@ -59,8 +59,8 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
   {
     groupTitle: "COMMERCIAL & CRM",
     items: [
-      { label: "Prospection", href: "/prospection", icon: Target, badge: "Vierges" },
       { label: "Base Prospects", href: "/base-prospects", icon: Database },
+      { label: "Prospection", href: "/prospection", icon: Target, badge: "Vierges" },
       { label: "Appels", href: "/appels", icon: PhoneCall },
       { label: "Rendez-vous", href: "/rendez-vous", icon: Calendar },
       { label: "Relances", href: "/relances", icon: Clock },
@@ -70,7 +70,7 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
   {
     groupTitle: "PRODUCTION & GESTION",
     items: [
-      { label: "Projets", href: "/projets", icon: Briefcase },
+      { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
       { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },

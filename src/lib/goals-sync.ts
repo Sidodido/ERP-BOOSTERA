@@ -1,4 +1,4 @@
-﻿import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { Prisma, TaskStatus, DepartmentType } from "@prisma/client";
 
 export interface MonthlyGoalDisplay {
@@ -335,7 +335,54 @@ export async function ensureEmployeeProfile(user: {
 }
 
 /**
- * Récupère et synchronise en direct les objectifs mensuels pour un utilisateur connecté
+ * Default goals per user role — used when no goals exist for the month
+ */
+const DEFAULT_GOALS_BY_ROLE: Record<string, { metric: string; targetValue: number }[]> = {
+  SALES_REP: [
+    { metric: "APPELS", targetValue: 400 },
+    { metric: "RENDEZ_VOUS", targetValue: 30 },
+    { metric: "CLIENTS", targetValue: 3 },
+  ],
+  COMMERCIAL_DIRECTOR: [
+    { metric: "APPELS", targetValue: 200 },
+    { metric: "CLIENTS", targetValue: 5 },
+  ],
+  SALES_DIRECTOR: [
+    { metric: "APPELS", targetValue: 200 },
+    { metric: "CLIENTS", targetValue: 5 },
+  ],
+  ADMIN: [
+    { metric: "APPELS", targetValue: 100 },
+    { metric: "CLIENTS", targetValue: 5 },
+  ],
+  TECH_LEAD: [
+    { metric: "VIDEOS", targetValue: 15 },
+    { metric: "CREATIONS", targetValue: 20 },
+  ],
+  DEVELOPER: [{ metric: "CREATIONS", targetValue: 15 }],
+  DESIGNER: [
+    { metric: "DESIGNS", targetValue: 20 },
+    { metric: "CREATIONS", targetValue: 25 },
+  ],
+  VIDEO_EDITOR: [{ metric: "VIDEOS", targetValue: 20 }],
+  HR: [
+    { metric: "APPELS", targetValue: 50 },
+    { metric: "CREATIONS", targetValue: 10 },
+  ],
+  ACCOUNTANT: [
+    { metric: "APPELS", targetValue: 50 },
+    { metric: "CLIENTS", targetValue: 2 },
+  ],
+  COMMUNITY_MANAGER: [
+    { metric: "CREATIONS", targetValue: 20 },
+    { metric: "APPELS", targetValue: 100 },
+  ],
+};
+
+/**
+ * Récupère et synchronise en direct les objectifs mensuels pour un utilisateur connecté.
+ * Si aucun objectif n'est défini pour ce mois, crée automatiquement des objectifs
+ * par défaut selon le rôle de l'employé.
  */
 export async function getUserMonthlyGoals(
   userId: string,
@@ -352,15 +399,49 @@ export async function getUserMonthlyGoals(
   const employee = await prisma.employee.findUnique({
     where: { userId },
     include: {
+      user: { select: { role: true } },
       goals: {
         where: { month, year },
       },
     },
   });
 
-  if (!employee || !employee.goals || employee.goals.length === 0) {
-    return [];
+  if (!employee) return [];
+
+  // ── Auto-create default goals if none exist for this month ─────────────────
+  if (!employee.goals || employee.goals.length === 0) {
+    const userRole = employee.user?.role || "SALES_REP";
+    const defaults = DEFAULT_GOALS_BY_ROLE[userRole] || DEFAULT_GOALS_BY_ROLE["SALES_REP"];
+
+    try {
+      await prisma.employeeGoal.createMany({
+        data: defaults.map((d) => ({
+          employeeId: employee.id,
+          metric: d.metric,
+          targetValue: d.targetValue,
+          achievedValue: 0,
+          month,
+          year,
+        })),
+        skipDuplicates: true,
+      });
+
+      // Re-fetch after creation
+      const freshEmployee = await prisma.employee.findUnique({
+        where: { userId },
+        include: {
+          user: { select: { role: true } },
+          goals: { where: { month, year } },
+        },
+      });
+      if (!freshEmployee || !freshEmployee.goals.length) return [];
+      employee.goals = freshEmployee.goals;
+    } catch (err) {
+      console.warn("[getUserMonthlyGoals] Failed to auto-create goals:", err);
+      return [];
+    }
   }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const results: MonthlyGoalDisplay[] = [];
 

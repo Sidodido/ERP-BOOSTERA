@@ -183,16 +183,6 @@ export function AbonnementDetailView({ client, users }: AbonnementDetailViewProp
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {client.projects?.[0] && (
-            <Link
-              href={`/projets/${client.projects[0].id}`}
-              className="px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Voir Projet Associé</span>
-            </Link>
-          )}
-
           <Button
             size="sm"
             onClick={() => setIsTaskModalOpen(true)}

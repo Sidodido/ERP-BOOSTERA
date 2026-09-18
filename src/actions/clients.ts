@@ -23,6 +23,7 @@ import {
 } from "@/lib/utils";
 import fs from "fs/promises";
 import path from "path";
+import { syncSubscriptionTasksForClients } from "@/actions/production";
 import { awardClientSigningCommissionAction } from "@/actions/rh";
 
 export async function getClients(params: {
@@ -203,20 +204,29 @@ export async function createClientAction(data: {
     details: { companyName: client.companyName },
   });
 
-  // Attribuer automatiquement la commission de signature de 500 DA dans la paie du mois de signature
+  // Attribuer automatiquement la commission de signature selon le pack (STARTER=500, SILVER=1000, GOLD=1500 DA)
   try {
     await awardClientSigningCommissionAction({
       clientId: client.id,
       userId: client.assignedToId || user.id,
       signedDate: client.contractStart || new Date(),
+      offerType: client.offerType,
     });
   } catch (commErr) {
     console.warn("Erreur attribution commission signature client:", commErr);
   }
 
+  // Auto-génération des tâches d'abonnement (Publications hebdo le lundi + Shooting à M+2)
+  try {
+    await syncSubscriptionTasksForClients(client.id);
+  } catch (syncErr) {
+    console.warn("Erreur auto-génération tâches abonnement client:", syncErr);
+  }
+
   revalidatePath("/clients");
   revalidatePath("/dashboard");
   revalidatePath("/equipes");
+  revalidatePath("/calendrier-technicien");
   return { success: true, client };
 }
 
@@ -307,6 +317,7 @@ export async function updateClientAction(
         clientId: updated.id,
         userId: updated.assignedToId,
         signedDate: updated.contractStart || updated.createdAt,
+        offerType: updated.offerType,
       });
     } catch (commErr) {
       console.warn("Erreur attribution commission signature client:", commErr);
@@ -339,11 +350,20 @@ export async function updateClientStatusAction(id: string, status: ClientStatus)
     details: { status },
   });
 
+  if (status === "ACTIVE" || status === "IN_PREPARATION") {
+    try {
+      await syncSubscriptionTasksForClients(id);
+    } catch (syncErr) {
+      console.warn("Erreur auto-génération tâches abonnement client:", syncErr);
+    }
+  }
+
   revalidatePath("/clients");
   revalidatePath(`/clients/${id}`);
   revalidatePath("/abonnements");
   revalidatePath(`/abonnements/${id}`);
   revalidatePath("/dashboard");
+  revalidatePath("/calendrier-technicien");
   return { success: true, client: updated };
 }
 

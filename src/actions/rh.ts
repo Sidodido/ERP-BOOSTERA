@@ -523,16 +523,27 @@ export async function markSalaryPaidAction(id: string) {
 }
 
 /**
- * Attribue automatiquement une commission fixe de 500 DA au collaborateur
- * lorsqu'il signe un contrat avec un client, et intègre ce montant directement
- * dans la paie du mois où le contrat a été signé.
+ * Attribue automatiquement une commission au collaborateur selon le pack signé :
+ * - STARTER : 500 DA
+ * - SILVER  : 1 000 DA
+ * - GOLD    : 1 500 DA
+ * Le montant est intégré directement dans la paie du mois où le contrat a été signé.
  */
+
+/** Montants de commission par pack */
+const PACK_COMMISSION_AMOUNTS: Record<string, number> = {
+  STARTER: 500,
+  SILVER: 1000,
+  GOLD: 1500,
+};
+
 export async function awardClientSigningCommissionAction(params: {
   clientId: string;
   userId?: string | null;
   signedDate?: Date | string | null;
+  offerType?: string | null;
 }) {
-  const { clientId, userId, signedDate } = params;
+  const { clientId, userId, signedDate, offerType: paramOfferType } = params;
 
   const client = await prisma.client.findUnique({
     where: { id: clientId },
@@ -542,6 +553,7 @@ export async function awardClientSigningCommissionAction(params: {
       assignedToId: true,
       contractStart: true,
       createdAt: true,
+      offerType: true,
     },
   });
 
@@ -623,8 +635,9 @@ export async function awardClientSigningCommissionAction(params: {
   const signingYear = cycle.year;
   const cycleInfo = getPayrollCycleDates(signingMonth, signingYear);
 
-  // 4. Créer la commission de 500 DA
-  const commissionAmount = 500;
+  // 4. Créer la commission selon le pack signé (STARTER=500, SILVER=1000, GOLD=1500)
+  const resolvedOfferType = (paramOfferType || client.offerType || "STARTER").toUpperCase();
+  const commissionAmount = PACK_COMMISSION_AMOUNTS[resolvedOfferType] ?? PACK_COMMISSION_AMOUNTS.STARTER;
   const commission = await prisma.commission.create({
     data: {
       employeeId: employee.id,
@@ -632,7 +645,7 @@ export async function awardClientSigningCommissionAction(params: {
       amount: new Prisma.Decimal(commissionAmount),
       rateApplied: new Prisma.Decimal(0),
       status: "APPROVED",
-      notes: `Commission de signature client (+500 DA) - ${client.companyName}`,
+      notes: `Commission de signature client Pack ${resolvedOfferType} (+${commissionAmount} DA) - ${client.companyName}`,
       earnedDate: rawDate,
     },
   });
@@ -730,7 +743,7 @@ export async function awardClientSigningCommissionAction(params: {
 }
 
 /**
- * Synchronise et rétro-attribue les commissions de 500 DA pour tous les clients signés
+ * Synchronise et rétro-attribue les commissions selon le pack pour tous les clients signés
  * n'ayant pas encore reçu leur commission.
  */
 export async function syncAllSignedClientsCommissionsAction() {
@@ -744,6 +757,7 @@ export async function syncAllSignedClientsCommissionsAction() {
       assignedToId: true,
       contractStart: true,
       createdAt: true,
+      offerType: true,
     },
   });
 
@@ -753,6 +767,7 @@ export async function syncAllSignedClientsCommissionsAction() {
       clientId: c.id,
       userId: c.assignedToId,
       signedDate: c.contractStart || c.createdAt,
+      offerType: c.offerType,
     });
     if (res.success && !res.alreadyAwarded) {
       awardedCount++;

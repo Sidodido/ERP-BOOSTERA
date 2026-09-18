@@ -247,6 +247,18 @@ export const CLIENT_MAIN_STATUSES = [
     dotClass: "bg-emerald-400",
     activeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-500/50",
   },
+  {
+    key: "SUSPENDED",
+    label: "Suspendu",
+    dotClass: "bg-amber-400",
+    activeClass: "bg-amber-500/20 text-amber-300 border-amber-500/50",
+  },
+  {
+    key: "CONTENTIOUS",
+    label: "Contentieux",
+    dotClass: "bg-rose-400",
+    activeClass: "bg-rose-500/20 text-rose-300 border-rose-500/50",
+  },
 ] as const;
 
 export const PROSPECT_STATUSES = {
@@ -434,123 +446,141 @@ export const DOCUMENT_CATEGORIES = {
 export const TASK_PARTS = {
   PART_1: {
     id: "PART_1",
-    label: "Partie 1 : Production sur site & Voix-Off",
-    shortLabel: "Partie 1 : Shooting & Voix-Off",
+    label: "Phase 1 : Conception & Architecture UI/UX",
+    shortLabel: "Phase 1 : Conception & UI/UX",
     badgeColor: "bg-blue-500/15 text-blue-400 border-blue-500/30",
     accentColor: "text-blue-400",
-    icon: "Video",
-    description: "Shooting photo & vidéo sur site (Toufik) et Enregistrement Voix-Off (Meroua)",
+    icon: "Layout",
+    description: "Cahier des charges, Wireframes & Maquettes Figma (Web/Mobile), Architecture technique",
   },
   PART_2: {
     id: "PART_2",
-    label: "Partie 2 : Montage, Web, Marketing & Tâches Additionnelles",
-    shortLabel: "Partie 2 : Montage, Web & Extras",
+    label: "Phase 2 : Développement Web, Mobile & Déploiement",
+    shortLabel: "Phase 2 : Dév & Mise en Ligne",
     badgeColor: "bg-purple-500/15 text-purple-400 border-purple-500/30",
     accentColor: "text-purple-400",
-    icon: "Globe",
-    description: "Montage Reel/TikTok, Carrousels réseaux sociaux, Design Figma, Site web et Meta Ads",
+    icon: "Code2",
+    description: "Développement Frontend & Mobile, Backend APIs, Tests QA, Serveur, Domaine & Stores",
   },
 } as const;
 
 export const STANDARD_TASK_TEMPLATES = [
-  // PARTIE 1 : MODÈLES RECOMMANDÉS (Production sur site & Voix-Off)
+  // PHASE 1 : CONCEPTION & ARCHITECTURE UI/UX
   {
-    title: "Shooting Photo & Vidéo sur site",
-    category: "VIDEO",
+    title: "Cahier des Charges & Spécifications Techniques",
+    category: "TECH",
     part: "PART_1" as const,
-    partLabel: "Partie 1 : Shooting & Voix-Off",
-    role: "VIDEO_EDITOR",
-    defaultHours: 4,
+    partLabel: "Phase 1 : Conception & UI/UX",
+    role: "TECH_LEAD",
+    defaultHours: 6,
     priority: "HIGH",
-    description: "Captation d'images professionnelles, plans séquences, interviews et B-roll sur place chez le client.",
+    description: "Définition des besoins, fonctionnalités clés, modélisation de données et user stories.",
   },
   {
-    title: "Enregistrement & Mixage Voix-Off",
-    category: "AUDIO",
+    title: "Design Maquette UI/UX Figma (Desktop & Mobile)",
+    category: "DESIGN",
     part: "PART_1" as const,
-    partLabel: "Partie 1 : Shooting & Voix-Off",
-    role: "VIDEO_EDITOR",
-    defaultHours: 1.5,
+    partLabel: "Phase 1 : Conception & UI/UX",
+    role: "DESIGNER",
+    defaultHours: 12,
+    priority: "HIGH",
+    description: "Création de la charte graphique, composants UI, prototypes interactifs et parcours utilisateur.",
+  },
+  {
+    title: "Architecture Base de Données & Modélisation",
+    category: "TECH",
+    part: "PART_1" as const,
+    partLabel: "Phase 1 : Conception & UI/UX",
+    role: "DEVELOPER",
+    defaultHours: 5,
     priority: "MEDIUM",
-    description: "Enregistrement du script commercial validé, synchronisation labiale ou fond musical.",
+    description: "Conception du schéma de base de données (PostgreSQL/Prisma), indexation et sécurité.",
   },
 
-  // PARTIE 2 : MODÈLES POST-PRODUCTION, WEB, MARKETING & ADDITIONNELS
+  // PHASE 2 : DÉVELOPPEMENT & DÉPLOIEMENT
   {
-    title: "Montage Reel / TikTok dynamique (Cut & Sound)",
-    category: "VIDEO",
-    part: "PART_2" as const,
-    partLabel: "Partie 2 : Montage, Web & Extras",
-    role: "VIDEO_EDITOR",
-    defaultHours: 3,
-    priority: "MEDIUM",
-    description: "Montage vidéo vertical 9:16 avec transitions rythmées, effets sonores et étalonnage couleur.",
-  },
-  {
-    title: "Création Carrousel Instagram / Facebook (10 slides)",
-    category: "DESIGN",
-    part: "PART_2" as const,
-    partLabel: "Partie 2 : Montage, Web & Extras",
-    role: "DESIGNER",
-    defaultHours: 2.5,
-    priority: "MEDIUM",
-    description: "Conception graphique selon la charte du client avec visuels percutants et copywriting engageant.",
-  },
-  {
-    title: "Conception Maquette Page d'Accueil & Mobile",
+    title: "Développement Frontend Web Responsive (React / Next.js)",
     category: "WEB",
     part: "PART_2" as const,
-    partLabel: "Partie 2 : Montage, Web & Extras",
-    role: "DESIGNER",
-    defaultHours: 5,
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
+    role: "DEVELOPER",
+    defaultHours: 20,
     priority: "HIGH",
-    description: "Design UI/UX complet sur Figma avec version desktop et responsive mobile.",
+    description: "Intégration HTML/Tailwind, pages dynamiques, composants réutilisables et responsive mobile.",
   },
   {
-    title: "Intégration & Mise en ligne Site Web",
-    category: "WEB",
+    title: "Développement Application Mobile (iOS / Android)",
+    category: "MOBILE",
     part: "PART_2" as const,
-    partLabel: "Partie 2 : Montage, Web & Extras",
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
+    role: "DEVELOPER",
+    defaultHours: 25,
+    priority: "HIGH",
+    description: "Développement mobile multiplateforme, écrans natifs, notifications push et navigation.",
+  },
+  {
+    title: "Développement Backend & API REST / Authentification",
+    category: "BACKEND",
+    part: "PART_2" as const,
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
+    role: "DEVELOPER",
+    defaultHours: 15,
+    priority: "HIGH",
+    description: "Routes API sécurisées, authentification JWT/OAuth, logique métier et rôles utilisateurs.",
+  },
+  {
+    title: "Intégration Paiement Électronique & Passerelles (CIB / Edahabia)",
+    category: "PAYMENT",
+    part: "PART_2" as const,
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
     role: "DEVELOPER",
     defaultHours: 8,
-    priority: "HIGH",
-    description: "Développement web, intégration du contenu client, formulaires de contact et nom de domaine.",
+    priority: "URGENT",
+    description: "Connexion passerelle de paiement algérienne (Satim / BaridiMob / Stripe), webhooks et reçus.",
   },
   {
-    title: "Configuration & Lancement Campagne Meta Ads",
-    category: "ADS",
+    title: "Recette, Tests Fonctionnels & Optimisation Performances",
+    category: "QA",
     part: "PART_2" as const,
-    partLabel: "Partie 2 : Montage, Web & Extras",
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
     role: "TECH_LEAD",
-    defaultHours: 2,
+    defaultHours: 6,
+    priority: "HIGH",
+    description: "Validation des fonctionnalités sur différents navigateurs/appareils, audits Core Web Vitals.",
+  },
+  {
+    title: "Déploiement Serveur, Domaine, SSL & Mise en Production",
+    category: "DEVOPS",
+    part: "PART_2" as const,
+    partLabel: "Phase 2 : Dév & Mise en Ligne",
+    role: "TECH_LEAD",
+    defaultHours: 4,
     priority: "URGENT",
-    description: "Ciblage géographique et démographique, paramétrage du budget sponsorisé et suivi du pixel.",
+    description: "Configuration du serveur (VPS / Cloud), Nginx, certificat SSL HTTPS, DNS et release finale.",
   },
 ];
 
 export function getTaskPart(task: { title: string; description?: string | null }): "PART_1" | "PART_2" {
   const content = `${task.title} ${task.description || ""}`.toLowerCase();
   
-  // Montage et Carrousels font partie de la Partie 2
+  // Phase 1 : Conception, UI/UX, Spécifications
   if (
-    content.includes("montage") ||
-    content.includes("reel") ||
-    content.includes("tiktok") ||
-    content.includes("carrousel")
-  ) {
-    return "PART_2";
-  }
-
-  // Shooting et Voix-off restent en Partie 1
-  if (
-    content.includes("shooting") ||
-    content.includes("captation") ||
-    content.includes("voix") ||
-    content.includes("enregistrement")
+    content.includes("maquette") ||
+    content.includes("figma") ||
+    content.includes("ux") ||
+    content.includes("ui") ||
+    content.includes("wireframe") ||
+    content.includes("design") ||
+    content.includes("cahier des charges") ||
+    content.includes("brief") ||
+    content.includes("spécification") ||
+    content.includes("architecture") ||
+    content.includes("prototype")
   ) {
     return "PART_1";
   }
 
+  // Phase 2 : Développement, Code, Mobile, Web, APIs, Tests, Déploiement
   return "PART_2";
 }
 

@@ -9,10 +9,18 @@ export const metadata = {
   description: "Calendrier mensuel des tâches de production issues des packs signés et en préparation.",
 };
 
-export default async function TechnicianCalendarPage() {
+export default async function TechnicianCalendarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; year?: string }>;
+}) {
   await requireAuth();
 
-  const data = await getTechnicianCalendarData();
+  const params = await searchParams;
+  const month = params.month ? parseInt(params.month, 10) : undefined;
+  const year = params.year ? parseInt(params.year, 10) : undefined;
+
+  const data = await getTechnicianCalendarData({ month, year });
 
   return (
     <AppShell>

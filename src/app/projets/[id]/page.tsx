@@ -3,7 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { getProjectDetail } from "@/actions/projects";
 import { ProjectDetailView } from "@/components/projects/ProjectDetailView";
 import { prisma } from "@/lib/prisma";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -15,6 +15,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
   if (!project) {
     notFound();
+  }
+
+  // Si c'est un abonnement mensuel, rediriger vers sa section dédiée Abonnements
+  if (project.isAbonnement && project.clientId) {
+    redirect(`/abonnements/${project.clientId}`);
   }
 
   const users = await prisma.user.findMany({

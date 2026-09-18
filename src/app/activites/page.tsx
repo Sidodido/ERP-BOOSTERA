@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getActivitiesDataAction } from "@/actions/activities";
 import { ActivitiesClient } from "@/components/activities/ActivitiesClient";
+import { AppShell } from "@/components/layout/AppShell";
 
 export const metadata = {
   title: "Activités & Performance Équipe | CRM Boostera",
@@ -23,14 +24,16 @@ export default async function ActivitesPage() {
   });
 
   return (
-    <ActivitiesClient
-      initialData={initialData}
-      currentUser={{
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      }}
-    />
+    <AppShell>
+      <ActivitiesClient
+        initialData={initialData}
+        currentUser={{
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        }}
+      />
+    </AppShell>
   );
 }

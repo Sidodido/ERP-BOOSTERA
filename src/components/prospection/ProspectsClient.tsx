@@ -835,21 +835,9 @@ export function ProspectsClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
             Prospection Commerciale
-            <span
-              className={`text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 ${
-                filterScope === "VIRGIN"
-                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                  : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-              }`}
-            >
-              {filterScope === "VIRGIN" ? (
-                <>
-                  <Flame className="w-3 h-3 text-amber-400" />
-                  <span>{filtered.length} prospects vierges</span>
-                </>
-              ) : (
-                <span>{filtered.length} prospects au total</span>
-              )}
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <Flame className="w-3 h-3 text-amber-400" />
+              <span>{filtered.length} prospects vierges</span>
             </span>
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
@@ -858,44 +846,6 @@ export function ProspectsClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Scope Selector: Vierges vs Tous */}
-          <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setFilterScope("VIRGIN")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                filterScope === "VIRGIN"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
-              <span>Prospects Vierges ({virginCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterScope("ALL")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                filterScope === "ALL"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <span>Tous ({prospects.length})</span>
-            </button>
-          </div>
-
-          {/* Direct link to Base Globale */}
-          <Link
-            href="/base-prospects"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors cursor-pointer"
-            title="Consulter l'ensemble de la base de données de tous les prospects du CRM"
-          >
-            <Database className="w-3.5 h-3.5 text-blue-400" />
-            <span>Base Globale Prospects ({prospects.length})</span>
-            <ArrowUpRight className="w-3 h-3 text-blue-400" />
-          </Link>
-
           {/* View Mode Toggle */}
           <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
@@ -929,21 +879,9 @@ export function ProspectsClient({
           </Button>
 
           <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncContactedToFollowUps}
-            isLoading={isSyncingRelances}
-            className="gap-1.5 bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20 cursor-pointer"
-            title="Mettre automatiquement tous les prospects contactés dans la relance (+3j, +7j, +15j)"
-          >
-            <RotateCw className="w-3.5 h-3.5 text-purple-400" />
-            <span>Sync Relances</span>
-          </Button>
-
-          <Button
             size="sm"
             onClick={() => setNewModalOpen(true)}
-            className="gap-1.5 shadow-md shadow-blue-500/20"
+            className="gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Nouveau Prospect</span>
@@ -1327,38 +1265,6 @@ export function ProspectsClient({
                             )}
                             <span>+ Appels</span>
                           </button>
-
-                          {(() => {
-                            const hasAppointment =
-                              (prospect._count?.appointments ?? 0) > 0 ||
-                              prospect.status === ProspectStatus.MEETING_SCHEDULED ||
-                              prospect.rawState === "RDV PRIS" ||
-                              (prospect.appointments && prospect.appointments.length > 0);
-
-                            return (
-                              <button
-                                onClick={() => {
-                                  setActiveProspect(prospect);
-                                  setAppointmentForm((prev) => ({
-                                    ...prev,
-                                    title: `RDV — ${prospect.companyName}`,
-                                  }));
-                                  setAppointmentModalOpen(true);
-                                }}
-                                className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                                  hasAppointment
-                                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-600 hover:text-white shadow-xs shadow-emerald-500/20"
-                                    : "bg-neutral-800 hover:bg-purple-600 hover:text-white text-neutral-300 border border-neutral-700/60 shadow-xs"
-                                }`}
-                                title={hasAppointment ? "✓ Rendez-vous Planifié (Cliquer pour voir/replanifier)" : "Planifier RDV"}
-                              >
-                                <Calendar className="w-3.5 h-3.5" />
-                                {hasAppointment && (
-                                  <span className="text-[10px] font-bold px-0.5 text-emerald-400">RDV</span>
-                                )}
-                              </button>
-                            );
-                          })()}
                         </div>
                       </td>
                     </tr>
@@ -1480,35 +1386,6 @@ export function ProspectsClient({
                     )}
                     <span>+ Appels</span>
                   </button>
-
-                  {(() => {
-                    const hasAppointment =
-                      (prospect._count?.appointments ?? 0) > 0 ||
-                      prospect.status === ProspectStatus.MEETING_SCHEDULED ||
-                      prospect.rawState === "RDV PRIS";
-
-                    return (
-                      <button
-                        onClick={() => {
-                          setActiveProspect(prospect);
-                          setAppointmentForm((prev) => ({
-                            ...prev,
-                            title: `RDV — ${prospect.companyName}`,
-                          }));
-                          setAppointmentModalOpen(true);
-                        }}
-                        className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
-                          hasAppointment
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-600 hover:text-white"
-                            : "bg-neutral-800 hover:bg-purple-600 hover:text-white text-neutral-300"
-                        }`}
-                        title={hasAppointment ? "✓ Rendez-vous planifié" : "Planifier RDV"}
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        {hasAppointment && <span className="text-[10px] font-bold">RDV</span>}
-                      </button>
-                    );
-                  })()}
                 </div>
               </div>
             </div>

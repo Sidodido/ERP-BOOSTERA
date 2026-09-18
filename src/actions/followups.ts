@@ -5,9 +5,17 @@ import { requireAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { FollowUpStatus, ProspectStatus, CallResult, AppointmentType, AppointmentStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { autoSyncFollowUpsInternal } from "@/actions/prospects";
 
 export async function getFollowUps(params: { status?: FollowUpStatus; userId?: string } = {}) {
   const user = await requireAuth();
+
+  // Actualisation automatique transparente des relances
+  try {
+    await autoSyncFollowUpsInternal(user.id);
+  } catch (syncErr) {
+    console.error("Auto-sync follow-ups error in getFollowUps:", syncErr);
+  }
   const isPrivileged = ["ADMIN", "SALES_DIRECTOR"].includes(user.role);
 
   const whereClause: any = {};

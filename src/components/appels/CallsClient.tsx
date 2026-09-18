@@ -1088,18 +1088,6 @@ export function CallsClient({
                             <span>Fiche</span>
                           </button>
 
-                          <button
-                            onClick={() => {
-                              setActiveProspect(prospect);
-                              setCallForm((prev) => ({ ...prev, prospectId: prospect.id }));
-                              setCallModalOpen(true);
-                            }}
-                            className="p-1.5 bg-neutral-800 hover:bg-emerald-600 hover:text-white rounded-lg text-neutral-300 transition-colors cursor-pointer border border-neutral-700/60 shadow-xs"
-                            title="Nouvel Appel"
-                          >
-                            <PhoneCall className="w-3.5 h-3.5" />
-                          </button>
-
                           {(() => {
                             const hasAppointment =
                               (prospect._count?.appointments ?? 0) > 0 ||

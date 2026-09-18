@@ -6,6 +6,7 @@ import { createAuditLog } from "@/lib/audit";
 import { CallResult, ProspectStatus, FollowUpStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { mapCallStatusToCallData } from "@/lib/utils";
+import { syncSingleProspectFollowUp } from "@/actions/prospects";
 
 export async function logCallAction(data: {
   prospectId?: string;
@@ -83,49 +84,10 @@ export async function logCallAction(data: {
       where: { id: data.prospectId },
       data: updatePayload,
     });
+
+    // Auto-synchronisation immédiate et automatique des relances
+    await syncSingleProspectFollowUp(data.prospectId, user.id);
   }
-
-  // Auto-generate follow-up sequence if requested or if callback/interested
-  if (
-    data.prospectId &&
-    (data.autoScheduleFollowUp ||
-      ([CallResult.CALLBACK_REQUESTED, CallResult.INTERESTED] as CallResult[]).includes(
-        data.result
-      ))
-  ) {
-    const prospectId = data.prospectId;
-    const now = Date.now();
-    const followUps = [
-      {
-        prospectId: prospectId,
-        userId: user.id,
-        stepNumber: 1,
-          scheduledAt: new Date(now + 1000 * 60 * 60 * 24 * 3), // +3 days
-          status: FollowUpStatus.SCHEDULED,
-          notes: `Relance 1 suite à appel (${data.result})`,
-        },
-        {
-          prospectId: prospectId,
-          userId: user.id,
-          stepNumber: 2,
-          scheduledAt: new Date(now + 1000 * 60 * 60 * 24 * 7), // +7 days
-          status: FollowUpStatus.SCHEDULED,
-          notes: `Relance 2 (+7 jours)`,
-        },
-        {
-          prospectId: prospectId,
-          userId: user.id,
-          stepNumber: 3,
-          scheduledAt: new Date(now + 1000 * 60 * 60 * 24 * 15), // +15 days
-          status: FollowUpStatus.SCHEDULED,
-          notes: `Relance 3 (+15 jours)`,
-        },
-      ];
-
-      await prisma.followUp.createMany({
-        data: followUps,
-      });
-    }
 
   await createAuditLog({
     userId: user.id,

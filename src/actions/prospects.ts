@@ -848,12 +848,13 @@ export async function convertProspectToClient(data: {
     },
   });
 
-  // Attribuer automatiquement la commission de signature de 500 DA dans la paie du mois de signature
+  // Attribuer automatiquement la commission de signature selon le pack (STARTER=500, SILVER=1000, GOLD=1500 DA)
   try {
     await awardClientSigningCommissionAction({
       clientId: result.id,
       userId: result.assignedToId || user.id,
       signedDate: result.contractStart || new Date(),
+      offerType: result.offerType,
     });
   } catch (commErr) {
     console.warn("Erreur attribution commission signature client:", commErr);
@@ -978,7 +979,7 @@ function isProspectContactedForRelance(
 /**
  * Synchronise les relances pour un prospect unique lors de modifications
  */
-async function syncSingleProspectFollowUp(prospectId: string, assignedUserId?: string) {
+export async function syncSingleProspectFollowUp(prospectId: string, assignedUserId?: string) {
   try {
     const p = await prisma.prospect.findUnique({
       where: { id: prospectId },
@@ -1050,96 +1051,130 @@ async function syncSingleProspectFollowUp(prospectId: string, assignedUserId?: s
 }
 
 /**
+ * Fonction interne automatique ultra-rapide pour synchroniser les relances sans nécessiter de clic manuel
+ */
+export async function autoSyncFollowUpsInternal(fallbackUserId?: string) {
+  try {
+    // 1. Prospects contactés sans relance planifiée
+    const candidates = await prisma.prospect.findMany({
+      where: {
+        followUps: {
+          none: {
+            status: FollowUpStatus.SCHEDULED,
+          },
+        },
+        OR: [
+          { callStatus: { in: ["EFFECTUE", "A RAPPELER"] } },
+          { status: { in: [ProspectStatus.INTERESTED, ProspectStatus.MEETING_SCHEDULED, ProspectStatus.CONTACTED] } },
+          { rawState: { contains: "INTERESSE" } },
+          { rawState: { contains: "A RAPPELER" } },
+          { rawState: { contains: "RDV" } },
+          { rawState: { contains: "EFFECTUE" } },
+        ],
+      },
+      select: {
+        id: true,
+        assignedToId: true,
+        rawState: true,
+        callStatus: true,
+        status: true,
+      },
+      take: 200,
+    });
+
+    const now = Date.now();
+    let synced = 0;
+
+    for (const p of candidates) {
+      if (isProspectContactedForRelance(p.rawState, p.callStatus, p.status)) {
+        const targetUserId = p.assignedToId || fallbackUserId;
+        if (targetUserId) {
+          await prisma.followUp.createMany({
+            data: [
+              {
+                prospectId: p.id,
+                userId: targetUserId,
+                stepNumber: 1,
+                scheduledAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
+                status: FollowUpStatus.SCHEDULED,
+                notes: "Relance Étape 1 (+3j) : Prospect contacté en prospection",
+              },
+              {
+                prospectId: p.id,
+                userId: targetUserId,
+                stepNumber: 2,
+                scheduledAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
+                status: FollowUpStatus.SCHEDULED,
+                notes: "Relance Étape 2 (+7j)",
+              },
+              {
+                prospectId: p.id,
+                userId: targetUserId,
+                stepNumber: 3,
+                scheduledAt: new Date(now + 15 * 24 * 60 * 60 * 1000),
+                status: FollowUpStatus.SCHEDULED,
+                notes: "Relance Étape 3 (+15j)",
+              },
+            ],
+          });
+          synced++;
+        }
+      }
+    }
+
+    // 2. Annuler les relances pour les prospects inéligibles (pas intéressé, pas de contact)
+    const ineligibles = await prisma.prospect.findMany({
+      where: {
+        followUps: {
+          some: {
+            status: FollowUpStatus.SCHEDULED,
+          },
+        },
+        OR: [
+          { status: ProspectStatus.NOT_INTERESTED },
+          { status: ProspectStatus.CONVERTED },
+          { rawState: { contains: "PAS INTERESSE" } },
+          { rawState: { contains: "PAS DE CONTACT" } },
+          { callStatus: { in: ["PAS DE REPONSE", "INJOIGNABLE", "OCCUPE", "PAS DE CONTACT", "NE REPEND PAS", "NON EFFECTUE"] } },
+        ],
+      },
+      select: { id: true },
+      take: 200,
+    });
+
+    if (ineligibles.length > 0) {
+      const ids = ineligibles.map((p) => p.id);
+      await prisma.followUp.updateMany({
+        where: {
+          prospectId: { in: ids },
+          status: FollowUpStatus.SCHEDULED,
+        },
+        data: {
+          status: FollowUpStatus.LOST,
+          notes: "Relance clôturée automatiquement : Statut 'Pas de contact' ou 'Pas intéressé'",
+        },
+      });
+    }
+
+    return { synced, cancelled: ineligibles.length };
+  } catch (err) {
+    console.error("Error in autoSyncFollowUpsInternal:", err);
+    return { synced: 0, cancelled: 0 };
+  }
+}
+
+/**
  * Action globale pour synchroniser tous les prospects contactés vers la relance
  */
 export async function syncContactedProspectsToFollowUpsAction() {
   const user = await requireAuth();
-
-  const prospects = await prisma.prospect.findMany({
-    include: {
-      followUps: {
-        where: {
-          status: FollowUpStatus.SCHEDULED,
-        },
-      },
-    },
-  });
-
-  let syncedCount = 0;
-  let cancelledCount = 0;
-  const now = Date.now();
-
-  for (const prospect of prospects) {
-    const isEligible = isProspectContactedForRelance(
-      prospect.rawState,
-      prospect.callStatus,
-      prospect.status
-    );
-
-    if (isEligible) {
-      if (prospect.followUps.length === 0) {
-        const targetUserId = prospect.assignedToId || user.id;
-        const day3 = new Date(now + 3 * 24 * 60 * 60 * 1000);
-        const day7 = new Date(now + 7 * 24 * 60 * 60 * 1000);
-        const day15 = new Date(now + 15 * 24 * 60 * 60 * 1000);
-
-        await prisma.followUp.createMany({
-          data: [
-            {
-              prospectId: prospect.id,
-              userId: targetUserId,
-              stepNumber: 1,
-              scheduledAt: day3,
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 1 (+3j) : Prospect contacté en prospection",
-            },
-            {
-              prospectId: prospect.id,
-              userId: targetUserId,
-              stepNumber: 2,
-              scheduledAt: day7,
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 2 (+7j)",
-            },
-            {
-              prospectId: prospect.id,
-              userId: targetUserId,
-              stepNumber: 3,
-              scheduledAt: day15,
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 3 (+15j)",
-            },
-          ],
-        });
-        syncedCount++;
-      }
-    } else {
-      const isExempt =
-        (prospect.rawState && (prospect.rawState.includes("PAS DE CONTACT") || prospect.rawState.includes("PAS INTERESSE"))) ||
-        (prospect.callStatus && (prospect.callStatus.includes("PAS") || prospect.callStatus.includes("INJOIGNABLE") || prospect.callStatus.includes("OCCUPE") || prospect.callStatus === "PAS DE CONTACT")) ||
-        prospect.status === ProspectStatus.NOT_INTERESTED;
-
-      if (isExempt && prospect.followUps.length > 0) {
-        await prisma.followUp.updateMany({
-          where: {
-            prospectId: prospect.id,
-            status: FollowUpStatus.SCHEDULED,
-          },
-          data: {
-            status: FollowUpStatus.LOST,
-            notes: "Relance clôturée : Statut 'Pas de contact' ou 'Pas intéressé'",
-          },
-        });
-        cancelledCount += prospect.followUps.length;
-      }
-    }
-  }
+  const { synced, cancelled } = await autoSyncFollowUpsInternal(user.id);
 
   await createAuditLog({
     userId: user.id,
     action: "SYNC_PROSPECTS_TO_FOLLOWUPS",
     module: "PROSPECTS",
-    details: { syncedCount, cancelledCount },
+    details: { syncedCount: synced, cancelledCount: cancelled },
   });
 
   revalidatePath("/prospection");
@@ -1148,9 +1183,9 @@ export async function syncContactedProspectsToFollowUpsAction() {
 
   return {
     success: true,
-    syncedCount,
-    cancelledCount,
-    message: `${syncedCount} prospect(s) contacté(s) synchronisé(s) vers les relances (+3j, +7j, +15j). Les prospects 'Pas de contact' et 'Pas intéressé' ont été exclus.`,
+    syncedCount: synced,
+    cancelledCount: cancelled,
+    message: `${synced} prospect(s) contacté(s) synchronisé(s) vers les relances (+3j, +7j, +15j).`,
   };
 }
 

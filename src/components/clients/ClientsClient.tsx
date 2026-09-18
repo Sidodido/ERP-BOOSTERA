@@ -535,7 +535,6 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
                 <th className="py-3 px-4 font-semibold min-w-[160px]">Offre Commerciale</th>
                 <th className="py-3 px-4 font-semibold min-w-[180px] whitespace-nowrap">Contrat & Forfait</th>
                 <th className="py-3 px-4 font-semibold min-w-[140px] whitespace-nowrap">Statut</th>
-                <th className="py-3 px-4 font-semibold min-w-[140px] whitespace-nowrap">Activité</th>
                 {!isCommercial && (
                   <th className="py-3 px-4 font-semibold text-right min-w-[120px] whitespace-nowrap">Actions</th>
                 )}
@@ -544,7 +543,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
             <tbody className="divide-y divide-neutral-800/60">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isCommercial ? 6 : 7} className="py-12 text-center text-neutral-500">
+                  <td colSpan={isCommercial ? 5 : 6} className="py-12 text-center text-neutral-500">
                     Aucun client enregistré pour l'instant.
                   </td>
                 </tr>
@@ -613,10 +612,6 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
                         <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot || "bg-current"}`} />
                         <span className="whitespace-nowrap">{statusConfig.label}</span>
                       </span>
-                    </td>
-
-                    <td className="py-3 px-4 text-neutral-400 text-[11px] whitespace-nowrap">
-                      {client._count.projects} projets • {client._count.invoices} factures
                     </td>
 
                     {!isCommercial && (

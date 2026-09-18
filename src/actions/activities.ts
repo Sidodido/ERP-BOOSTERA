@@ -88,7 +88,13 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
   // Determine category action filters
   let actionFilter: string[] | undefined = undefined;
   if (params.category === "CALLS") {
-    actionFilter = ["COMMUNICATION_PHONE", "PHONE_CLICK", "LOG_CALL", "CREATE_CLIENT_CALL"];
+    actionFilter = [
+      "COMMUNICATION_PHONE",
+      "PHONE_CLICK",
+      "LOG_CALL",
+      "CREATE_CLIENT_CALL",
+      "TRANSFER_PROSPECT_TO_APPELS",
+    ];
   } else if (params.category === "WHATSAPP") {
     actionFilter = ["COMMUNICATION_WHATSAPP", "WHATSAPP_CLICK"];
   } else if (params.category === "BREAKS") {
@@ -212,7 +218,15 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     prisma.auditLog.count({
       where: {
         ...kpiWhere,
-        action: { in: ["COMMUNICATION_PHONE", "PHONE_CLICK", "LOG_CALL", "CREATE_CLIENT_CALL"] },
+        action: {
+          in: [
+            "COMMUNICATION_PHONE",
+            "PHONE_CLICK",
+            "LOG_CALL",
+            "CREATE_CLIENT_CALL",
+            "TRANSFER_PROSPECT_TO_APPELS",
+          ],
+        },
       },
     }),
     prisma.auditLog.count({
@@ -287,6 +301,7 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     reason: string;
     startTime: string;
     elapsedMinutes: number;
+    isAutoDetected?: boolean;
   }[] = [];
 
   const breakToursHistory: {
@@ -300,6 +315,7 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     durationMinutes: number;
     reason: string;
     status: "EN_COURS" | "TERMINEE";
+    isAutoDetected?: boolean;
   }[] = [];
 
   let totalBreakMinutesTeamToday = 0;
@@ -353,6 +369,7 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
           durationMinutes,
           reason,
           status: "TERMINEE",
+          isAutoDetected: false,
         });
 
         activeStart = null;
@@ -381,6 +398,7 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
         reason,
         startTime: activeStart.createdAt.toISOString(),
         elapsedMinutes: elapsed,
+        isAutoDetected: false,
       });
 
       breakToursHistory.push({
@@ -395,8 +413,167 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
         durationMinutes: elapsed,
         reason,
         status: "EN_COURS",
+        isAutoDetected: false,
       });
     }
+  }
+
+  // ── AUTO-DETECTED INACTIVITY BREAKS ──────────────────────────────────────────
+  // Rules:
+  //  1. Only detect gaps WITHIN working hours (after clockIn, before clockOut or now)
+  //  2. The user must be clocked in today for any detection to apply
+  //  3. Gaps ≥ 15 min between consecutive actions count as an inactivity pause
+  //  4. "Currently inactive" only if the user IS clocked in right now (no clockOut)
+  //     AND their last action is > 15 min ago AND that last action is AFTER clockIn
+  //  5. Never double-count with manually declared PAUSE_START/PAUSE_END
+  // ─────────────────────────────────────────────────────────────────────────────
+  const AUTO_BREAK_THRESHOLD_MINUTES = 15;
+
+  // Build a map: userId → clockIn / clockOut for quick lookup
+  const attendanceByUserId = new Map<
+    string,
+    { clockIn: Date | null; clockOut: Date | null; isCurrentlyIn: boolean }
+  >();
+  for (const att of todayAttendanceRecords) {
+    const uid = att.employee.userId;
+    if (!uid) continue;
+    const clockIn = att.clockIn ? new Date(att.clockIn) : null;
+    const clockOut = att.clockOut ? new Date(att.clockOut) : null;
+    attendanceByUserId.set(uid, {
+      clockIn,
+      clockOut,
+      isCurrentlyIn: !!clockIn && !clockOut,
+    });
+  }
+
+  // Fetch today's actions for CLOCKED-IN users only — after their clockIn time
+  // We filter per user after fetching to keep the query simple
+  const todayAllLogs = await prisma.auditLog.findMany({
+    where: {
+      createdAt: { gte: todayStart },
+      userId: { not: null },
+      action: { notIn: ["PAUSE_START", "PAUSE_END"] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      userId: true,
+      createdAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          role: true,
+          employee: { select: { position: true } },
+        },
+      },
+    },
+  });
+
+  // Group by userId
+  const logsByUser: Record<string, typeof todayAllLogs> = {};
+  for (const log of todayAllLogs) {
+    if (!log.userId) continue;
+    if (!logsByUser[log.userId]) logsByUser[log.userId] = [];
+    logsByUser[log.userId].push(log);
+  }
+
+  for (const [userId, allUserLogs] of Object.entries(logsByUser)) {
+    const att = attendanceByUserId.get(userId);
+
+    // Skip users who haven't clocked in today
+    if (!att || !att.clockIn) continue;
+
+    const workStart = att.clockIn;
+    const workEnd = att.clockOut || now; // if still working, use now
+
+    // Only consider logs that happened AFTER clockIn
+    const userLogs = allUserLogs.filter(
+      (l) => new Date(l.createdAt).getTime() >= workStart.getTime()
+    );
+
+    if (userLogs.length === 0) continue;
+
+    const userName = userLogs[0].user?.name || "Collaborateur";
+    const userRole = userLogs[0].user?.employee?.position || userLogs[0].user?.role || "Collaborateur";
+
+    // ── Scan gaps between consecutive actions ──────────────────────────────
+    for (let i = 0; i < userLogs.length - 1; i++) {
+      const currentLog = userLogs[i];
+      const nextLog = userLogs[i + 1];
+
+      const gapStart = new Date(currentLog.createdAt);
+      const gapEnd = new Date(nextLog.createdAt);
+      const gapMinutes = Math.floor((gapEnd.getTime() - gapStart.getTime()) / 60000);
+
+      if (gapMinutes < AUTO_BREAK_THRESHOLD_MINUTES) continue;
+
+      // Check overlap with a manually declared pause (avoid duplicate)
+      const coveredByManual = breakToursHistory.some((bp) => {
+        if (bp.userId !== userId || bp.isAutoDetected) return false;
+        const mStart = new Date(bp.startTime).getTime();
+        const mEnd = bp.endTime ? new Date(bp.endTime).getTime() : now.getTime();
+        return gapStart.getTime() < mEnd && gapEnd.getTime() > mStart;
+      });
+      if (coveredByManual) continue;
+
+      totalBreakMinutesTeamToday += gapMinutes;
+
+      breakToursHistory.push({
+        id: `auto_${userId}_${i}_${gapStart.getTime()}`,
+        userId,
+        userName,
+        userRole,
+        avatarUrl: userLogs[i].user?.avatarUrl || null,
+        startTime: gapStart.toISOString(),
+        endTime: gapEnd.toISOString(),
+        durationMinutes: gapMinutes,
+        reason: `Inactivité — ${gapMinutes} min sans action`,
+        status: "TERMINEE",
+        isAutoDetected: true,
+      });
+    }
+
+    // ── Check if currently inactive (last action > 15 min ago while clocked in) ──
+    if (!att.isCurrentlyIn) continue; // Already clocked out — nothing "en cours"
+
+    const lastLog = userLogs[userLogs.length - 1];
+    const lastActionTime = new Date(lastLog.createdAt).getTime();
+    const timeSinceLastActionMin = Math.floor((now.getTime() - lastActionTime) / 60000);
+
+    if (timeSinceLastActionMin < AUTO_BREAK_THRESHOLD_MINUTES) continue;
+
+    // Not already flagged (manual or auto)
+    const alreadyFlagged = currentlyOnBreakUsers.some((b) => b.userId === userId);
+    if (alreadyFlagged) continue;
+
+    currentlyOnBreakUsers.push({
+      userId,
+      userName,
+      userRole,
+      avatarUrl: lastLog.user?.avatarUrl || null,
+      reason: `Aucune action depuis ${timeSinceLastActionMin} min`,
+      startTime: lastLog.createdAt.toISOString(),
+      elapsedMinutes: timeSinceLastActionMin,
+      isAutoDetected: true,
+    });
+
+    breakToursHistory.push({
+      id: `auto_current_${userId}_${lastActionTime}`,
+      userId,
+      userName,
+      userRole,
+      avatarUrl: lastLog.user?.avatarUrl || null,
+      startTime: lastLog.createdAt.toISOString(),
+      endTime: null,
+      durationMinutes: timeSinceLastActionMin,
+      reason: `Inactivité — aucune action depuis ${timeSinceLastActionMin} min`,
+      status: "EN_COURS",
+      isAutoDetected: true,
+    });
+
+    totalBreakMinutesTeamToday += timeSinceLastActionMin;
   }
 
   // Sort break history: most recent first
@@ -476,9 +653,13 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     p.totalActions += count;
 
     if (
-      ["COMMUNICATION_PHONE", "PHONE_CLICK", "LOG_CALL", "CREATE_CLIENT_CALL"].includes(
-        row.action
-      )
+      [
+        "COMMUNICATION_PHONE",
+        "PHONE_CLICK",
+        "LOG_CALL",
+        "CREATE_CLIENT_CALL",
+        "TRANSFER_PROSPECT_TO_APPELS",
+      ].includes(row.action)
     ) {
       p.phoneCalls += count;
     } else if (["COMMUNICATION_WHATSAPP", "WHATSAPP_CLICK"].includes(row.action)) {

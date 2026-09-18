@@ -7,14 +7,41 @@ import { revalidatePath } from "next/cache";
 export async function getUserNotificationsAction() {
   const user = await requireAuth();
 
+  const isCommercial = user.role === "SALES_REP" || user.role === "SALES_DIRECTOR";
+
   const notifications = await prisma.notification.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      ...(isCommercial
+        ? {
+            type: { not: "CONTENT_AI" },
+            NOT: [
+              { title: { contains: "Planning Semaine", mode: "insensitive" } },
+              { title: { contains: "publication", mode: "insensitive" } },
+              { message: { contains: "publication", mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     take: 20,
   });
 
   const unreadCount = await prisma.notification.count({
-    where: { userId: user.id, isRead: false },
+    where: {
+      userId: user.id,
+      isRead: false,
+      ...(isCommercial
+        ? {
+            type: { not: "CONTENT_AI" },
+            NOT: [
+              { title: { contains: "Planning Semaine", mode: "insensitive" } },
+              { title: { contains: "publication", mode: "insensitive" } },
+              { message: { contains: "publication", mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
   });
 
   return { notifications, unreadCount };

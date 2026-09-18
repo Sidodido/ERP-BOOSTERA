@@ -60,7 +60,11 @@ export function MonthlyGoalsWidget({
   const currentYearNum = year || new Date().getFullYear();
   const monthName = MONTH_NAMES[currentMonthNum - 1] || "";
 
-  const [selectedCollaborator, setSelectedCollaborator] = React.useState<string>("ALL");
+  const [selectedCollaborator, setSelectedCollaborator] = React.useState<string>(
+    // Non-admin users (showEmployeeBadge=false) only see their own goals anyway,
+    // but admins should start on "ALL" to see everyone
+    showEmployeeBadge ? "ALL" : (userName || "ALL")
+  );
 
   // Extract distinct collaborators if showEmployeeBadge is true
   const distinctEmployees = React.useMemo(() => {
@@ -82,6 +86,43 @@ export function MonthlyGoalsWidget({
     if (selectedCollaborator === "ALL") return goals;
     return goals.filter((g) => g.employeeName === selectedCollaborator);
   }, [goals, selectedCollaborator]);
+
+  // Group goals by collaborator for team overview
+  const goalsByCollaborator = React.useMemo(() => {
+    if (!showEmployeeBadge) return [];
+    const map = new Map<
+      string,
+      {
+        employeeName: string;
+        position?: string;
+        goals: MonthlyGoalDisplay[];
+        completedCount: number;
+        averageProgress: number;
+      }
+    >();
+
+    for (const g of goals) {
+      const name = g.employeeName || "Non assigné";
+      if (!map.has(name)) {
+        map.set(name, {
+          employeeName: name,
+          position: g.position,
+          goals: [],
+          completedCount: 0,
+          averageProgress: 0,
+        });
+      }
+      map.get(name)!.goals.push(g);
+    }
+
+    for (const item of map.values()) {
+      item.completedCount = item.goals.filter((g) => g.achievedValue >= g.targetValue).length;
+      const totalPct = item.goals.reduce((acc, g) => acc + g.progressPercentage, 0);
+      item.averageProgress = item.goals.length > 0 ? Math.round(totalPct / item.goals.length) : 0;
+    }
+
+    return Array.from(map.values());
+  }, [goals, showEmployeeBadge]);
 
   const totalGoals = filteredGoals.length;
   const completedGoals = filteredGoals.filter((g) => g.achievedValue >= g.targetValue).length;
@@ -242,157 +283,295 @@ export function MonthlyGoalsWidget({
         </div>
       )}
 
-      {/* Grid of Goals Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredGoals.map((goal) => {
-          const isOverachieved = goal.achievedValue > goal.targetValue;
-          const isReached = goal.achievedValue >= goal.targetValue;
-          const progressPercent = goal.progressPercentage;
-          const barWidth = Math.min(100, progressPercent);
+      {/* VUE 1 : GROUPÉE PAR COLLABORATEUR (Quand TOUS est sélectionné) */}
+      {showEmployeeBadge && distinctEmployees.length > 1 && selectedCollaborator === "ALL" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+          {goalsByCollaborator.map((collab) => {
+            const isAllCompleted = collab.completedCount === collab.goals.length && collab.goals.length > 0;
+            return (
+              <div
+                key={collab.employeeName}
+                className={`rounded-2xl p-5 border transition-all shadow-sm flex flex-col justify-between ${
+                  isAllCompleted
+                    ? "bg-gradient-to-b from-emerald-950/20 via-neutral-900/90 to-neutral-900 border-emerald-500/30 hover:border-emerald-500/50"
+                    : "bg-neutral-900/80 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                <div>
+                  {/* Collaborator Card Header */}
+                  <div className="flex items-center justify-between gap-3 border-b border-neutral-800/80 pb-3 mb-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center font-bold text-sm text-indigo-300">
+                        {collab.employeeName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-bold text-neutral-100">
+                            {collab.employeeName}
+                          </h3>
+                          {collab.position && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700 font-medium">
+                              {collab.position}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-neutral-400">
+                          {collab.goals.length} objectif(s) fixés pour {monthName} {currentYearNum}
+                        </span>
+                      </div>
+                    </div>
 
-          const remaining = Math.max(0, goal.targetValue - goal.achievedValue);
-          const surplus = Math.max(0, goal.achievedValue - goal.targetValue);
-
-          const isCA = goal.metric === "CA" || goal.metric === "CA_DA";
-
-          return (
-            <div
-              key={goal.id}
-              className={`relative overflow-hidden rounded-2xl p-5 border transition-all shadow-sm ${
-                isReached
-                  ? "bg-gradient-to-b from-emerald-950/20 via-neutral-900/80 to-neutral-900/90 border-emerald-500/30 hover:border-emerald-500/50"
-                  : progressPercent >= 70
-                  ? "bg-gradient-to-b from-amber-950/15 via-neutral-900/80 to-neutral-900/90 border-amber-500/30 hover:border-amber-500/50"
-                  : "bg-neutral-900/80 border-neutral-800 hover:border-neutral-700"
-              }`}
-            >
-              {/* Card Header */}
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center border ${getMetricBadgeStyle(
-                      goal.metric
-                    )}`}
-                  >
-                    {getMetricIcon(goal.metric)}
-                  </div>
-                  <div>
-                    {showEmployeeBadge && goal.employeeName && (
-                      <span className="text-[11px] font-bold text-indigo-400 mb-0.5 flex items-center gap-1">
-                        <span>👤</span> {goal.employeeName}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs px-2.5 py-1 rounded-xl font-bold border flex items-center gap-1.5 ${
+                          isAllCompleted
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                            : collab.completedCount > 0
+                            ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                            : "bg-neutral-800 text-neutral-300 border-neutral-700"
+                        }`}
+                      >
+                        <span>🎯</span>
+                        <span>{collab.completedCount} / {collab.goals.length} atteints</span>
                       </span>
-                    )}
-                    <h3 className="text-sm font-bold text-neutral-100">
-                      {goal.metricLabel}
-                    </h3>
-                    <span className="text-[11px] text-neutral-400 capitalize">
-                      {goal.unit}
-                    </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCollaborator(collab.employeeName)}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold p-1 hover:underline cursor-pointer"
+                        title="Voir en détail"
+                      >
+                        Détail →
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* List of Goals for this Collaborator */}
+                  <div className="space-y-2.5">
+                    {collab.goals.map((goal) => {
+                      const isReached = goal.achievedValue >= goal.targetValue;
+                      const progressPercent = goal.progressPercentage;
+                      const barWidth = Math.min(100, progressPercent);
+                      const isCA = goal.metric === "CA" || goal.metric === "CA_DA";
+
+                      return (
+                        <div
+                          key={goal.id}
+                          className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800/80 space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {getMetricIcon(goal.metric)}
+                              <span className="text-xs font-bold text-neutral-200">
+                                {goal.metricLabel}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-mono font-bold text-neutral-100">
+                                {isCA ? formatCurrency(goal.achievedValue) : goal.achievedValue} / {isCA ? formatCurrency(goal.targetValue) : goal.targetValue} {goal.unit}
+                              </span>
+                              <span
+                                className={`text-xs font-mono font-black ${
+                                  isReached
+                                    ? "text-emerald-400"
+                                    : progressPercent >= 70
+                                    ? "text-amber-400"
+                                    : "text-neutral-400"
+                                }`}
+                              >
+                                ({progressPercent}%)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="w-full bg-neutral-900 h-2 rounded-full overflow-hidden border border-neutral-800">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                isReached
+                                  ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                                  : progressPercent >= 70
+                                  ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                                  : "bg-gradient-to-r from-blue-500 to-indigo-500"
+                              }`}
+                              style={{ width: `${barWidth}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Status Badge */}
-                <div>
-                  {isOverachieved ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
-                      <Flame className="w-3 h-3 text-emerald-400" />
-                      Dépassement 🚀
-                    </span>
-                  ) : isReached ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                      Atteint 🎯
-                    </span>
-                  ) : progressPercent >= 70 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                      <Flame className="w-3 h-3 text-amber-400" />
-                      En très bonne voie 🔥
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
-                      <Clock className="w-3 h-3 text-neutral-400" />
-                      En cours ⏳
-                    </span>
-                  )}
+                {/* Footer of card */}
+                <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-400">
+                  <span>Moyenne d'avancement : <strong className="text-neutral-200">{collab.averageProgress}%</strong></span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCollaborator(collab.employeeName)}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-medium hover:underline cursor-pointer"
+                  >
+                    Filtrer sur ce collaborateur
+                  </button>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* VUE 2 : GRILLE DE CARTES DÉTAILLÉES (Quand un collaborateur précis est sélectionné ou vue individuelle) */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredGoals.map((goal) => {
+            const isOverachieved = goal.achievedValue > goal.targetValue;
+            const isReached = goal.achievedValue >= goal.targetValue;
+            const progressPercent = goal.progressPercentage;
+            const barWidth = Math.min(100, progressPercent);
 
-              {/* Numbers Display */}
-              <div className="flex items-baseline justify-between pt-1 pb-2">
-                <div>
-                  <div className="flex items-baseline gap-1.5">
+            const remaining = Math.max(0, goal.targetValue - goal.achievedValue);
+            const surplus = Math.max(0, goal.achievedValue - goal.targetValue);
+
+            const isCA = goal.metric === "CA" || goal.metric === "CA_DA";
+
+            return (
+              <div
+                key={goal.id}
+                className={`relative overflow-hidden rounded-2xl p-5 border transition-all shadow-sm ${
+                  isReached
+                    ? "bg-gradient-to-b from-emerald-950/20 via-neutral-900/80 to-neutral-900/90 border-emerald-500/30 hover:border-emerald-500/50"
+                    : progressPercent >= 70
+                    ? "bg-gradient-to-b from-amber-950/15 via-neutral-900/80 to-neutral-900/90 border-amber-500/30 hover:border-amber-500/50"
+                    : "bg-neutral-900/80 border-neutral-800 hover:border-neutral-700"
+                }`}
+              >
+                {/* Card Header */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center border ${getMetricBadgeStyle(
+                        goal.metric
+                      )}`}
+                    >
+                      {getMetricIcon(goal.metric)}
+                    </div>
+                    <div>
+                      {showEmployeeBadge && goal.employeeName && (
+                        <span className="text-[11px] font-bold text-indigo-400 mb-0.5 flex items-center gap-1">
+                          <span>👤</span> {goal.employeeName}
+                        </span>
+                      )}
+                      <h3 className="text-sm font-bold text-neutral-100">
+                        {goal.metricLabel}
+                      </h3>
+                      <span className="text-[11px] text-neutral-400 capitalize">
+                        {goal.unit}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Status Badge */}
+                  <div>
+                    {isOverachieved ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">
+                        <Flame className="w-3 h-3 text-emerald-400" />
+                        Dépassement 🚀
+                      </span>
+                    ) : isReached ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        Atteint 🎯
+                      </span>
+                    ) : progressPercent >= 70 ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        <Flame className="w-3 h-3 text-amber-400" />
+                        En très bonne voie 🔥
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700">
+                        <Clock className="w-3 h-3 text-neutral-400" />
+                        En cours ⏳
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Numbers Display */}
+                <div className="flex items-baseline justify-between pt-1 pb-2">
+                  <div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span
+                        className={`text-2xl font-black font-mono tracking-tight ${
+                          isReached
+                            ? "text-emerald-400"
+                            : progressPercent >= 70
+                            ? "text-amber-400"
+                            : "text-neutral-100"
+                        }`}
+                      >
+                        {isCA ? formatCurrency(goal.achievedValue) : goal.achievedValue}
+                      </span>
+                      <span className="text-xs text-neutral-500 font-mono">
+                        / {isCA ? formatCurrency(goal.targetValue) : goal.targetValue} {goal.unit}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-400 font-medium">
+                      Réalisé ce mois
+                    </span>
+                  </div>
+
+                  <div className="text-right">
                     <span
-                      className={`text-2xl font-black font-mono tracking-tight ${
+                      className={`text-xl font-black font-mono ${
                         isReached
                           ? "text-emerald-400"
                           : progressPercent >= 70
                           ? "text-amber-400"
-                          : "text-neutral-100"
+                          : "text-neutral-200"
                       }`}
                     >
-                      {isCA ? formatCurrency(goal.achievedValue) : goal.achievedValue}
-                    </span>
-                    <span className="text-xs text-neutral-500 font-mono">
-                      / {isCA ? formatCurrency(goal.targetValue) : goal.targetValue} {goal.unit}
+                      {progressPercent}%
                     </span>
                   </div>
-                  <span className="text-[11px] text-neutral-400 font-medium">
-                    Réalisé ce mois
-                  </span>
                 </div>
 
-                <div className="text-right">
-                  <span
-                    className={`text-xl font-black font-mono ${
+                {/* Progress Bar */}
+                <div className="w-full bg-neutral-950 h-2.5 rounded-full overflow-hidden border border-neutral-800/80 p-0.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
                       isReached
-                        ? "text-emerald-400"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
                         : progressPercent >= 70
-                        ? "text-amber-400"
-                        : "text-neutral-200"
+                        ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                        : "bg-gradient-to-r from-indigo-600 to-blue-500"
                     }`}
-                  >
-                    {progressPercent}%
+                    style={{ width: `${barWidth}%` }}
+                  />
+                </div>
+
+                {/* Motivational Footer */}
+                <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px]">
+                  {isReached ? (
+                    <span className="text-emerald-400 font-medium flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      {isOverachieved
+                        ? `Objectif validé ! +${surplus} ${goal.unit} au-delà de la cible.`
+                        : "Bravo ! Objectif mensuel parfaitement validé."}
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400 font-medium">
+                      Plus que <strong className="text-neutral-200">{remaining} {goal.unit}</strong> pour valider la cible.
+                    </span>
+                  )}
+
+                  <span className="text-[10px] text-neutral-500 font-mono">
+                    {goal.metric}
                   </span>
                 </div>
               </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-neutral-950 h-2.5 rounded-full overflow-hidden border border-neutral-800/80 p-0.5">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    isReached
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-sm shadow-emerald-500/50"
-                      : progressPercent >= 70
-                      ? "bg-gradient-to-r from-amber-500 to-yellow-400"
-                      : "bg-gradient-to-r from-indigo-600 to-blue-500"
-                  }`}
-                  style={{ width: `${barWidth}%` }}
-                />
-              </div>
-
-              {/* Motivational Footer */}
-              <div className="mt-3 pt-2.5 border-t border-neutral-800/60 flex items-center justify-between text-[11px]">
-                {isReached ? (
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    {isOverachieved
-                      ? `Objectif validé ! +${surplus} ${goal.unit} au-delà de la cible.`
-                      : "Bravo ! Objectif mensuel parfaitement validé."}
-                  </span>
-                ) : (
-                  <span className="text-neutral-400 font-medium">
-                    Plus que <strong className="text-neutral-200">{remaining} {goal.unit}</strong> pour valider la cible.
-                  </span>
-                )}
-
-                <span className="text-[10px] text-neutral-500 font-mono">
-                  {goal.metric}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

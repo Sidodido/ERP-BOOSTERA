@@ -102,7 +102,54 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [selectedClientId, setSelectedClientId] = useState<string>("ALL");
+  const [selectedType, setSelectedType] = useState<string>("ALL");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+
+  // Helper pour classifier le type de projet Tech
+  const getProjectType = (p: ProjectItem) => {
+    const desc = p.description || "";
+    const code = p.code || "";
+    const name = p.name.toLowerCase();
+
+    if (
+      desc.includes("[TYPE:MOBILE_APP]") ||
+      code.startsWith("APP-") ||
+      name.includes("mobile") ||
+      name.includes("ios") ||
+      name.includes("android") ||
+      name.includes("application")
+    ) {
+      return {
+        id: "MOBILE_APP",
+        label: "App Mobile",
+        icon: "📱",
+        badgeColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+      };
+    }
+    if (
+      desc.includes("[TYPE:PLATFORM]") ||
+      code.startsWith("PLT-") ||
+      name.includes("plateforme") ||
+      name.includes("saas") ||
+      name.includes("portail") ||
+      name.includes("erp") ||
+      name.includes("crm") ||
+      name.includes("dashboard")
+    ) {
+      return {
+        id: "PLATFORM",
+        label: "Plateforme / SaaS",
+        icon: "💻",
+        badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+      };
+    }
+    return {
+      id: "WEB_DEV",
+      label: "Développement Web",
+      icon: "🌐",
+      badgeColor: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+    };
+  };
 
   // Scope: ACTIVE (Projets Actifs), HISTORY (Historique des Projets terminés / annulés), ALL (Tous)
   const [projectScope, setProjectScope] = useState<"ACTIVE" | "HISTORY" | "ALL">(() => {
@@ -136,11 +183,12 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
     clientId: clients[0]?.id || "",
     name: "",
     code: "",
+    projectType: "WEB_DEV" as "WEB_DEV" | "PLATFORM" | "MOBILE_APP" | "CUSTOM_DEV",
     description: "",
     managerId: users.find((u) => u.role === "TECH_LEAD")?.id || users[0]?.id || "",
     startDate: new Date().toISOString().split("T")[0],
     deadline: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-    budget: 30000,
+    budget: 50000,
   });
   const [formError, setFormError] = useState("");
 
@@ -171,7 +219,13 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
     // 3. Client filter
     if (selectedClientId !== "ALL" && p.client.id !== selectedClientId) return false;
 
-    // 4. Search text filter
+    // 4. Project Type filter
+    if (selectedType !== "ALL") {
+      const pType = getProjectType(p);
+      if (pType.id !== selectedType) return false;
+    }
+
+    // 5. Search text filter
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchName = p.name.toLowerCase().includes(q);
@@ -200,6 +254,7 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
           clientId: formData.clientId,
           name: formData.name,
           code: formData.code || undefined,
+          projectType: formData.projectType,
           description: formData.description,
           managerId: formData.managerId || undefined,
           startDate: formData.startDate,
@@ -213,11 +268,12 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
             clientId: clients[0]?.id || "",
             name: "",
             code: "",
+            projectType: "WEB_DEV",
             description: "",
             managerId: users.find((u) => u.role === "TECH_LEAD")?.id || users[0]?.id || "",
             startDate: new Date().toISOString().split("T")[0],
             deadline: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-            budget: 30000,
+            budget: 50000,
           });
           router.push(`/projets/${res.project.id}`);
         }
@@ -244,11 +300,11 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
               <Briefcase className="w-5 h-5" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-neutral-100">
-              Gestion des Projets Clients
+              Gestion des Projets Web & Mobile
             </h1>
           </div>
           <p className="text-xs text-neutral-400 mt-1">
-            Cycle de vie complet, production technique, respect des deadlines et rentabilité brute.
+            Développement Web, Plateformes SaaS & Applications Mobiles. Cycle de vie technique, respect des deadlines et rentabilité.
           </p>
         </div>
 
@@ -258,18 +314,19 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
               clientId: clients[0]?.id || "",
               name: "",
               code: "",
+              projectType: "WEB_DEV",
               description: "",
               managerId: users.find((u) => u.role === "TECH_LEAD")?.id || users[0]?.id || "",
               startDate: new Date().toISOString().split("T")[0],
               deadline: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
-              budget: 30000,
+              budget: 50000,
             });
             setIsCreateModalOpen(true);
           }}
           className="gap-2 shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Nouveau Projet</span>
+          <span>Nouveau Projet Tech</span>
         </Button>
       </div>
 
@@ -543,6 +600,18 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
               ))}
           </select>
 
+          {/* Project Type Filter (Web / Plateforme / Mobile) */}
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="h-8 px-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+          >
+            <option value="ALL">💻 Tous les types Tech</option>
+            <option value="WEB_DEV">🌐 Développement Web</option>
+            <option value="PLATFORM">💻 Plateformes & SaaS</option>
+            <option value="MOBILE_APP">📱 Applications Mobiles</option>
+          </select>
+
           {/* Client Filter */}
           <select
             value={selectedClientId}
@@ -675,10 +744,21 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
                     >
                       <td className="px-4 py-3.5">
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-mono text-[10px] font-bold text-blue-400">
                               {p.code}
                             </span>
+                            {(() => {
+                              const pType = getProjectType(p);
+                              return (
+                                <span
+                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded border flex items-center gap-0.5 ${pType.badgeColor}`}
+                                >
+                                  <span>{pType.icon}</span>
+                                  <span>{pType.label}</span>
+                                </span>
+                              );
+                            })()}
                             {(p.status === "COMPLETED" || p.status === "CANCELLED") && (
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
                                 <Archive className="w-2.5 h-2.5" />
@@ -686,7 +766,7 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
                               </span>
                             )}
                           </div>
-                          <span className="font-semibold text-neutral-100 group-hover:text-blue-400 transition-colors">
+                          <span className="font-semibold text-neutral-100 group-hover:text-blue-400 transition-colors mt-0.5">
                             {p.name}
                           </span>
                         </div>
@@ -880,27 +960,43 @@ export function ProjectsListView({ projects, clients, users }: ProjectsListViewP
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-neutral-300">Client associé *</label>
-            <select
-              value={formData.clientId}
-              onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
-              className="w-full h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-              required
-            >
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.companyName} {c.wilaya ? `(${c.wilaya})` : ""}
-                </option>
-              ))}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300">Client associé *</label>
+              <select
+                value={formData.clientId}
+                onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                className="w-full h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                required
+              >
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.companyName} {c.wilaya ? `(${c.wilaya})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300">Type de Projet Tech *</label>
+              <select
+                value={formData.projectType}
+                onChange={(e) => setFormData({ ...formData, projectType: e.target.value as any })}
+                className="w-full h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer font-medium"
+              >
+                <option value="WEB_DEV">🌐 Site Web & E-Commerce (Vitrine / Boutique)</option>
+                <option value="PLATFORM">💻 Plateforme Web & SaaS (Portail / Dashboard)</option>
+                <option value="MOBILE_APP">📱 Application Mobile (iOS & Android)</option>
+                <option value="CUSTOM_DEV">⚙️ Solution Sur-Mesure & API</option>
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2 space-y-1.5">
               <label className="text-xs font-semibold text-neutral-300">Nom du projet *</label>
               <Input
-                placeholder="Ex: Production Pack Gold — Mars 2026"
+                placeholder="Ex: Refonte Site Web E-Commerce & App Mobile Client"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required

@@ -361,34 +361,6 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
         </div>
       )}
 
-      {/* Banner Liaison Abonnement Mensuel */}
-      {project.client?.offerType && (
-        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/40 via-neutral-900 to-indigo-950/30 border border-purple-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-neutral-100 flex items-center gap-2">
-                Abonnement Récurrent : Pack {project.client.offerType} ({WEEKLY_QUOTAS_BY_OFFER[project.client.offerType as OfferType]?.tagline || "Actif"})
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
-                  {WEEKLY_QUOTAS_BY_OFFER[project.client.offerType as OfferType]?.weekly || 1} pub(s)/semaine
-                </span>
-              </p>
-              <p className="text-[11px] text-neutral-400 mt-0.5">
-                Accédez à la gestion complète de cet abonnement, au Studio IA (Google Gemini) et aux livrables contractuels.
-              </p>
-            </div>
-          </div>
-          <Link
-            href={`/abonnements/${project.clientId}`}
-            className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Ouvrir dans Abonnements & Studio IA →</span>
-          </Link>
-        </div>
-      )}
 
       {/* Lifecycle Status Stepper */}
       <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800/80 space-y-3">
@@ -621,7 +593,7 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                         : "bg-purple-500/10 text-purple-400 border-purple-500/20"
                     }`}
                   >
-                    {isPart1 ? "🎬 Partie 1 : Audiovisuel & Social" : "💻 Partie 2 : Web & Extra"}
+                    {isPart1 ? "📐 Phase 1 : Conception & UI/UX" : "💻 Phase 2 : Dév & Mise en Ligne"}
                   </span>
                   {t.status === "VALIDATED" && (
                     <span
@@ -736,8 +708,8 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    <Video className="w-3.5 h-3.5" />
-                    <span>Partie 1 : Shooting & Voix ({part1Tasks.length})</span>
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Phase 1 : Conception & UI/UX ({part1Tasks.length})</span>
                   </button>
                   <button
                     type="button"
@@ -749,7 +721,7 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                     }`}
                   >
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Partie 2 : Montage & Web ({part2Tasks.length})</span>
+                    <span>Phase 2 : Dév & Déploiement ({part2Tasks.length})</span>
                   </button>
                 </div>
               </div>
@@ -760,30 +732,30 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                 className="gap-1.5 text-xs"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Nouvelle Tâche</span>
+                <span>Nouvelle Tâche Tech</span>
               </Button>
             </div>
 
-            {/* SECTION 1 : PARTIE 1 (Production Audiovisuelle & Réseaux Sociaux - Modèles recommandés) */}
+            {/* SECTION 1 : PHASE 1 (Conception & Architecture UI/UX) */}
             {(taskPartFilter === "ALL" || taskPartFilter === "PART_1") && (
               <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-lg space-y-0">
                 {/* Section Header */}
                 <div className="p-4 bg-gradient-to-r from-blue-950/40 via-neutral-900 to-neutral-900 border-b border-neutral-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
-                      <Video className="w-4 h-4" />
+                      <Layers className="w-4 h-4" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-neutral-100">
-                          Partie 1 : Production sur site & Voix-Off
+                          Phase 1 : Conception, Architecture & UI/UX Figma
                         </h4>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
-                          Shooting & Voix-Off
+                          Conception & UI/UX
                         </span>
                       </div>
                       <p className="text-[11px] text-neutral-400 mt-0.5">
-                        Shooting photo/vidéo sur site (Toufik) et Enregistrement Voix-Off (Meroua)
+                        Cahier des charges, Wireframes & Maquettes Figma (Web/Mobile), Architecture technique
                       </p>
                     </div>
                   </div>
@@ -807,13 +779,13 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                 {/* Tasks List */}
                 {part1Tasks.length === 0 ? (
                   <div className="p-6 text-center text-xs text-neutral-500">
-                    Aucune tâche de production sur site / voix-off pour l'instant.
+                    Aucune tâche de conception ou UI/UX pour l'instant.
                     <button
                       type="button"
                       onClick={() => openForPart("PART_1")}
                       className="ml-2 text-blue-400 hover:underline font-semibold cursor-pointer"
                     >
-                      + Ajouter une tâche manuellement
+                      + Ajouter une tâche de conception
                     </button>
                   </div>
                 ) : (
@@ -824,7 +796,7 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
               </div>
             )}
 
-            {/* SECTION 2 : PARTIE 2 (Web, Marketing Digital & Tâches Additionnelles) */}
+            {/* SECTION 2 : PHASE 2 (Développement Web, Mobile & Déploiement) */}
             {(taskPartFilter === "ALL" || taskPartFilter === "PART_2") && (
               <div className="bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-lg space-y-0">
                 {/* Section Header */}
@@ -836,14 +808,14 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-neutral-100">
-                          Partie 2 : Montage, Web, Marketing & Tâches Additionnelles
+                          Phase 2 : Développement Web, Mobile & Déploiement
                         </h4>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
-                          Montage, Web & Extras
+                          Développement & Mise en Ligne
                         </span>
                       </div>
                       <p className="text-[11px] text-neutral-400 mt-0.5">
-                        Montage Reel/TikTok, Carrousels réseaux sociaux, Design Figma, Site web et Meta Ads
+                        Développement Frontend & Mobile, Backend APIs, Tests QA, Serveur, Domaine & Stores
                       </p>
                     </div>
                   </div>
@@ -868,16 +840,14 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
                 {/* Tasks List */}
                 {part2Tasks.length === 0 ? (
                   <div className="p-8 text-center text-xs text-neutral-500 space-y-2">
-                    <p>Aucune tâche de montage, web ou marketing pour l'instant.</p>
-                    {project.clientId && (
-                      <Link
-                        href={`/abonnements/${project.clientId}`}
-                        className="inline-flex items-center gap-1.5 text-purple-400 hover:underline font-semibold cursor-pointer"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Gérer les thèmes et le Studio IA dans la section Abonnements →
-                      </Link>
-                    )}
+                    <p>Aucune tâche de développement ou déploiement pour l'instant.</p>
+                    <button
+                      type="button"
+                      onClick={() => openForPart("PART_2")}
+                      className="text-purple-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      + Ajouter une tâche de développement
+                    </button>
                   </div>
                 ) : (
                   <div className="divide-y divide-neutral-800/60">
@@ -1068,11 +1038,11 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-blue-400 flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5" />
-                    <span>Partie 1 : Modèles sur site & Voix-Off</span>
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>Phase 1 : Modèles Conception, Architecture & UI/UX</span>
                   </span>
                   <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
-                    Meroua & Toufik
+                    Figma & Tech Lead
                   </span>
                 </div>
                 <span className="text-[10px] text-blue-400/80 font-mono">
@@ -1106,13 +1076,16 @@ export function ProjectDetailView({ project, users }: ProjectDetailViewProps) {
               </div>
             </div>
 
-            {/* Partie 2 : Modèles Montage, Web, Marketing & Additionnels */}
+            {/* Phase 2 : Modèles Développement Web, Mobile & Déploiement */}
             <div className="space-y-1.5 pt-2.5 border-t border-neutral-800">
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-purple-400 flex items-center gap-1.5">
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Partie 2 : Modèles Montage, Web & Extras</span>
+                    <span>Phase 2 : Modèles Dév Web, Mobile, APIs & Déploiement</span>
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+                    Développeurs & DevOps
                   </span>
                 </div>
                 <span className="text-[10px] text-neutral-400 font-mono">

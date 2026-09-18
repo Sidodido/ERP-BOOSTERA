@@ -210,38 +210,50 @@ export function TechnicianCalendarClient({
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState(currentUserId || "");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
 
-  // Month navigation
+  // Month navigation — navigate via URL so the server reloads data for the correct month
   const handlePrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
+    let m = currentMonth;
+    let y = currentYear;
+    if (m === 0) {
+      m = 11;
+      y = y - 1;
     } else {
-      setCurrentMonth((m) => m - 1);
+      m = m - 1;
     }
     setSelectedDayStr(null);
+    router.push(`/calendrier-technicien?month=${m + 1}&year=${y}`);
   };
 
   const handleNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
+    let m = currentMonth;
+    let y = currentYear;
+    if (m === 11) {
+      m = 0;
+      y = y + 1;
     } else {
-      setCurrentMonth((m) => m + 1);
+      m = m + 1;
     }
     setSelectedDayStr(null);
+    router.push(`/calendrier-technicien?month=${m + 1}&year=${y}`);
   };
 
   const handleCurrentMonth = () => {
     const today = new Date();
-    setCurrentMonth(today.getMonth());
-    setCurrentYear(today.getFullYear());
     setSelectedDayStr(null);
+    router.push(`/calendrier-technicien?month=${today.getMonth() + 1}&year=${today.getFullYear()}`);
   };
+
 
   // Helper to detect deliverable type icon
   const getDeliverableIcon = (title: string, description?: string | null) => {
     const text = `${title} ${description || ""}`.toLowerCase();
-    if (text.includes("video") || text.includes("vidéo") || text.includes("reel") || text.includes("tournage") || text.includes("shooting") || text.includes("montage")) {
+    if (text.includes("shooting") || text.includes("tournage")) {
+      return <Video className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+    }
+    if (text.includes("publication") || text.includes("post") || text.includes("réseaux") || text.includes("social")) {
+      return <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
+    }
+    if (text.includes("video") || text.includes("vidéo") || text.includes("reel") || text.includes("montage")) {
       return <Video className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
     }
     if (text.includes("design") || text.includes("maquette") || text.includes("carrousel") || text.includes("visuel") || text.includes("logo") || text.includes("affiche")) {

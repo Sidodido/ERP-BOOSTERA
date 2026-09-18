@@ -506,15 +506,14 @@ export async function createBatchTasksAction(data: {
     });
 
     if (!proj) {
-      const count = await prisma.project.count();
-      const code = `PRJ-${new Date().getFullYear()}-${String(count + 1).padStart(3, "0")}`;
+      const code = `ABN-${Date.now().toString(36).toUpperCase()}`;
       const client = await prisma.client.findUnique({ where: { id: data.clientId } });
       proj = await prisma.project.create({
         data: {
           clientId: data.clientId,
-          name: `Régie & Tâches — ${client?.companyName || "Client"}`,
+          name: `Abonnement — ${client?.companyName || "Client"}`,
           code,
-          description: "Projet créé automatiquement pour le suivi des tâches directes du client.",
+          description: "Conteneur automatique pour le suivi des tâches récurrentes du client.",
           status: "IN_PRODUCTION",
         },
       });
@@ -597,6 +596,127 @@ export async function createBatchTasksAction(data: {
 }
 
 /**
+ * Synchronise et génère automatiquement les tâches des abonnements mensuels pour chaque client :
+ * 1. Publications chaque début de semaine (Lundi)
+ * 2. Shooting Photo & Vidéo programmé automatiquement 2 mois après la date de signature du contrat
+ */
+export async function syncSubscriptionTasksForClients(clientId?: string) {
+  try {
+    const clients = await prisma.client.findMany({
+      where: {
+        ...(clientId ? { id: clientId } : {}),
+        status: { in: ["ACTIVE", "IN_PREPARATION"] },
+      },
+      include: {
+        projects: {
+          where: { code: { startsWith: "ABN-" } },
+        },
+      },
+    });
+
+    for (const client of clients) {
+      let project = client.projects[0];
+      if (!project) {
+        project = await prisma.project.create({
+          data: {
+            clientId: client.id,
+            name: `Abonnement — ${client.companyName}`,
+            code: `ABN-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`,
+            description: "Conteneur automatique pour le suivi des tâches récurrentes de l'abonnement.",
+            status: "IN_PRODUCTION",
+          },
+        });
+      }
+
+      const signatureDate = client.contractStart ? new Date(client.contractStart) : new Date(client.createdAt);
+
+      const contractEndDate = client.contractEnd
+        ? new Date(client.contractEnd)
+        : new Date(signatureDate.getTime() + 12 * 30 * 24 * 60 * 60 * 1000);
+
+      const existingTasks = await prisma.projectTask.findMany({
+        where: { projectId: project.id },
+        select: { id: true, title: true, dueDate: true },
+      });
+
+      // 1. Shooting Photo & Vidéo programmé automatiquement 2 mois après la date de signature
+      const shootingDate = new Date(signatureDate);
+      shootingDate.setMonth(shootingDate.getMonth() + 2);
+      shootingDate.setHours(10, 0, 0, 0);
+
+      const hasShooting = existingTasks.some((t) => {
+        if (!t.title.toLowerCase().includes("shooting")) return false;
+        if (!t.dueDate) return false;
+        const diffDays = Math.abs(t.dueDate.getTime() - shootingDate.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays < 15;
+      });
+
+      if (!hasShooting) {
+        await prisma.projectTask.create({
+          data: {
+            projectId: project.id,
+            title: `🎬 Shooting Photo & Vidéo (M+2) — ${client.companyName}`,
+            description: `Session de tournage et shooting vidéo/photo programmée automatiquement 2 mois après la date de signature du contrat (${signatureDate.toLocaleDateString("fr-FR")}).`,
+            dueDate: shootingDate,
+            priority: TaskPriority.HIGH,
+            status: TaskStatus.TODO,
+            timeSpentHours: 4,
+          },
+        });
+      }
+
+      // 2. Publications chaque début de semaine (Lundi)
+      const now = new Date();
+      const sixMonthsAhead = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+      const horizonEnd = new Date(Math.min(contractEndDate.getTime(), sixMonthsAhead.getTime()));
+
+      const currentMonday = new Date(signatureDate);
+      const dayOfWeek = currentMonday.getDay();
+      const diffToMonday = dayOfWeek === 1 ? 0 : (8 - dayOfWeek) % 7;
+      currentMonday.setDate(currentMonday.getDate() + diffToMonday);
+      currentMonday.setHours(9, 0, 0, 0);
+
+      const newPublicationTasks = [];
+
+      while (currentMonday <= horizonEnd) {
+        const mondayDateStr = currentMonday.toISOString().split("T")[0];
+
+        const alreadyExists = existingTasks.some((t) => {
+          if (!t.dueDate) return false;
+          const tDateStr = t.dueDate.toISOString().split("T")[0];
+          return tDateStr === mondayDateStr && t.title.toLowerCase().includes("publication");
+        });
+
+        if (!alreadyExists) {
+          newPublicationTasks.push({
+            projectId: project.id,
+            title: `📱 Publication Réseaux Sociaux (Début de semaine) — ${client.companyName}`,
+            description: `Publication et diffusion du contenu hebdomadaire (Post / Reel / Carrousel). Client : ${client.companyName} (${client.offerType}).`,
+            dueDate: new Date(currentMonday),
+            priority: TaskPriority.MEDIUM,
+            status: TaskStatus.TODO,
+            timeSpentHours: 1,
+          });
+        }
+
+        currentMonday.setDate(currentMonday.getDate() + 7);
+      }
+
+      if (newPublicationTasks.length > 0) {
+        await prisma.projectTask.createMany({
+          data: newPublicationTasks,
+        });
+      }
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("Erreur syncSubscriptionTasksForClients:", err);
+    return { success: false, error: err };
+  }
+}
+
+/**
  * Récupère l'ensemble des tâches de production pour le calendrier mensuel du rôle technicien.
  * Rassemble toutes les tâches du mois dans les packs signés (actifs ou en préparation)
  * et les projets en production.
@@ -606,6 +726,13 @@ export async function getTechnicianCalendarData(params?: {
   year?: number;
 }) {
   const user = await requireAuth();
+
+  // Auto-synchronisation des tâches d'abonnements (Publications hebdo le lundi + Shooting M+2)
+  try {
+    await syncSubscriptionTasksForClients();
+  } catch (syncErr) {
+    console.error("Auto-sync subscription tasks error:", syncErr);
+  }
 
   const now = new Date();
   const targetYear = params?.year || now.getFullYear();

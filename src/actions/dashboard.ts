@@ -375,7 +375,11 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
         },
       }),
       prisma.project.count({
-        where: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
+        where: {
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          code: { not: { startsWith: "ABN-" } },
+          name: { not: { startsWith: "Abonnement" } },
+        },
       }),
       prisma.client.count({
         where: { status: ClientStatus.ACTIVE },
@@ -397,7 +401,11 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
         },
       }),
       prisma.project.findMany({
-        where: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
+        where: {
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          code: { not: { startsWith: "ABN-" } },
+          name: { not: { startsWith: "Abonnement" } },
+        },
         orderBy: { updatedAt: "desc" },
         take: 5,
         include: {

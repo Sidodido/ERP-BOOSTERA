@@ -101,11 +101,22 @@ export function TechnicianDashboard({ metrics, userName }: TechnicianDashboardPr
       {/* Pointage Quotidien */}
       <DailyAttendanceWidget />
 
-      {/* Mes Objectifs du Mois (Synchronisés en Direct) */}
+      {/* Objectifs Mensuels (Personnels ou de l'Équipe pour l'Admin) */}
       <MonthlyGoalsWidget
-        goals={metrics.myMonthlyGoals || []}
+        goals={
+          metrics.isAdmin && metrics.allTeamGoals && metrics.allTeamGoals.length > 0
+            ? metrics.allTeamGoals
+            : metrics.myMonthlyGoals || []
+        }
         userName={userName}
         showAdminLink={metrics.isAdmin}
+        title={
+          metrics.isAdmin && metrics.allTeamGoals && metrics.allTeamGoals.length > 0
+            ? "Objectifs Mensuels des Collaborateurs (Équipe)"
+            : "Mes Objectifs du Mois"
+        }
+        subtitle="Suivi en direct des objectifs de chaque collaborateur synchronisés avec leurs actions réelles."
+        showEmployeeBadge={Boolean(metrics.isAdmin && metrics.allTeamGoals && metrics.allTeamGoals.length > 0)}
       />
 
       {/* Row 1: Key Production KPIs */}

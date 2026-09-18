@@ -906,18 +906,6 @@ export function BaseProspectsClient({
           </Button>
 
           <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncContactedToFollowUps}
-            isLoading={isSyncingRelances}
-            className="gap-1.5 bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20 cursor-pointer"
-            title="Mettre automatiquement tous les prospects contactés dans la relance (+3j, +7j, +15j)"
-          >
-            <RotateCw className="w-3.5 h-3.5 text-purple-400" />
-            <span>Sync Relances</span>
-          </Button>
-
-          <Button
             size="sm"
             onClick={() => setNewModalOpen(true)}
             className="gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer bg-blue-600 hover:bg-blue-500 text-white"
