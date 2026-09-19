@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma db push --accept-data-loss && node seed.js",
+    "postinstall": "prisma generate",
     "db:seed": "bun run prisma/seed.ts"
   },
   "prisma": {

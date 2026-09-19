@@ -200,7 +200,45 @@ if (!fs.existsSync(pagesManifestPath)) {
 // 4. Prisma Auto-Init Helper
 let prismaClient = null;
 let prismaLoadError = null;
-function getPrisma() {
+let prismaInstallLog = "";
+
+function tryGeneratePrisma() {
+  const { execSync } = require("child_process");
+  const nodeBin = "/home/zidane17/nodevenv/erp/22/bin";
+  const customPath = `${nodeBin}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ""}`;
+  const env = { ...process.env, PATH: customPath };
+  let logs = [];
+
+  // Step A: Attempt npx prisma generate
+  try {
+    logs.push("⏳ Lancement de 'npx prisma generate'...");
+    const out = execSync("npx prisma generate", { cwd: __dirname, env, encoding: "utf-8", timeout: 60000 });
+    logs.push("✅ prisma generate réussi :\n" + out);
+    return { success: true, logs: logs.join("\n") };
+  } catch (e1) {
+    logs.push("ℹ️ npx prisma generate direct a échoué: " + (e1.stdout || "") + " " + (e1.stderr || "") + " " + e1.message);
+  }
+
+  // Step B: Attempt npm install @prisma/client prisma
+  try {
+    logs.push("⏳ Installation de @prisma/client et prisma via npm...");
+    const out2 = execSync("npm install @prisma/client@6.4.1 prisma@6.4.1 --no-audit --no-fund --omit=dev", { cwd: __dirname, env, encoding: "utf-8", timeout: 90000 });
+    logs.push("✅ npm install terminé :\n" + out2);
+    logs.push("⏳ Génération du client...");
+    const out3 = execSync("npx prisma generate", { cwd: __dirname, env, encoding: "utf-8", timeout: 60000 });
+    logs.push("✅ prisma generate réussi :\n" + out3);
+    return { success: true, logs: logs.join("\n") };
+  } catch (e2) {
+    logs.push("❌ Échec installation npm: " + (e2.stdout || "") + " " + (e2.stderr || "") + " " + e2.message);
+    return { success: false, logs: logs.join("\n") };
+  }
+}
+
+function getPrisma(forceReload = false) {
+  if (forceReload) {
+    prismaClient = null;
+    prismaLoadError = null;
+  }
   if (!prismaClient && !prismaLoadError) {
     try {
       let PrismaClientClass = null;
@@ -216,6 +254,26 @@ function getPrisma() {
             }
           } catch {}
         }
+        if (!PrismaClientClass) {
+          // Attempt on-the-fly generation if missing
+          const genRes = tryGeneratePrisma();
+          prismaInstallLog = genRes.logs;
+          if (genRes.success) {
+            try {
+              PrismaClientClass = require("@prisma/client").PrismaClient;
+            } catch (eRetry) {
+              for (const p of possiblePaths) {
+                try {
+                  const candidate = path.join(p, "@prisma/client");
+                  if (fs.existsSync(candidate)) {
+                    PrismaClientClass = require(candidate).PrismaClient;
+                    if (PrismaClientClass) break;
+                  }
+                } catch {}
+              }
+            }
+          }
+        }
         if (!PrismaClientClass) throw e1;
       }
       prismaClient = new PrismaClientClass({
@@ -230,9 +288,14 @@ function getPrisma() {
 }
 
 async function runDbInit() {
-  const prisma = getPrisma();
+  let prisma = getPrisma();
   if (!prisma) {
-    throw new Error("@prisma/client n'est pas disponible.");
+    const res = tryGeneratePrisma();
+    prismaInstallLog = res.logs;
+    prisma = getPrisma(true);
+  }
+  if (!prisma) {
+    throw new Error("@prisma/client n'est pas disponible.\nLogs d'installation:\n" + prismaInstallLog);
   }
   const sqlPath = path.join(__dirname, "boostera_init.sql");
   if (!fs.existsSync(sqlPath)) {
@@ -367,6 +430,7 @@ const server = http.createServer(async (req, res) => {
           <p><strong>Statut :</strong> <span class="badge ${dbError ? 'badge-error' : 'badge-success'}">${dbStatus}</span></p>
           
           ${dbError ? `<p><strong>Détail de l'erreur :</strong></p><pre>${dbError}</pre>` : ''}
+          ${prismaInstallLog ? `<p><strong>Journal d'installation / réparation Prisma :</strong></p><pre style="color: #38bdf8;">${prismaInstallLog}</pre>` : ''}
           
           <p><strong>Nombre d'utilisateurs actifs :</strong> ${userCount}</p>
 
