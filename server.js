@@ -31,12 +31,10 @@ logDebug("Starting BOOSTERA ERP server.js...");
 
 const Module = require("module");
 
-// 1. Support all possible node_modules locations in cPanel / CloudLinux / LiteSpeed
+// Auto-fix paths if needed
 const possiblePaths = [
   path.join(__dirname, "node_modules"),
   path.join(process.cwd(), "node_modules"),
-  "/home/zidane17/nodevenv/erp/22/lib/node_modules",
-  "/home/zidane17/nodevenv/erp/22/lib64/node_modules",
 ];
 
 for (const p of possiblePaths) {
@@ -45,66 +43,6 @@ for (const p of possiblePaths) {
   }
 }
 
-try {
-  const existingNodePath = process.env.NODE_PATH ? process.env.NODE_PATH.split(path.delimiter) : [];
-  const validPaths = possiblePaths.filter(p => fs.existsSync(p));
-  process.env.NODE_PATH = Array.from(new Set([...validPaths, ...existingNodePath])).join(path.delimiter);
-  Module._initPaths();
-} catch {}
-
-// Auto-fix any extracted folders or zip files
-try {
-  const { execSync } = require("child_process");
-  const nmDir = path.join(__dirname, "node_modules");
-  fs.mkdirSync(nmDir, { recursive: true });
-
-  // 1. Check for uploaded zip files and auto-extract
-  const zipFiles = [
-    path.join(__dirname, "prisma-engine.zip"),
-    path.join(nmDir, "prisma-engine.zip"),
-    path.join(__dirname, "prisma_linux.zip"),
-    path.join(nmDir, "prisma_linux.zip"),
-  ];
-  for (const zf of zipFiles) {
-    if (fs.existsSync(zf)) {
-      logDebug(`Found zip archive ${zf}, auto-extracting with unzip...`);
-      try {
-        execSync(`unzip -o "${zf}" -d "${nmDir}"`);
-        logDebug(`Successfully extracted ${zf}`);
-      } catch (err) {
-        logDebug(`Extraction notice: ${err.message}`);
-      }
-    }
-  }
-
-  // 2. Fix nested node_modules (e.g. node_modules/node_modules/@prisma)
-  const nestedNm = path.join(nmDir, "node_modules");
-  if (fs.existsSync(nestedNm)) {
-    logDebug("Detected nested node_modules, flattening...");
-    copyDirRecursive(nestedNm, nmDir);
-  }
-
-  // 3. Fix root-level extraction (e.g. erp/@prisma or erp/.prisma)
-  const rootPrisma = path.join(__dirname, "@prisma");
-  if (fs.existsSync(rootPrisma)) {
-    logDebug("Moving root @prisma to node_modules/@prisma");
-    copyDirRecursive(rootPrisma, path.join(nmDir, "@prisma"));
-  }
-  const rootDotPrisma = path.join(__dirname, ".prisma");
-  if (fs.existsSync(rootDotPrisma)) {
-    logDebug("Moving root .prisma to node_modules/.prisma");
-    copyDirRecursive(rootDotPrisma, path.join(nmDir, ".prisma"));
-  }
-
-  // 4. Fix clean_prisma extraction
-  const cleanPrisma = path.join(__dirname, "clean_prisma");
-  if (fs.existsSync(cleanPrisma)) {
-    logDebug("Moving clean_prisma to node_modules");
-    copyDirRecursive(cleanPrisma, nmDir);
-  }
-} catch (autoFixErr) {
-  logDebug("Auto-fix notice: " + autoFixErr.message);
-}
 
 const envPath = path.join(__dirname, ".env");
 if (fs.existsSync(envPath)) {
@@ -211,42 +149,9 @@ if (!fs.existsSync(pagesManifestPath)) {
   }
 }
 
-// 4. Prisma Auto-Init Helper
+// 4. Prisma Helper
 let prismaClient = null;
 let prismaLoadError = null;
-let prismaInstallLog = "";
-
-function tryGeneratePrisma() {
-  const { execSync } = require("child_process");
-  const nodeBin = "/home/zidane17/nodevenv/erp/22/bin";
-  const customPath = `${nodeBin}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ""}`;
-  const env = { ...process.env, PATH: customPath };
-  let logs = [];
-
-  // Step A: Attempt npx prisma generate
-  try {
-    logs.push("⏳ Lancement de 'npx prisma generate'...");
-    const out = execSync("npx prisma generate", { cwd: __dirname, env, encoding: "utf-8", timeout: 60000 });
-    logs.push("✅ prisma generate réussi :\n" + out);
-    return { success: true, logs: logs.join("\n") };
-  } catch (e1) {
-    logs.push("ℹ️ npx prisma generate direct a échoué: " + (e1.stdout || "") + " " + (e1.stderr || "") + " " + e1.message);
-  }
-
-  // Step B: Attempt npm install @prisma/client prisma
-  try {
-    logs.push("⏳ Installation de @prisma/client et prisma via npm...");
-    const out2 = execSync("npm install @prisma/client@6.4.1 prisma@6.4.1 --no-audit --no-fund --omit=dev", { cwd: __dirname, env, encoding: "utf-8", timeout: 90000 });
-    logs.push("✅ npm install terminé :\n" + out2);
-    logs.push("⏳ Génération du client...");
-    const out3 = execSync("npx prisma generate", { cwd: __dirname, env, encoding: "utf-8", timeout: 60000 });
-    logs.push("✅ prisma generate réussi :\n" + out3);
-    return { success: true, logs: logs.join("\n") };
-  } catch (e2) {
-    logs.push("❌ Échec installation npm: " + (e2.stdout || "") + " " + (e2.stderr || "") + " " + e2.message);
-    return { success: false, logs: logs.join("\n") };
-  }
-}
 
 function getPrisma(forceReload = false) {
   if (forceReload) {
@@ -255,42 +160,8 @@ function getPrisma(forceReload = false) {
   }
   if (!prismaClient && !prismaLoadError) {
     try {
-      let PrismaClientClass = null;
-      try {
-        PrismaClientClass = require("@prisma/client").PrismaClient;
-      } catch (e1) {
-        for (const p of possiblePaths) {
-          try {
-            const candidate = path.join(p, "@prisma/client");
-            if (fs.existsSync(candidate)) {
-              PrismaClientClass = require(candidate).PrismaClient;
-              if (PrismaClientClass) break;
-            }
-          } catch {}
-        }
-        if (!PrismaClientClass) {
-          // Attempt on-the-fly generation if missing
-          const genRes = tryGeneratePrisma();
-          prismaInstallLog = genRes.logs;
-          if (genRes.success) {
-            try {
-              PrismaClientClass = require("@prisma/client").PrismaClient;
-            } catch (eRetry) {
-              for (const p of possiblePaths) {
-                try {
-                  const candidate = path.join(p, "@prisma/client");
-                  if (fs.existsSync(candidate)) {
-                    PrismaClientClass = require(candidate).PrismaClient;
-                    if (PrismaClientClass) break;
-                  }
-                } catch {}
-              }
-            }
-          }
-        }
-        if (!PrismaClientClass) throw e1;
-      }
-      prismaClient = new PrismaClientClass({
+      const { PrismaClient } = require("@prisma/client");
+      prismaClient = new PrismaClient({
         log: ["error"],
       });
     } catch (e) {
@@ -300,6 +171,7 @@ function getPrisma(forceReload = false) {
   }
   return prismaClient;
 }
+
 
 async function runDbInit() {
   let logs = [];
@@ -385,22 +257,18 @@ async function bootstrap() {
     );
   }
 
-  // Attempt non-blocking DB check on startup
+  // Non-blocking DB check on startup
   try {
     const prisma = getPrisma();
     if (prisma) {
-      logDebug("Checking if User table exists...");
-      try {
-        await prisma.$queryRawUnsafe('SELECT 1 FROM "User" LIMIT 1');
-        logDebug("User table exists and is accessible.");
-      } catch (tableErr) {
-        logDebug("User table missing, auto-running DB initialization...");
-        await runDbInit();
-      }
+      prisma.$queryRawUnsafe('SELECT 1 FROM "User" LIMIT 1')
+        .then(() => logDebug("User table exists and is accessible."))
+        .catch(err => logDebug("DB check notice: " + err.message));
     }
   } catch (dbBootErr) {
     logDebug("DB boot check notice: " + dbBootErr.message);
   }
+
 
   const dev = false;
   nextApp = next({ dev, dir: __dirname, quiet: true });
