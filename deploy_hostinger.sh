@@ -24,20 +24,20 @@ if [ -d "$HOME/domains/boostera.digital/wordpress_backup" ]; then
   rm -rf "$HOME/domains/boostera.digital/wordpress_backup"
 fi
 
-# 4. Trouver le dossier du sous-domaine erp
-ERP_WEB_DIR=""
-if [ -d "$HOME/domains/boostera.digital/public_html/erp" ]; then
-  ERP_WEB_DIR="$HOME/domains/boostera.digital/public_html/erp"
-elif [ -d "$HOME/domains/erp.boostera.digital/public_html" ]; then
-  ERP_WEB_DIR="$HOME/domains/erp.boostera.digital/public_html"
-elif [ -d "$HOME/domains/boostera.digital/erp" ]; then
-  ERP_WEB_DIR="$HOME/domains/boostera.digital/erp"
-else
-  ERP_WEB_DIR="$HOME/domains/boostera.digital/public_html/erp"
-  mkdir -p "$ERP_WEB_DIR"
-fi
+# 4. Configurer les deux dossiers potentiels du sous-domaine
+DIR1="$HOME/domains/boostera.digital/public_html/erp"
+DIR2="$HOME/domains/erp.boostera.digital/public_html"
+mkdir -p "$DIR1" "$DIR2"
 
-echo "📁 Dossier web du sous-domaine : $ERP_WEB_DIR"
+for d in "$DIR1" "$DIR2"; do
+  rm -f "$d/default.php" "$d/index.html" "$d/index.php.bak"
+  cat << 'EOF' > "$d/.htaccess"
+RewriteEngine On
+RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
+EOF
+done
+
+echo "📁 Dossiers web du sous-domaine configurés !"
 
 # 5. Dossier de l'application ERP
 APP_DIR="$HOME/boostera_erp"
@@ -67,20 +67,9 @@ sleep 1
 nohup node --max-old-space-size=256 server.js > server_output.log 2>&1 &
 echo "✅ Serveur lancé en arrière-plan !"
 
-
-
-# 8. Nettoyer la page par défaut d'Hostinger dans le sous-domaine
-rm -f "$ERP_WEB_DIR/default.php" "$ERP_WEB_DIR/index.html" "$ERP_WEB_DIR/index.php.bak"
-
-# 9. Configurer la passerelle .htaccess dans le dossier du sous-domaine
-echo "🌐 Configuration de la redirection .htaccess sur erp.boostera.digital..."
-cat << 'EOF' > "$ERP_WEB_DIR/.htaccess"
-RewriteEngine On
-RewriteRule ^(.*)$ http://127.0.0.1:3000/$1 [P,L]
-EOF
-
 echo "✅ Test de l'application..."
-sleep 2
+sleep 3
 curl -s -I http://127.0.0.1:3000/login | grep "HTTP/" || echo "Serveur en cours d'exécution !"
 
 echo "🎉 Déploiement terminé avec succès ! Visitez https://erp.boostera.digital/login"
+
