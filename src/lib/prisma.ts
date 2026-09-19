@@ -10,4 +10,5 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Toujours réutiliser l'instance sur globalThis pour éviter la saturation du pool Neon sur Vercel
+globalForPrisma.prisma = prisma;

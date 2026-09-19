@@ -14,14 +14,27 @@ export async function loginAction(formData: FormData) {
   }
 
   let user;
-  try {
-    user = await prisma.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
-  } catch (dbError: any) {
-    console.error("Erreur base de données lors du login:", dbError);
+  let lastDbError: any = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      user = await prisma.user.findUnique({
+        where: { email: email.trim().toLowerCase() },
+      });
+      lastDbError = null;
+      break;
+    } catch (dbError: any) {
+      lastDbError = dbError;
+      console.warn(`[Login] Tentative ${attempt}/3 connexion DB échouée:`, dbError?.message || dbError);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
+  }
+
+  if (lastDbError) {
+    console.error("Erreur base de données finale lors du login:", lastDbError);
     return {
-      error: `Erreur base de données (${dbError.code || "DB_ERROR"}). Veuillez vérifier la connexion ou exécuter la configuration initiale.`,
+      error: `Erreur de connexion base de données (${lastDbError.code || "DB_RETRY_EXHAUSTED"}). Veuillez réessayer dans un instant.`,
     };
   }
 
