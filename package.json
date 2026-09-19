@@ -26,19 +26,19 @@
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.7.0",
     "xlsx": "^0.18.5",
-    "zod": "^4.6.5"
-  },
-  "devDependencies": {
+    "zod": "^4.6.5",
+    "prisma": "^6.4.1",
+    "typescript": "^5",
+    "tailwindcss": "^4",
     "@tailwindcss/postcss": "^4",
-    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
-    "prisma": "^6.4.1",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "eslint-config-next": "16.3.5"
   },
   "packageManager": "bun@1.4.0",
   "ignoreScripts": [
