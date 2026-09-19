@@ -371,6 +371,36 @@ const server = http.createServer(async (req, res) => {
     let usersList = [];
 
     const prisma = getPrisma();
+    let dbDiag = "";
+
+    if (prisma) {
+      try {
+        const userInfo = await prisma.$queryRawUnsafe(`
+          SELECT current_user, session_user, current_database(), current_schema()
+        `);
+        dbDiag += "DB Session: " + JSON.stringify(userInfo) + "\n";
+
+        const tablesInfo = await prisma.$queryRawUnsafe(`
+          SELECT schemaname, tablename, tableowner 
+          FROM pg_tables 
+          WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+        `);
+        dbDiag += "Tables trouvées: " + JSON.stringify(tablesInfo) + "\n";
+
+        // Try granting permissions if possible
+        try {
+          await prisma.$executeRawUnsafe(`GRANT ALL ON SCHEMA public TO CURRENT_USER;`);
+          await prisma.$executeRawUnsafe(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO CURRENT_USER;`);
+          await prisma.$executeRawUnsafe(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO CURRENT_USER;`);
+          dbDiag += "Auto-grant permissions exécuté avec succès.\n";
+        } catch (grantErr) {
+          dbDiag += "Auto-grant notice: " + grantErr.message + "\n";
+        }
+      } catch (diagErr) {
+        dbDiag += "Diag error: " + diagErr.message + "\n";
+      }
+    }
+
     if (parsedUrl.pathname === "/api/setup-db") {
       try {
         await runDbInit();
@@ -389,7 +419,7 @@ const server = http.createServer(async (req, res) => {
         });
         dbStatus = "Connecté (Table User présente)";
       } catch (e) {
-        dbError = e.message;
+        if (!dbError) dbError = e.message;
       }
     } else {
       dbStatus = "PrismaClient non disponible";
@@ -430,6 +460,7 @@ const server = http.createServer(async (req, res) => {
           <p><strong>Statut :</strong> <span class="badge ${dbError ? 'badge-error' : 'badge-success'}">${dbStatus}</span></p>
           
           ${dbError ? `<p><strong>Détail de l'erreur :</strong></p><pre>${dbError}</pre>` : ''}
+          ${dbDiag ? `<p><strong>Diagnostic PostgreSQL :</strong></p><pre style="color: #34d399;">${dbDiag}</pre>` : ''}
           ${prismaInstallLog ? `<p><strong>Journal d'installation / réparation Prisma :</strong></p><pre style="color: #38bdf8;">${prismaInstallLog}</pre>` : ''}
           
           <p><strong>Nombre d'utilisateurs actifs :</strong> ${userCount}</p>
