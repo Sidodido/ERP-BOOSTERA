@@ -13,9 +13,17 @@ export async function loginAction(formData: FormData) {
     return { error: "Veuillez renseigner votre email et mot de passe." };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
-  });
+  let user;
+  try {
+    user = await prisma.user.findUnique({
+      where: { email: email.trim().toLowerCase() },
+    });
+  } catch (dbError: any) {
+    console.error("Erreur base de données lors du login:", dbError);
+    return {
+      error: `Erreur base de données (${dbError.code || "DB_ERROR"}). Veuillez vérifier la connexion ou exécuter la configuration initiale.`,
+    };
+  }
 
   if (!user || !user.isActive) {
     return { error: "Identifiants invalides ou compte inactif." };
