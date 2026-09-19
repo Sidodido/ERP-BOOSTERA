@@ -13,6 +13,20 @@ function logDebug(msg) {
   } catch {}
 }
 
+const origConsoleError = console.error;
+console.error = function (...args) {
+  logDebug("[NEXT.ERROR] " + args.map(a => (a && a.stack) ? a.stack : (typeof a === "object" ? JSON.stringify(a) : String(a))).join(" "));
+  origConsoleError.apply(console, args);
+};
+
+process.on("unhandledRejection", (reason) => {
+  logDebug("[UNHANDLED REJECTION] " + ((reason && reason.stack) ? reason.stack : String(reason)));
+});
+
+process.on("uncaughtException", (err) => {
+  logDebug("[UNCAUGHT EXCEPTION] " + (err.stack || err.message));
+});
+
 logDebug("Starting BOOSTERA ERP server.js...");
 
 const Module = require("module");
