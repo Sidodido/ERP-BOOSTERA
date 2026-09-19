@@ -129,19 +129,7 @@ export default function LoginPage() {
             <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider text-center">
               Comptes de démonstration (Accès rapide)
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickFill("admin@boostera.dz")}
-                className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-blue-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span className="truncate">Direction</span>
-                </div>
-                <p className="text-[10px] text-neutral-500 truncate mt-0.5">Accès Total</p>
-              </button>
-
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => handleQuickFill("wiam@boostera.dz")}
@@ -190,6 +178,7 @@ export default function LoginPage() {
                 <p className="text-[10px] text-neutral-500 truncate mt-0.5">Technicien</p>
               </button>
             </div>
+
             <p className="text-[10px] text-center text-neutral-500">
               Mot de passe par défaut : <code className="text-neutral-300">Boostera2026!</code>
             </p>
