@@ -288,23 +288,63 @@ function getPrisma(forceReload = false) {
 }
 
 async function runDbInit() {
+  let logs = [];
+  const { execSync } = require("child_process");
+  const nodeBin = "/home/zidane17/nodevenv/erp/22/bin";
+  const env = { ...process.env, PATH: `${nodeBin}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ""}` };
+
+  // 1. Ensure Prisma client is ready
   let prisma = getPrisma();
   if (!prisma) {
     const res = tryGeneratePrisma();
     prismaInstallLog = res.logs;
     prisma = getPrisma(true);
   }
-  if (!prisma) {
-    throw new Error("@prisma/client n'est pas disponible.\nLogs d'installation:\n" + prismaInstallLog);
+
+  // 2. Strategy A: npx prisma db push --accept-data-loss
+  try {
+    logs.push("1. Exécution de 'npx prisma db push'...");
+    const pushOut = execSync("npx prisma db push --accept-data-loss", { cwd: __dirname, env, encoding: "utf-8", timeout: 60000 });
+    logs.push("✅ prisma db push a réussi :\n" + pushOut);
+  } catch (pushErr) {
+    logs.push("ℹ️ prisma db push notice: " + (pushErr.stdout || "") + " " + (pushErr.stderr || "") + " " + pushErr.message);
   }
+
+  // 3. Strategy B: Execute SQL statement by statement if table User still missing
   const sqlPath = path.join(__dirname, "boostera_init.sql");
-  if (!fs.existsSync(sqlPath)) {
-    throw new Error("Fichier boostera_init.sql introuvable dans " + __dirname);
+  if (fs.existsSync(sqlPath) && prisma) {
+    logs.push("2. Exécution des instructions boostera_init.sql...");
+    const sqlContent = fs.readFileSync(sqlPath, "utf-8");
+    const cleanSql = sqlContent.replace(/--.*$/gm, "");
+    const stmts = cleanSql.split(";").map(s => s.trim()).filter(s => s.length > 5);
+    let ok = 0;
+    for (const stmt of stmts) {
+      try {
+        await prisma.$executeRawUnsafe(stmt);
+        ok++;
+      } catch (stmtErr) {
+        if (!stmtErr.message.includes("already exists") && !stmtErr.message.includes("déjà")) {
+          logs.push("Notice SQL: " + stmtErr.message.split("\n")[0]);
+        }
+      }
+    }
+    logs.push(`✅ Exécuté ${ok}/${stmts.length} commandes SQL.`);
   }
-  const sqlContent = fs.readFileSync(sqlPath, "utf-8");
-  logDebug("Executing boostera_init.sql (" + sqlContent.length + " bytes)...");
-  await prisma.$executeRawUnsafe(sqlContent);
-  logDebug("Database schema and seed executed successfully!");
+
+  // 4. Strategy C: Seed accounts
+  try {
+    const seedPath = path.join(__dirname, "seed.js");
+    if (fs.existsSync(seedPath)) {
+      logs.push("3. Exécution de seed.js pour les utilisateurs...");
+      const seedOut = execSync("node seed.js", { cwd: __dirname, env, encoding: "utf-8", timeout: 30000 });
+      logs.push("✅ seed.js réussi:\n" + seedOut);
+    }
+  } catch (seedErr) {
+    logs.push("ℹ️ seed.js notice: " + seedErr.message);
+  }
+
+  logDebug("Database schema and seed executed. Logs:\n" + logs.join("\n"));
+  return logs.join("\n");
 }
 
 // 5. Require Next.js
@@ -361,6 +401,18 @@ bootstrap().catch((err) => {
 const server = http.createServer(async (req, res) => {
   const parsedUrl = parse(req.url, true);
 
+  // === DEBUG LOGS ROUTE ===
+  if (parsedUrl.pathname === "/api/debug-log") {
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    if (fs.existsSync(debugLogFile)) {
+      const content = fs.readFileSync(debugLogFile, "utf-8");
+      res.end(content.split("\n").slice(-150).join("\n"));
+    } else {
+      res.end("Aucun log disponible");
+    }
+    return;
+  }
+
   // === DIAGNOSTIC & AUTO-SETUP ROUTE (Bypasses Next.js) ===
   if (parsedUrl.pathname === "/api/setup-db" || parsedUrl.pathname === "/api/setup-status") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -401,9 +453,10 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    let initLogs = "";
     if (parsedUrl.pathname === "/api/setup-db") {
       try {
-        await runDbInit();
+        initLogs = await runDbInit();
         dbStatus = "Initialisation réussie !";
       } catch (err) {
         dbError = err.message;
@@ -460,6 +513,7 @@ const server = http.createServer(async (req, res) => {
           <p><strong>Statut :</strong> <span class="badge ${dbError ? 'badge-error' : 'badge-success'}">${dbStatus}</span></p>
           
           ${dbError ? `<p><strong>Détail de l'erreur :</strong></p><pre>${dbError}</pre>` : ''}
+          ${initLogs ? `<p><strong>Journal d'initialisation de la base :</strong></p><pre style="color: #38bdf8;">${initLogs}</pre>` : ''}
           ${dbDiag ? `<p><strong>Diagnostic PostgreSQL :</strong></p><pre style="color: #34d399;">${dbDiag}</pre>` : ''}
           ${prismaInstallLog ? `<p><strong>Journal d'installation / réparation Prisma :</strong></p><pre style="color: #38bdf8;">${prismaInstallLog}</pre>` : ''}
           

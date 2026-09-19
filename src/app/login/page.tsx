@@ -33,8 +33,12 @@ export default function LoginPage() {
         setErrorMessage(res.error);
         setLoading(false);
       }
-    } catch {
-      // Redirect throws an error in Next.js which is expected behavior
+    } catch (err: any) {
+      if (err?.message?.includes("NEXT_REDIRECT") || err?.digest?.includes("NEXT_REDIRECT")) {
+        return;
+      }
+      setErrorMessage(err?.message || "Erreur serveur (500) lors de la connexion.");
+      setLoading(false);
     }
   };
 

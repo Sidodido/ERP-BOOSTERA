@@ -28,6 +28,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["zidane-dev.dz", "www.zidane-dev.dz"],
+    },
+  },
   async headers() {
     return [
       {
