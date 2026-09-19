@@ -30,7 +30,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
-      allowedOrigins: ["boostera.digital", "www.boostera.digital", "zidane-dev.dz", "www.zidane-dev.dz"],
+      allowedOrigins: ["erp.boostera.digital", "boostera.digital", "www.boostera.digital", "zidane-dev.dz", "www.zidane-dev.dz"],
     },
   },
   async headers() {
