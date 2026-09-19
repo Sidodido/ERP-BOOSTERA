@@ -234,6 +234,8 @@ self.__SERVER_FILES_MANIFEST={
       "turbopackPluginRuntimeStrategy": "childProcesses",
       "serverActions": {
         "allowedOrigins": [
+          "boostera.digital",
+          "www.boostera.digital",
           "zidane-dev.dz",
           "www.zidane-dev.dz"
         ]
