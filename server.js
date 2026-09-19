@@ -155,17 +155,94 @@ async function bootstrap() {
     );
   }
 
-  // Ensure database tables exist if database is configured
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("localhost:5432/boostera_db")) {
+  // Ensure database tables and initial accounts exist
+  if (process.env.DATABASE_URL) {
     try {
-      execSync("npx prisma db push --skip-generate --accept-data-loss", {
-        cwd: __dirname,
-        stdio: "pipe",
-        timeout: 30000,
-      });
-      console.log("> Schéma Prisma synchronisé avec succès !");
+      console.log("Synchronisation de la base PostgreSQL...");
+      try {
+        execSync("npx prisma db push --accept-data-loss", {
+          cwd: __dirname,
+          stdio: "pipe",
+          timeout: 60000,
+        });
+        console.log("> Schéma Prisma synchronisé avec succès !");
+      } catch (pe) {
+        console.warn("Notice prisma db push:", pe.message);
+      }
+
+      const { PrismaClient } = require("@prisma/client");
+      const testPrisma = new PrismaClient();
+      const count = await testPrisma.user.count().catch(() => 0);
+      if (count === 0) {
+        console.log("Base vide : création des comptes initiaux...");
+        const bcrypt = require("bcryptjs");
+        const hash = await bcrypt.hash("Boostera2026!", 10);
+
+        const admin = await testPrisma.user.create({
+          data: {
+            email: "admin@boostera.dz",
+            passwordHash: hash,
+            name: "Direction BOOSTERA",
+            role: "ADMIN",
+            phone: "0550 00 00 01",
+          },
+        });
+
+        const meroua = await testPrisma.user.create({
+          data: {
+            email: "meroua@boostera.dz",
+            passwordHash: hash,
+            name: "Meroua (Commerciale)",
+            role: "SALES_REP",
+            phone: "0550 11 22 32",
+          },
+        });
+
+        const wiam = await testPrisma.user.create({
+          data: {
+            email: "wiam@boostera.dz",
+            passwordHash: hash,
+            name: "Wiam (Commerciale)",
+            role: "SALES_REP",
+            phone: "0550 11 22 31",
+          },
+        });
+
+        const toufik = await testPrisma.user.create({
+          data: {
+            email: "toufik@boostera.dz",
+            passwordHash: hash,
+            name: "Toufik (Commercial)",
+            role: "SALES_REP",
+            phone: "0550 11 22 33",
+          },
+        });
+
+        const sidahmed = await testPrisma.user.create({
+          data: {
+            email: "sidahmed@boostera.dz",
+            passwordHash: hash,
+            name: "Sidahmed (Technicien)",
+            role: "TECH_LEAD",
+            phone: "0550 11 22 34",
+          },
+        });
+
+        await testPrisma.employee.createMany({
+          data: [
+            { userId: admin.id, firstName: "Direction", lastName: "BOOSTERA", position: "Direction Générale", department: "ADMINISTRATION" },
+            { userId: meroua.id, firstName: "Meroua", lastName: "Commerciale", position: "Commercial", department: "COMMERCIAL" },
+            { userId: wiam.id, firstName: "Wiam", lastName: "Commerciale", position: "Commercial", department: "COMMERCIAL" },
+            { userId: toufik.id, firstName: "Toufik", lastName: "Commercial", position: "Commercial", department: "COMMERCIAL" },
+            { userId: sidahmed.id, firstName: "Sidahmed", lastName: "Technicien", position: "Chef de Projet", department: "TECHNICAL" },
+          ],
+        });
+
+        console.log("> Comptes initiaux créés avec succès !");
+      }
+      await testPrisma.$disconnect();
     } catch (dbErr) {
-      console.warn("Notice DB sync:", dbErr.message);
+      console.warn("Notice DB setup/seed:", dbErr.message);
     }
   }
 
