@@ -3,16 +3,15 @@ const { parse } = require("url");
 const next = require("next");
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = process.env.HOSTNAME || "0.0.0.0";
-const port = parseInt(process.env.PORT || "3000", 10);
-
-const app = next({ dev, hostname, port });
+const app = next({ dev, dir: __dirname });
 const handle = app.getRequestHandler();
+
+const port = process.env.PORT || 3000;
 
 app
   .prepare()
   .then(() => {
-    createServer(async (req, res) => {
+    const server = createServer(async (req, res) => {
       try {
         const parsedUrl = parse(req.url, true);
         await handle(req, res, parsedUrl);
@@ -21,16 +20,14 @@ app
         res.statusCode = 500;
         res.end("Internal Server Error");
       }
-    })
-      .once("error", (err) => {
-        console.error("Server error:", err);
-        process.exit(1);
-      })
-      .listen(port, () => {
-        console.log(`> BOOSTERA ERP Ready on http://${hostname}:${port}`);
-      });
+    });
+
+    server.listen(port, (err) => {
+      if (err) throw err;
+      console.log(`> Ready on ${port}`);
+    });
   })
   .catch((err) => {
-    console.error("Failed to prepare Next.js app:", err);
+    console.error("Next.js prepare error:", err);
     process.exit(1);
   });
