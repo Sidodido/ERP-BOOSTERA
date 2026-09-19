@@ -1361,7 +1361,8 @@ export async function bulkImportProspects(
       ["NOUVEAU", "NEW", "A CONTACTER", "À CONTACTER", "AUCUN", "VIERGE", "EN ATTENTE", "SANS"].includes(rawStateUpper);
 
     const hasResponse = Boolean(row.response && row.response.trim());
-    const isVirginProspect = Boolean(options?.importAsVirgin) || (isCallStatusVirgin && isRawStateVirgin && !hasResponse);
+    const hasNotes = Boolean(row.notes && row.notes.trim());
+    const isVirginProspect = Boolean(options?.importAsVirgin) || (isCallStatusVirgin && isRawStateVirgin && !hasResponse && !hasNotes);
 
     const mappedStatus = isVirginProspect
       ? ProspectStatus.NEW

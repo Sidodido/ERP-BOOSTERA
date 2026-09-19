@@ -582,6 +582,7 @@ export function isVirginProspect(p: {
   calls?: any[];
   appointments?: any[];
   response?: string | null;
+  notes?: string | null;
 }): boolean {
   // 1. Déplacé explicitement vers les appels et la base via le bouton (+)
   if (
@@ -601,20 +602,16 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // 4. Appel déjà effectué ou statut d'appel non vierge
+  // 4. Appel : doit être strictement vierge pour afficher "— Appel —" dans le sélecteur
   const rawCall = (p.callStatus || "").trim().toUpperCase();
-  const isCallVirgin =
-    !rawCall ||
-    ["NON EFFECTUE", "NON EFFECTUÉ", "NON", "VIERGE", "AUCUN", "PAS ENCORE", "—", "-"].includes(rawCall);
+  const isCallVirgin = !rawCall || ["—", "-", "VIERGE", "AUCUN"].includes(rawCall);
   if (!isCallVirgin) {
     return false;
   }
 
-  // 5. État / Résultat non vierge
+  // 5. Résultat d'appel : doit être strictement vierge pour afficher "— Résultat —"
   const rawState = (p.rawState || "").trim().toUpperCase();
-  const isStateVirgin =
-    !rawState ||
-    ["NOUVEAU", "NEW", "A CONTACTER", "À CONTACTER", "AUCUN", "VIERGE", "EN ATTENTE", "SANS", "—", "-"].includes(rawState);
+  const isStateVirgin = !rawState || ["NOUVEAU", "NEW", "AUCUN", "VIERGE", "—", "-"].includes(rawState);
   if (!isStateVirgin) {
     return false;
   }
@@ -630,8 +627,13 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // 7. Présence d'une réponse
+  // 7. Présence d'une réponse : doit être vide pour afficher le placeholder "Réponse..."
   if (p.response && p.response.trim()) {
+    return false;
+  }
+
+  // 8. Présence d'une remarque : doit être vide pour afficher le placeholder "Remarque..."
+  if (p.notes && p.notes.trim()) {
     return false;
   }
 
