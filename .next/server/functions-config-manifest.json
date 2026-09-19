@@ -9,6 +9,9 @@
           "originalSource": "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)"
         }
       ]
+    },
+    "/api/cron/backup-db": {
+      "maxDuration": 60
     }
   }
 }

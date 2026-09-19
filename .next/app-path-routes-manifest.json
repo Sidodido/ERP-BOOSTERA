@@ -7,6 +7,7 @@
   "/api/cron/setup-database/route": "/api/cron/setup-database",
   "/api/cron/weekly-content/route": "/api/cron/weekly-content",
   "/favicon.ico/route": "/favicon.ico",
+  "/api/cron/backup-db/route": "/api/cron/backup-db",
   "/abonnements/[id]/page": "/abonnements/[id]",
   "/abonnements/page": "/abonnements",
   "/achats/page": "/achats",
@@ -32,8 +33,8 @@
   "/reporting/page": "/reporting",
   "/rh/page": "/rh",
   "/stocks/page": "/stocks",
-  "/activites/page": "/activites",
   "/assistant-ia/page": "/assistant-ia",
+  "/activites/page": "/activites",
   "/base-prospects/page": "/base-prospects",
   "/calendrier-technicien/page": "/calendrier-technicien"
 }

@@ -29,6 +29,7 @@ import {
   Clock3,
   CalendarDays,
   FileSpreadsheet,
+  Database,
 } from "lucide-react";
 import {
   createUserAction,
@@ -41,6 +42,7 @@ import {
 import { autoSyncDailyAbsencesAction } from "@/actions/attendance";
 import { Role, CommissionRuleType, AttendanceStatus, DepartmentType } from "@prisma/client";
 import { SystemUpdatesTab } from "./SystemUpdatesTab";
+import { DatabaseBackupTab } from "./DatabaseBackupTab";
 
 interface UserItem {
   id: string;
@@ -174,8 +176,8 @@ export function ParametresClient({
   initialTab,
 }: ParametresClientProps) {
   const router = useRouter();
-  type TabType = "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE" | "UPDATES";
-  const validTabs: TabType[] = ["ATTENDANCE", "USERS", "COMMISSIONS", "AGENCY", "AUDIT", "UPDATES"];
+  type TabType = "USERS" | "COMMISSIONS" | "AGENCY" | "AUDIT" | "ATTENDANCE" | "UPDATES" | "BACKUP";
+  const validTabs: TabType[] = ["ATTENDANCE", "USERS", "COMMISSIONS", "AGENCY", "AUDIT", "UPDATES", "BACKUP"];
 
   const getInitialTab = (): TabType => {
     if (initialTab && validTabs.includes(initialTab as TabType)) {
@@ -610,6 +612,17 @@ export function ParametresClient({
         >
           <RefreshCw className="w-4 h-4" />
           Mises à jour & Déploiement
+        </button>
+        <button
+          onClick={() => handleSelectTab("BACKUP")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2 ${
+            activeTab === "BACKUP"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          Sauvegardes BD
         </button>
       </div>
 
@@ -1214,6 +1227,9 @@ export function ParametresClient({
 
       {/* TAB 5: SYSTEM UPDATES & DEPLOYMENT */}
       {activeTab === "UPDATES" && <SystemUpdatesTab />}
+
+      {/* TAB 6: DATABASE BACKUP */}
+      {activeTab === "BACKUP" && <DatabaseBackupTab />}
 
       {/* MODAL: CREATE USER */}
       {showUserModal && (

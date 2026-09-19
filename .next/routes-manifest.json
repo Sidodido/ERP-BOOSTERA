@@ -122,6 +122,12 @@
       "namedRegex": "^/api/auth/login(?:/)?$"
     },
     {
+      "page": "/api/cron/backup-db",
+      "regex": "^/api/cron/backup\\-db(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/backup\\-db(?:/)?$"
+    },
+    {
       "page": "/api/cron/check-db",
       "regex": "^/api/cron/check\\-db(?:/)?$",
       "routeKeys": {},
