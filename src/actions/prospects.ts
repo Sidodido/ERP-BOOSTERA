@@ -42,8 +42,9 @@ export async function getProspects(params: ProspectFilterParams = {}) {
         OR: [
           { callStatus: null },
           { callStatus: "" },
-          { callStatus: "NON EFFECTUE" },
-          { callStatus: "PAS DE CONTACT" },
+          { callStatus: "—" },
+          { callStatus: "-" },
+          { callStatus: "VIERGE" },
         ],
       },
       {
@@ -51,8 +52,22 @@ export async function getProspects(params: ProspectFilterParams = {}) {
           { rawState: null },
           { rawState: "" },
           { rawState: "NOUVEAU" },
+          { rawState: "NEW" },
           { rawState: "VIERGE" },
-          { rawState: "PAS DE CONTACT" },
+          { rawState: "—" },
+          { rawState: "-" },
+        ],
+      },
+      {
+        OR: [
+          { response: null },
+          { response: "" },
+        ],
+      },
+      {
+        OR: [
+          { notes: null },
+          { notes: "" },
         ],
       },
       {

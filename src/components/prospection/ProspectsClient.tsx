@@ -749,10 +749,9 @@ export function ProspectsClient({
     setFeedbackMessage({ type: "success", text: "Prospect supprimé avec succès." });
   };
 
-  // Filter prospects
+  // Filter prospects : STRICTEMENT les lignes vierges (— Appel —, — Résultat —, Réponse..., Remarque...)
   const filtered = prospects.filter((p) => {
-    // Dans la section prospection : par défaut, on garde uniquement les prospects vierges
-    if (filterScope === "VIRGIN" && !isVirginProspect(p)) {
+    if (!isVirginProspect(p)) {
       return false;
     }
 
@@ -885,46 +884,21 @@ export function ProspectsClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
             Prospection Commerciale
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30">
-              <Flame className="w-3 h-3 text-amber-400" />
-              <span>
-                {filterScope === "VIRGIN"
-                  ? `${filtered.length} prospects vierges`
-                  : `${filtered.length} prospects au total`}
-              </span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <Flame className="w-3 h-3 text-emerald-400" />
+              <span>{filtered.length} fiches vierges prêtes</span>
             </span>
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
-            File d&apos;attente active des prospects. Seules les fiches vierges (non encore appelées) s&apos;affichent ici.
+            File d&apos;attente active de prospection. Seules les fiches vierges (non encore traitées) s&apos;affichent ici.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Scope Filter Switch: Listes Vierges vs Tous */}
-          <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setFilterScope("VIRGIN")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                filterScope === "VIRGIN"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <Flame className="w-3.5 h-3.5 text-amber-400" />
-              <span>Listes Vierges ({virginCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterScope("ALL")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                filterScope === "ALL"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <span>Tous ({prospects.length})</span>
-            </button>
+          {/* Badge Fiches Vierges */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900/90 border border-amber-500/30 rounded-xl text-xs shadow-xs">
+            <Flame className="w-3.5 h-3.5 text-amber-400" />
+            <span className="font-semibold text-amber-300">Listes Vierges ({filtered.length})</span>
           </div>
 
           {/* View Mode Toggle */}

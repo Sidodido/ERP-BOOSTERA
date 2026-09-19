@@ -11,7 +11,7 @@ export default async function ProspectionPage() {
   if (!user) redirect("/login");
 
   const [prospects, overviewStats, localFileInfo, salesUsers] = await Promise.all([
-    getProspects(),
+    getProspects({ onlyVirgin: true }),
     getProspectsOverviewStats(),
     getLocalProspectionFileInfo(),
     prisma.user.findMany({
