@@ -1,10 +1,28 @@
 const http = require("http");
 const { parse } = require("url");
+const path = require("path");
+const fs = require("fs");
+
+// Support all possible node_modules locations in cPanel / CloudLinux / LiteSpeed
+const possiblePaths = [
+  path.join(__dirname, "node_modules"),
+  path.join(process.cwd(), "node_modules"),
+  "/home/zidane17/nodevenv/erp/22/lib/node_modules",
+  "/home/zidane17/nodevenv/erp/22/lib64/node_modules",
+];
+
+for (const p of possiblePaths) {
+  if (fs.existsSync(p) && !module.paths.includes(p)) {
+    module.paths.unshift(p);
+  }
+}
 
 let next;
+let nextImportError = null;
 try {
   next = require("next");
 } catch (e) {
+  nextImportError = e;
   console.error("Next.js import error:", e);
 }
 
@@ -14,8 +32,35 @@ let initError = null;
 
 async function bootstrap() {
   if (!next) {
+    let dirContents = [];
+    let nodeModulesContents = [];
+    try {
+      dirContents = fs.readdirSync(__dirname);
+    } catch {}
+
+    const nmPath = path.join(__dirname, "node_modules");
+    if (fs.existsSync(nmPath)) {
+      try {
+        nodeModulesContents = fs.readdirSync(nmPath).slice(0, 15);
+      } catch {}
+    }
+
+    const venvNm = "/home/zidane17/nodevenv/erp/22/lib/node_modules";
+    let venvContents = [];
+    if (fs.existsSync(venvNm)) {
+      try {
+        venvContents = fs.readdirSync(venvNm).slice(0, 15);
+      } catch {}
+    }
+
     throw new Error(
-      "Le module Next.js n'a pas été trouvé dans node_modules. Veuillez cliquer sur 'Run NPM Install' dans votre cPanel."
+      `Le module 'next' n'est pas accessible.\n` +
+      `Erreur originale : ${nextImportError ? nextImportError.message : 'inconnue'}\n\n` +
+      `Répertoire (__dirname) : ${__dirname}\n` +
+      `Fichiers trouvés dans le dossier : ${dirContents.join(", ") || "vide"}\n` +
+      `Dossier node_modules local existe : ${fs.existsSync(nmPath) ? "OUI (" + nodeModulesContents.join(", ") + "...)" : "NON"}\n` +
+      `Dossier node_modules virtuel existe : ${fs.existsSync(venvNm) ? "OUI (" + venvContents.join(", ") + "...)" : "NON"}\n\n` +
+      `Veuillez vous assurer que 'Run NPM Install' s'est bien exécuté ou vérifiez le bouton dans cPanel.`
     );
   }
 
@@ -41,7 +86,7 @@ const server = http.createServer(async (req, res) => {
           <title>BOOSTERA ERP — Diagnostic</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
-            .card { max-width: 700px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+            .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
             h1 { color: #f43f5e; font-size: 22px; margin-top: 0; display: flex; align-items: center; gap: 8px; }
             p { color: #d4d4d8; font-size: 14px; line-height: 1.5; }
             pre { background: #09090b; padding: 16px; border-radius: 8px; border: 1px solid #3f3f46; color: #fb7185; font-size: 13px; font-family: monospace; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 16px 0; }
@@ -51,10 +96,10 @@ const server = http.createServer(async (req, res) => {
         <body>
           <div class="card">
             <h1>⚠️ Diagnostic Système — BOOSTERA ERP</h1>
-            <p>Le serveur Node.js est actif, mais Next.js a rencontré cette erreur lors de son initialisation :</p>
+            <p>Le serveur Node.js est actif et répond. Voici le diagnostic précis :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
             <div class="info">
-              💡 <strong>Solution :</strong> Ce message indique précisément ce qui doit être fait (ex: exécuter 'npm run build', vérifier le fichier .env, ou installer les dépendances).
+              💡 <strong>Statut :</strong> Le serveur est bien connecté à votre nom de domaine <code>zidane-dev.dz</code>.
             </div>
           </div>
         </body>
