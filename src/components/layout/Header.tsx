@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useTransition } from "react";
-import { Search, Bell, LogOut, ShieldCheck, CheckCheck, ExternalLink, Sparkles, X, Trash2 } from "lucide-react";
+import { Search, Bell, LogOut, ShieldCheck, CheckCheck, ExternalLink, Sparkles, X, Trash2, Menu } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import {
   getUserNotificationsAction,
@@ -12,6 +12,8 @@ import {
 } from "@/actions/notifications";
 import { useRouter } from "next/navigation";
 import { HeaderAttendancePill } from "@/components/attendance/HeaderAttendancePill";
+import { useSidebar } from "./SidebarContext";
+
 
 interface HeaderProps {
   userName?: string;
@@ -30,6 +32,7 @@ interface NotificationItem {
 
 export function Header({ userName, userRole }: HeaderProps) {
   const router = useRouter();
+  const { toggleMobile } = useSidebar();
   const [isPending, startTransition] = useTransition();
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -115,16 +118,29 @@ export function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 sticky top-0 z-20 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/80 px-6 flex items-center justify-between">
-      {/* Search Input */}
-      <div className="relative w-80">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-        <input
-          type="text"
-          placeholder="Recherche globale (Prospects, Clients, Factures...)"
-          className="w-full h-9 pl-9 pr-4 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
-        />
+    <header className="h-16 sticky top-0 z-20 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/80 px-4 sm:px-6 flex items-center justify-between gap-3">
+      {/* Left side: Hamburger on mobile + Search Input */}
+      <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={toggleMobile}
+          className="p-2 -ml-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-xl md:hidden transition-colors cursor-pointer"
+          title="Menu de navigation"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Search Input */}
+        <div className="relative w-44 sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+          <input
+            type="text"
+            placeholder="Recherche globale..."
+            className="w-full h-9 pl-9 pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
+          />
+        </div>
       </div>
+
 
       {/* Right Actions */}
       <div className="flex items-center gap-3">

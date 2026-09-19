@@ -30,8 +30,11 @@ import {
   Activity,
   CalendarDays,
   RefreshCw,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "./SidebarContext";
 
 let globalSidebarScrollTop = 0;
 
@@ -39,7 +42,9 @@ interface SidebarProps {
   userRole?: string;
   rawRole?: string;
   userName?: string;
+  initialCollapsed?: boolean;
 }
+
 
 interface NavItem {
   label: string;
@@ -114,11 +119,49 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
-export function Sidebar({ userRole, rawRole, userName }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const { mobileOpen, setMobileOpen } = useSidebar();
   const pathname = usePathname();
   const navRef = useRef<HTMLDivElement>(null);
+  const mobileNavRef = useRef<HTMLDivElement>(null);
   const isRestoringRef = useRef(true);
+
+  // Sync state with localStorage on client mount
+  useEffect(() => {
+    try {
+      const savedCollapsed = localStorage.getItem("sidebar_collapsed");
+      if (savedCollapsed !== null) {
+        setCollapsed(savedCollapsed === "true");
+      }
+      const savedGroups = localStorage.getItem("sidebar_collapsed_groups");
+      if (savedGroups) {
+        setCollapsedGroups(JSON.parse(savedGroups));
+      }
+    } catch {}
+  }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar_collapsed", String(next));
+        document.cookie = `sidebar_collapsed=${next}; path=/; max-age=31536000; SameSite=Lax`;
+      } catch {}
+      return next;
+    });
+  };
+
+  const toggleGroup = (groupTitle: string) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [groupTitle]: !prev[groupTitle] };
+      try {
+        localStorage.setItem("sidebar_collapsed_groups", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Détection du rôle Commercial (SALES_REP, COMMERCIAL ou libellé Commercial / Commerciale)
   const isCommercial =
@@ -235,130 +278,281 @@ export function Sidebar({ userRole, rawRole, userName }: SidebarProps) {
   };
 
   return (
-    <aside
-      className={cn(
-        "h-screen sticky top-0 flex flex-col bg-neutral-950 border-r border-neutral-800/80 transition-all duration-300 z-30 select-none",
-        collapsed ? "w-18" : "w-64"
-      )}
-    >
-      {/* Brand Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
-        {!collapsed && (
-          <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
+    <>
+      {/* Desktop Sidebar (hidden on mobile, retains collapsed/expanded state) */}
+      <aside
+        className={cn(
+          "hidden md:flex h-screen sticky top-0 flex-col bg-neutral-950 border-r border-neutral-800/80 transition-all duration-300 z-30 select-none",
+          collapsed ? "w-18" : "w-64"
+        )}
+      >
+        {/* Brand Header */}
+        <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
+          {!collapsed && (
+            <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
+                B
+              </div>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
+                  BOOSTERA
+                  <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+                    ERP
+                  </span>
+                </span>
+                <span className="text-[10px] text-neutral-500">Agence Digitale</span>
+              </div>
+            </Link>
+          )}
+
+          {collapsed && (
+            <div className="w-8 h-8 mx-auto rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm">
               B
             </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                BOOSTERA
-                <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
-                  ERP
-                </span>
-              </span>
-              <span className="text-[10px] text-neutral-500">Agence Digitale</span>
-            </div>
-          </Link>
-        )}
-
-        {collapsed && (
-          <div className="w-8 h-8 mx-auto rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm">
-            B
-          </div>
-        )}
-
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
-          title={collapsed ? "Agrandir" : "Réduire"}
-        >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <ChevronLeft className="w-4 h-4" />
           )}
-        </button>
-      </div>
 
-      {/* Navigation Groups */}
-      <div
-        ref={navRef}
-        onScroll={handleNavScroll}
-        style={{ overflowAnchor: "none" }}
-        className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-neutral-800"
-      >
-        {visibleGroups.map((group) => (
-          <div key={group.groupTitle} className="space-y-1">
-            {!collapsed && (
-              <p className="px-2.5 text-[10px] font-bold text-neutral-500 tracking-wider">
-                {group.groupTitle}
-              </p>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
+            title={collapsed ? "Agrandir le menu" : "Réduire le menu"}
+          >
+            {collapsed ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronLeft className="w-4 h-4" />
             )}
-            {group.items.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-              const Icon = item.icon;
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  scroll={false}
-                  data-active={isActive ? "true" : undefined}
-                  onClick={() => {
-                    if (navRef.current) {
-                      globalSidebarScrollTop = navRef.current.scrollTop;
-                      try {
-                        sessionStorage.setItem("sidebar_nav_scroll", String(navRef.current.scrollTop));
-                      } catch {}
-                    }
-                  }}
-                  className={cn(
-                    "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
-                    isActive
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
-                      : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
-                  )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon
-                    className={cn(
-                      "w-4 h-4 shrink-0 transition-colors",
-                      isActive ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
-                    )}
-                  />
-                  {!collapsed && (
-                    <span className="flex-1 truncate">{item.label}</span>
-                  )}
-                  {!collapsed && item.badge && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
-                      {item.badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      {/* Footer: User Info */}
-      <div className="p-3 border-t border-neutral-800/80 space-y-2">
-        {/* User Info */}
-        <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
-            {userName ? userName.charAt(0).toUpperCase() : "U"}
-          </div>
-          {!collapsed && (
-            <div className="flex-1 truncate">
-              <p className="text-xs font-semibold text-neutral-200 truncate">
-                {userName || "Utilisateur"}
-              </p>
-              <p className="text-[10px] text-neutral-500 truncate">
-                {userRole || "Rôle"}
-              </p>
-            </div>
-          )}
+          </button>
         </div>
-      </div>
-    </aside>
+
+        {/* Navigation Groups */}
+        <div
+          ref={navRef}
+          onScroll={handleNavScroll}
+          style={{ overflowAnchor: "none" }}
+          className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-neutral-800"
+        >
+          {visibleGroups.map((group) => {
+            const hasActiveItem = group.items.some(
+              (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+            );
+            const isGroupCollapsed = !hasActiveItem && !!collapsedGroups[group.groupTitle];
+
+            return (
+              <div key={group.groupTitle} className="space-y-1">
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.groupTitle)}
+                    className="w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
+                    title={isGroupCollapsed ? "Déplier la section" : "Replier la section"}
+                  >
+                    <span>{group.groupTitle}</span>
+                    <ChevronDown
+                      className={cn(
+                        "w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
+                        isGroupCollapsed && "-rotate-90"
+                      )}
+                    />
+                  </button>
+                )}
+                {(!collapsed && isGroupCollapsed) ? null : (
+                  group.items.map((item) => {
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    const Icon = item.icon;
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        scroll={false}
+                        data-active={isActive ? "true" : undefined}
+                        onClick={() => {
+                          if (navRef.current) {
+                            globalSidebarScrollTop = navRef.current.scrollTop;
+                            try {
+                              sessionStorage.setItem("sidebar_nav_scroll", String(navRef.current.scrollTop));
+                            } catch {}
+                          }
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                          isActive
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                            : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+                        )}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        <Icon
+                          className={cn(
+                            "w-4 h-4 shrink-0 transition-colors",
+                            isActive ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                          )}
+                        />
+                        {!collapsed && (
+                          <span className="flex-1 truncate">{item.label}</span>
+                        )}
+                        {!collapsed && item.badge && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                            {item.badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer: User Info */}
+        <div className="p-3 border-t border-neutral-800/80 space-y-2">
+          <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+              {userName ? userName.charAt(0).toUpperCase() : "U"}
+            </div>
+            {!collapsed && (
+              <div className="flex-1 truncate">
+                <p className="text-xs font-semibold text-neutral-200 truncate">
+                  {userName || "Utilisateur"}
+                </p>
+                <p className="text-[10px] text-neutral-500 truncate">
+                  {userRole || "Rôle"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Drawer (Always starts closed, only opens on hamburger click) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+            onClick={() => setMobileOpen(false)}
+          />
+
+          {/* Off-canvas Drawer Panel */}
+          <aside className="relative flex flex-col w-72 max-w-[85vw] h-full bg-neutral-950 border-r border-neutral-800 shadow-2xl z-50 animate-in slide-in-from-left duration-200">
+            {/* Brand Header with Close Button */}
+            <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2.5"
+              >
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
+                  B
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
+                    BOOSTERA
+                    <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+                      ERP
+                    </span>
+                  </span>
+                  <span className="text-[10px] text-neutral-500">Agence Digitale</span>
+                </div>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                title="Fermer le menu"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Navigation Groups for Mobile */}
+            <div
+              ref={mobileNavRef}
+              className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-neutral-800"
+            >
+              {visibleGroups.map((group) => {
+                const hasActiveItem = group.items.some(
+                  (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+                );
+                const isGroupCollapsed = !hasActiveItem && !!collapsedGroups[group.groupTitle];
+
+                return (
+                  <div key={group.groupTitle} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.groupTitle)}
+                      className="w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
+                    >
+                      <span>{group.groupTitle}</span>
+                      <ChevronDown
+                        className={cn(
+                          "w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
+                          isGroupCollapsed && "-rotate-90"
+                        )}
+                      />
+                    </button>
+
+                    {!isGroupCollapsed && (
+                      group.items.map((item) => {
+                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                        const Icon = item.icon;
+
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setMobileOpen(false)}
+                            className={cn(
+                              "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                              isActive
+                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                                : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+                            )}
+                          >
+                            <Icon
+                              className={cn(
+                                "w-4 h-4 shrink-0 transition-colors",
+                                isActive ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                              )}
+                            />
+                            <span className="flex-1 truncate">{item.label}</span>
+                            {item.badge && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                                {item.badge}
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer User Info Mobile */}
+            <div className="p-3 border-t border-neutral-800/80">
+              <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                </div>
+                <div className="flex-1 truncate">
+                  <p className="text-xs font-semibold text-neutral-200 truncate">
+                    {userName || "Utilisateur"}
+                  </p>
+                  <p className="text-[10px] text-neutral-500 truncate">
+                    {userRole || "Rôle"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
+
