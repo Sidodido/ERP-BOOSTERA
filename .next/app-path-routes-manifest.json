@@ -32,8 +32,8 @@
   "/reporting/page": "/reporting",
   "/rh/page": "/rh",
   "/stocks/page": "/stocks",
-  "/base-prospects/page": "/base-prospects",
-  "/assistant-ia/page": "/assistant-ia",
   "/activites/page": "/activites",
+  "/assistant-ia/page": "/assistant-ia",
+  "/base-prospects/page": "/base-prospects",
   "/calendrier-technicien/page": "/calendrier-technicien"
 }

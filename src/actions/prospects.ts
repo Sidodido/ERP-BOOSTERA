@@ -1402,96 +1402,107 @@ export async function bulkImportProspects(
     });
   }
 
-  // Traitement simultané par micro-lots de 8 pour diviser le temps d'exécution par 8 sur la base Neon
-  const CONCURRENCY = 8;
-  for (let i = 0; i < validRowsToInsert.length; i += CONCURRENCY) {
-    const microBatch = validRowsToInsert.slice(i, i + CONCURRENCY);
-    await Promise.all(
-      microBatch.map(async (item) => {
-        try {
-          const createdProspect = await prisma.prospect.create({
-            data: {
-              companyName: item.cleanCompany,
-              phone: item.cleanPhone,
-              prospectionDate: item.isVirginProspect ? null : item.prospectionDate,
-              sector: item.sector,
-              address: item.address,
-              wilaya: item.wilaya,
-              callStatus: item.callStatus,
-              status: item.status,
-              rawState: item.rawState,
-              email: item.email,
-              response: item.response,
-              notes: item.notes,
-              assignedToId: item.assignedToId,
-              createdById: user.id,
-            },
-          });
+  // Insertion ultra-rapide par bloc SQL natif (1 seule requête SQL au lieu de centaines)
+  if (validRowsToInsert.length > 0) {
+    try {
+      const prospectsData = validRowsToInsert.map((item) => ({
+        companyName: item.cleanCompany,
+        phone: item.cleanPhone,
+        prospectionDate: item.isVirginProspect ? null : item.prospectionDate,
+        sector: item.sector,
+        address: item.address,
+        wilaya: item.wilaya,
+        callStatus: item.callStatus,
+        status: item.status,
+        rawState: item.rawState,
+        email: item.email,
+        response: item.response,
+        notes: item.notes,
+        assignedToId: item.assignedToId,
+        createdById: user.id,
+      }));
 
-          // Si liste non vierge avec appel effectif
-          if (!item.isVirginProspect && item.rowCallStatus) {
-            const callData = mapCallStatusToCallData(item.rowCallStatus);
-            if (callData) {
-              await prisma.call.create({
-                data: {
-                  prospectId: createdProspect.id,
-                  userId: item.assignedToId,
-                  result: callData.result,
-                  comment: `Import Excel: ${callData.comment}`,
-                  durationSeconds: callData.durationSeconds,
-                  calledAt: item.prospectionDate || new Date(),
-                },
-              });
-            }
-          }
+      const createdProspects = await (prisma.prospect as any).createManyAndReturn({
+        data: prospectsData,
+        skipDuplicates: true,
+        select: { id: true, phone: true, companyName: true },
+      });
 
-          // Mise en relance automatique (+3j, +7j, +15j)
-          const isContactedEligible = !item.isVirginProspect && isProspectContactedForRelance(
-            item.rawState || undefined,
-            item.callStatus || undefined,
-            item.status
-          );
+      imported = createdProspects.length;
 
-          if (isContactedEligible) {
-            const now = Date.now();
-            await prisma.followUp.createMany({
-              data: [
-                {
-                  prospectId: createdProspect.id,
-                  userId: item.assignedToId,
-                  stepNumber: 1,
-                  scheduledAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
-                  status: FollowUpStatus.SCHEDULED,
-                  notes: "Relance Étape 1 (+3j) : Prospect contacté lors de l'import",
-                },
-                {
-                  prospectId: createdProspect.id,
-                  userId: item.assignedToId,
-                  stepNumber: 2,
-                  scheduledAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
-                  status: FollowUpStatus.SCHEDULED,
-                  notes: "Relance Étape 2 (+7j)",
-                },
-                {
-                  prospectId: createdProspect.id,
-                  userId: item.assignedToId,
-                  stepNumber: 3,
-                  scheduledAt: new Date(now + 15 * 24 * 60 * 60 * 1000),
-                  status: FollowUpStatus.SCHEDULED,
-                  notes: "Relance Étape 3 (+15j)",
-                },
-              ],
+      const callsToCreate: any[] = [];
+      const followUpsToCreate: any[] = [];
+      const now = Date.now();
+
+      for (let i = 0; i < createdProspects.length; i++) {
+        const created = createdProspects[i];
+        const item = validRowsToInsert[i];
+        if (!item) continue;
+
+        // Si appel effectif
+        if (!item.isVirginProspect && item.rowCallStatus) {
+          const callData = mapCallStatusToCallData(item.rowCallStatus);
+          if (callData) {
+            callsToCreate.push({
+              prospectId: created.id,
+              userId: item.assignedToId,
+              result: callData.result,
+              comment: `Import Excel: ${callData.comment}`,
+              durationSeconds: callData.durationSeconds,
+              calledAt: item.prospectionDate || new Date(),
             });
-            autoRelancesCreated++;
           }
-
-          imported++;
-        } catch (err: any) {
-          errors.push(`Erreur pour ${item.cleanCompany}: ${err?.message || "inconnue"}`);
-          skippedInvalid++;
         }
-      })
-    );
+
+        // Relance automatique (+3j, +7j, +15j)
+        const isContactedEligible = !item.isVirginProspect && isProspectContactedForRelance(
+          item.rawState || undefined,
+          item.callStatus || undefined,
+          item.status
+        );
+
+        if (isContactedEligible) {
+          followUpsToCreate.push(
+            {
+              prospectId: created.id,
+              userId: item.assignedToId,
+              stepNumber: 1,
+              scheduledAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
+              status: FollowUpStatus.SCHEDULED,
+              notes: "Relance Étape 1 (+3j) : Prospect contacté lors de l'import",
+            },
+            {
+              prospectId: created.id,
+              userId: item.assignedToId,
+              stepNumber: 2,
+              scheduledAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
+              status: FollowUpStatus.SCHEDULED,
+              notes: "Relance Étape 2 (+7j)",
+            },
+            {
+              prospectId: created.id,
+              userId: item.assignedToId,
+              stepNumber: 3,
+              scheduledAt: new Date(now + 15 * 24 * 60 * 60 * 1000),
+              status: FollowUpStatus.SCHEDULED,
+              notes: "Relance Étape 3 (+15j)",
+            }
+          );
+          autoRelancesCreated++;
+        }
+      }
+
+      if (callsToCreate.length > 0) {
+        await prisma.call.createMany({ data: callsToCreate });
+      }
+
+      if (followUpsToCreate.length > 0) {
+        await prisma.followUp.createMany({ data: followUpsToCreate });
+      }
+    } catch (err: any) {
+      console.error("Batch insert error:", err);
+      errors.push(`Erreur lors de l'insertion du lot: ${err?.message || "inconnue"}`);
+    }
   }
 
   await createAuditLog({
