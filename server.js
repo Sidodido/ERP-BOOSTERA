@@ -49,45 +49,87 @@ if (fs.existsSync(envPath)) {
   } catch {}
 }
 
-// 3. Auto-organize .next directory if build files were extracted to root
+// 3. Ensure .next and .next/server directories exist and copy build artifacts
 const nextDir = path.join(__dirname, ".next");
-if (!fs.existsSync(nextDir)) {
-  try {
-    fs.mkdirSync(nextDir, { recursive: true });
-  } catch {}
-}
+const nextServerDir = path.join(nextDir, "server");
+const nextStaticDir = path.join(nextDir, "static");
 
-const rootBuildId = path.join(__dirname, "BUILD_ID");
-if (fs.existsSync(rootBuildId)) {
-  const buildItems = [
-    "BUILD_ID",
-    "server",
-    "static",
-    "app-path-routes-manifest.json",
-    "build-manifest.json",
-    "export-marker.json",
-    "fallback-build-manifest.json",
-    "images-manifest.json",
-    "next-minimal-server.js.nft.json",
-    "next-server.js.nft.json",
-    "prerender-manifest.json",
-    "required-server-files.js",
-    "required-server-files.json",
-    "routes-manifest.json",
-    "trace",
-    "trace-build",
-  ];
+try {
+  fs.mkdirSync(nextServerDir, { recursive: true });
+  fs.mkdirSync(nextStaticDir, { recursive: true });
+} catch {}
 
-  for (const item of buildItems) {
-    const srcPath = path.join(__dirname, item);
-    const dstPath = path.join(nextDir, item);
-    if (fs.existsSync(srcPath)) {
+// Copy recursive helper
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
       try {
-        if (!fs.existsSync(dstPath)) {
-          fs.cpSync(srcPath, dstPath, { recursive: true });
-        }
+        fs.copyFileSync(srcPath, destPath);
       } catch {}
     }
+  }
+}
+
+// If "server" folder exists at root, sync it into .next/server
+const rootServerDir = path.join(__dirname, "server");
+if (fs.existsSync(rootServerDir)) {
+  copyDirRecursive(rootServerDir, nextServerDir);
+}
+
+// If "static" folder exists at root, sync it into .next/static
+const rootStaticDir = path.join(__dirname, "static");
+if (fs.existsSync(rootStaticDir)) {
+  copyDirRecursive(rootStaticDir, nextStaticDir);
+}
+
+// Sync root manifest files into .next
+const rootFiles = [
+  "BUILD_ID",
+  "app-path-routes-manifest.json",
+  "build-manifest.json",
+  "export-marker.json",
+  "fallback-build-manifest.json",
+  "images-manifest.json",
+  "next-minimal-server.js.nft.json",
+  "next-server.js.nft.json",
+  "prerender-manifest.json",
+  "required-server-files.js",
+  "required-server-files.json",
+  "routes-manifest.json",
+];
+
+for (const f of rootFiles) {
+  const src = path.join(__dirname, f);
+  const dst = path.join(nextDir, f);
+  if (fs.existsSync(src)) {
+    try {
+      fs.copyFileSync(src, dst);
+    } catch {}
+  }
+}
+
+// Ensure pages-manifest.json exists in .next/server
+const pagesManifestPath = path.join(nextServerDir, "pages-manifest.json");
+if (!fs.existsSync(pagesManifestPath)) {
+  const rootPagesManifest = path.join(rootServerDir, "pages-manifest.json");
+  if (fs.existsSync(rootPagesManifest)) {
+    try {
+      fs.copyFileSync(rootPagesManifest, pagesManifestPath);
+    } catch {}
+  } else {
+    try {
+      fs.writeFileSync(
+        pagesManifestPath,
+        JSON.stringify({ "/404": "pages/404.html", "/500": "pages/500.html" }, null, 2)
+      );
+    } catch {}
   }
 }
 
