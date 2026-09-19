@@ -581,6 +581,7 @@ export function isVirginProspect(p: {
   _count?: { calls?: number; appointments?: number };
   calls?: any[];
   appointments?: any[];
+  response?: string | null;
 }): boolean {
   // 1. Déplacé explicitement vers les appels et la base via le bouton (+)
   if (
@@ -595,8 +596,45 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // Tout prospect dans la file de prospection y RESTE, même si on le marque "Intéressé"
-  // ou "Appel effectué", tant qu'on n'a pas explicitement cliqué sur le bouton (+) pour le transférer.
+  // 3. Statut autre que NOUVEAU
+  if (p.status && p.status !== "NEW") {
+    return false;
+  }
+
+  // 4. Appel déjà effectué ou statut d'appel non vierge
+  const rawCall = (p.callStatus || "").trim().toUpperCase();
+  const isCallVirgin =
+    !rawCall ||
+    ["NON EFFECTUE", "NON EFFECTUÉ", "NON", "VIERGE", "AUCUN", "PAS ENCORE", "—", "-"].includes(rawCall);
+  if (!isCallVirgin) {
+    return false;
+  }
+
+  // 5. État / Résultat non vierge
+  const rawState = (p.rawState || "").trim().toUpperCase();
+  const isStateVirgin =
+    !rawState ||
+    ["NOUVEAU", "NEW", "A CONTACTER", "À CONTACTER", "AUCUN", "VIERGE", "EN ATTENTE", "SANS", "—", "-"].includes(rawState);
+  if (!isStateVirgin) {
+    return false;
+  }
+
+  // 6. Présence d'historique d'appels ou de rendez-vous
+  const hasCalls = (p.calls && p.calls.length > 0) || (p._count && (p._count.calls || 0) > 0);
+  if (hasCalls) {
+    return false;
+  }
+
+  const hasAppointments = (p.appointments && p.appointments.length > 0) || (p._count && (p._count.appointments || 0) > 0);
+  if (hasAppointments) {
+    return false;
+  }
+
+  // 7. Présence d'une réponse
+  if (p.response && p.response.trim()) {
+    return false;
+  }
+
   return true;
 }
 

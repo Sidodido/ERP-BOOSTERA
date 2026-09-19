@@ -214,6 +214,7 @@ export function ProspectsClient({
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [directImportSheet, setDirectImportSheet] = useState<string>("TOUS");
   const [importAssignedToId, setImportAssignedToId] = useState<string>("");
+  const [importAsVirgin, setImportAsVirgin] = useState<boolean>(true);
 
   // Helper function to parse rows from any worksheet matching the 10 columns with robust header auto-detection
   const parseRowsFromSheet = (worksheet: XLSX.WorkSheet) => {
@@ -430,7 +431,7 @@ export function ProspectsClient({
           statusText: `Importation : ${currentCount} / ${total} (${percent}%)...`,
         });
 
-        const res = await bulkImportProspects(chunk, importAssignedToId || undefined);
+        const res = await bulkImportProspects(chunk, importAssignedToId || undefined, { importAsVirgin });
         if (res) {
           totalImported += res.imported || 0;
           totalDuplicates += res.skippedDuplicates || 0;
@@ -879,15 +880,46 @@ export function ProspectsClient({
             Prospection Commerciale
             <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5 bg-amber-500/15 text-amber-300 border border-amber-500/30">
               <Flame className="w-3 h-3 text-amber-400" />
-              <span>{filtered.length} prospects vierges</span>
+              <span>
+                {filterScope === "VIRGIN"
+                  ? `${filtered.length} prospects vierges`
+                  : `${filtered.length} prospects au total`}
+              </span>
             </span>
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
-            File d&apos;attente active des prospects. Cliquez sur l&apos;icône « + » pour déplacer un prospect vers les Appels et la Base de données.
+            File d&apos;attente active des prospects. Seules les fiches vierges (non encore appelées) s&apos;affichent ici.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Scope Filter Switch: Listes Vierges vs Tous */}
+          <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setFilterScope("VIRGIN")}
+              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                filterScope === "VIRGIN"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <span>Listes Vierges ({virginCount})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterScope("ALL")}
+              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                filterScope === "ALL"
+                  ? "bg-neutral-800 text-white shadow-xs"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              <span>Tous ({prospects.length})</span>
+            </button>
+          </div>
+
           {/* View Mode Toggle */}
           <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
@@ -1921,6 +1953,30 @@ export function ProspectsClient({
             </p>
           </div>
 
+          {/* Mode Liste Vierge Option */}
+          {importedRows.length > 0 && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-amber-400" />
+                  Mode Liste Vierge pour Prospection (Recommandé)
+                </p>
+                <p className="text-[11px] text-neutral-300 mt-0.5">
+                  Réinitialise l&apos;Appel (« — Appel — ») et le Résultat (« — Résultat — ») à vide pour créer des fiches vierges prêtes à être appelées par l&apos;équipe.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={importAsVirgin}
+                  onChange={(e) => setImportAsVirgin(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+          )}
+
           {/* Live 10-Column Preview */}
           {importedRows.length > 0 && (
             <div className="space-y-2">
@@ -1950,14 +2006,18 @@ export function ProspectsClient({
                       <tr key={idx} className="hover:bg-neutral-900/50">
                         <td className="p-2 font-bold font-sans text-neutral-100">{row.companyName}</td>
                         <td className="p-2 text-emerald-400">{row.phone}</td>
-                        <td className="p-2">{row.date || "—"}</td>
+                        <td className="p-2">{importAsVirgin ? "—" : (row.date || "—")}</td>
                         <td className="p-2 text-blue-400 font-sans">{row.sector}</td>
                         <td className="p-2 font-sans">{row.address || "—"}</td>
-                        <td className="p-2">{row.callStatus || "—"}</td>
-                        <td className="p-2 text-amber-400">{row.rawState || "—"}</td>
+                        <td className={`p-2 ${importAsVirgin ? "text-neutral-500 font-sans" : ""}`}>
+                          {importAsVirgin ? "— Appel —" : (row.callStatus || "—")}
+                        </td>
+                        <td className={`p-2 ${importAsVirgin ? "text-neutral-500 font-sans" : "text-amber-400"}`}>
+                          {importAsVirgin ? "— Résultat —" : (row.rawState || "—")}
+                        </td>
                         <td className="p-2">{row.email || "—"}</td>
-                        <td className="p-2 text-neutral-300 font-sans">{row.response || "—"}</td>
-                        <td className="p-2 text-neutral-400 font-sans">{row.notes || "—"}</td>
+                        <td className="p-2 text-neutral-300 font-sans">{importAsVirgin ? "—" : (row.response || "—")}</td>
+                        <td className="p-2 text-neutral-400 font-sans">{importAsVirgin ? "—" : (row.notes || "—")}</td>
                         <td className="p-2 text-blue-400 font-sans">
                           {row.commercialName ||
                             (importAssignedToId ? salesUsers.find((u) => u.id === importAssignedToId)?.name : "Auto / Connecté")}

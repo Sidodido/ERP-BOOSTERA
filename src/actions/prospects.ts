@@ -1249,7 +1249,10 @@ export async function bulkImportProspects(
     commercialName?: string;// COMMERCIAL
     assignedToId?: string;
   }>,
-  defaultAssignedToId?: string
+  defaultAssignedToId?: string,
+  options?: {
+    importAsVirgin?: boolean;
+  }
 ) {
   const user = await requireAuth();
 
@@ -1344,7 +1347,7 @@ export async function bulkImportProspects(
       existingCompanySet.add(compKey);
     }
 
-    const prospectionDate = parseExcelDate(row.date);
+    const prospectionDate = options?.importAsVirgin ? null : parseExcelDate(row.date);
 
     const rawCallUpper = (row.callStatus || "").trim().toUpperCase();
     const rawStateUpper = (row.rawState || "").trim().toUpperCase();
@@ -1358,7 +1361,7 @@ export async function bulkImportProspects(
       ["NOUVEAU", "NEW", "A CONTACTER", "À CONTACTER", "AUCUN", "VIERGE", "EN ATTENTE", "SANS"].includes(rawStateUpper);
 
     const hasResponse = Boolean(row.response && row.response.trim());
-    const isVirginProspect = isCallStatusVirgin && isRawStateVirgin && !hasResponse;
+    const isVirginProspect = Boolean(options?.importAsVirgin) || (isCallStatusVirgin && isRawStateVirgin && !hasResponse);
 
     const mappedStatus = isVirginProspect
       ? ProspectStatus.NEW
@@ -1394,11 +1397,11 @@ export async function bulkImportProspects(
       status: mappedStatus,
       rawState: isVirginProspect ? null : (row.rawState?.trim() || null),
       email: row.email?.trim() || null,
-      response: row.response?.trim() || null,
-      notes: row.notes?.trim() || null,
+      response: isVirginProspect ? null : (row.response?.trim() || null),
+      notes: isVirginProspect ? null : (row.notes?.trim() || null),
       assignedToId: resolvedAssignedToId,
       isVirginProspect,
-      rowCallStatus: row.callStatus?.trim(),
+      rowCallStatus: isVirginProspect ? undefined : row.callStatus?.trim(),
     });
   }
 
