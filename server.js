@@ -2,6 +2,7 @@ const http = require("http");
 const { parse } = require("url");
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 
 // Support all possible node_modules locations in cPanel / CloudLinux / LiteSpeed
 const possiblePaths = [
@@ -17,13 +18,55 @@ for (const p of possiblePaths) {
   }
 }
 
+// 1. Ensure .env file exists
+const envPath = path.join(__dirname, ".env");
+if (!fs.existsSync(envPath)) {
+  const examplePath = path.join(__dirname, ".env.example");
+  if (fs.existsSync(examplePath)) {
+    try {
+      fs.copyFileSync(examplePath, envPath);
+      console.log("Fichier .env initialisé depuis .env.example");
+    } catch (e) {
+      console.error("Erreur copie .env:", e);
+    }
+  }
+}
+
+// 2. Try to require next, with auto-installation fallback if missing
 let next;
 let nextImportError = null;
-try {
-  next = require("next");
-} catch (e) {
-  nextImportError = e;
-  console.error("Next.js import error:", e);
+
+function tryRequireNext() {
+  try {
+    return require("next");
+  } catch (e) {
+    return null;
+  }
+}
+
+next = tryRequireNext();
+
+if (!next) {
+  console.log("Next.js manquant dans node_modules. Lancement de l'auto-installation...");
+  try {
+    execSync("npm install next@16.3.5 --legacy-peer-deps --no-audit --no-fund", {
+      cwd: __dirname,
+      stdio: "pipe",
+      timeout: 180000,
+    });
+    // Refresh paths
+    const localNm = path.join(__dirname, "node_modules");
+    if (fs.existsSync(localNm) && !module.paths.includes(localNm)) {
+      module.paths.unshift(localNm);
+    }
+    next = tryRequireNext();
+    if (next) {
+      console.log("Next.js auto-installé avec succès !");
+    }
+  } catch (e) {
+    nextImportError = e;
+    console.error("Échec auto-installation next:", e.message);
+  }
 }
 
 const port = process.env.PORT || 3000;
@@ -33,41 +76,33 @@ let initError = null;
 async function bootstrap() {
   if (!next) {
     let dirContents = [];
-    let nodeModulesContents = [];
     try {
       dirContents = fs.readdirSync(__dirname);
     } catch {}
 
-    const nmPath = path.join(__dirname, "node_modules");
-    if (fs.existsSync(nmPath)) {
-      try {
-        nodeModulesContents = fs.readdirSync(nmPath).slice(0, 15);
-      } catch {}
-    }
-
-    const venvNm = "/home/zidane17/nodevenv/erp/22/lib/node_modules";
-    let venvContents = [];
-    if (fs.existsSync(venvNm)) {
-      try {
-        venvContents = fs.readdirSync(venvNm).slice(0, 15);
-      } catch {}
-    }
-
     throw new Error(
-      `Le module 'next' n'est pas accessible.\n` +
-      `Erreur originale : ${nextImportError ? nextImportError.message : 'inconnue'}\n\n` +
-      `Répertoire (__dirname) : ${__dirname}\n` +
-      `Fichiers trouvés dans le dossier : ${dirContents.join(", ") || "vide"}\n` +
-      `Dossier node_modules local existe : ${fs.existsSync(nmPath) ? "OUI (" + nodeModulesContents.join(", ") + "...)" : "NON"}\n` +
-      `Dossier node_modules virtuel existe : ${fs.existsSync(venvNm) ? "OUI (" + venvContents.join(", ") + "...)" : "NON"}\n\n` +
-      `Veuillez vous assurer que 'Run NPM Install' s'est bien exécuté ou vérifiez le bouton dans cPanel.`
+      `Le module 'next' n'est pas installé ou l'installation a échoué.\n` +
+      `Erreur : ${nextImportError ? (nextImportError.stderr?.toString() || nextImportError.message) : 'Module manquant'}\n\n` +
+      `Contenu du dossier : ${dirContents.join(", ")}`
     );
+  }
+
+  // Also check prisma client
+  try {
+    require("@prisma/client");
+  } catch (e) {
+    console.log("Génération de Prisma client...");
+    try {
+      execSync("npx prisma generate", { cwd: __dirname, stdio: "pipe", timeout: 60000 });
+    } catch (pe) {
+      console.warn("Avertissement Prisma generate:", pe.message);
+    }
   }
 
   const dev = process.env.NODE_ENV !== "production";
   nextApp = next({ dev, dir: __dirname });
   await nextApp.prepare();
-  console.log("> Next.js application prepared successfully!");
+  console.log("> BOOSTERA ERP Next.js application prepared successfully!");
 }
 
 bootstrap().catch((err) => {
@@ -83,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
         <head>
           <meta charset="utf-8">
-          <title>BOOSTERA ERP — Diagnostic</title>
+          <title>BOOSTERA ERP — Configuration</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
             .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -95,12 +130,9 @@ const server = http.createServer(async (req, res) => {
         </head>
         <body>
           <div class="card">
-            <h1>⚠️ Diagnostic Système — BOOSTERA ERP</h1>
-            <p>Le serveur Node.js est actif et répond. Voici le diagnostic précis :</p>
+            <h1>⚠️ Initialisation — BOOSTERA ERP</h1>
+            <p>Le serveur est connecté à <strong>zidane-dev.dz</strong>. Voici le détail :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
-            <div class="info">
-              💡 <strong>Statut :</strong> Le serveur est bien connecté à votre nom de domaine <code>zidane-dev.dz</code>.
-            </div>
           </div>
         </body>
       </html>
