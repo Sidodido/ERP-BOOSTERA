@@ -14,7 +14,8 @@
 /coverage
 
 # next.js
-/.next/
+/.next/cache/
+/.next/dev/
 /out/
 
 # production
@@ -24,6 +25,12 @@
 .DS_Store
 *.pem
 /scratch/
+dist_next/
+cookies.txt
+*.log
+scratch_test.ts
+create_tables*.sql
+generate_seed.js
 
 # debug
 npm-debug.log*

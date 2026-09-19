@@ -1,0 +1,1 @@
+globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/cron/setup-database/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"C:\\Users\\amatek\\OneDrive\\Bureau\\crm\\src\\app\\api\\cron\\setup-database\\route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};

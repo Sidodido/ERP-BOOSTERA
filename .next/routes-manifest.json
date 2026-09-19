@@ -1,0 +1,305 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "app",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ],
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+    }
+  ],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/abonnements/[id]",
+      "regex": "^/abonnements/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/abonnements/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/clients/[id]",
+      "regex": "^/clients/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/clients/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/projets/[id]",
+      "regex": "^/projets/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/projets/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_global-error",
+      "regex": "^/_global\\-error(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_global\\-error(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/abonnements",
+      "regex": "^/abonnements(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/abonnements(?:/)?$"
+    },
+    {
+      "page": "/achats",
+      "regex": "^/achats(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/achats(?:/)?$"
+    },
+    {
+      "page": "/activites",
+      "regex": "^/activites(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/activites(?:/)?$"
+    },
+    {
+      "page": "/api/auth/login",
+      "regex": "^/api/auth/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/auth/login(?:/)?$"
+    },
+    {
+      "page": "/api/cron/check-db",
+      "regex": "^/api/cron/check\\-db(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/check\\-db(?:/)?$"
+    },
+    {
+      "page": "/api/cron/daily-attendance-absences",
+      "regex": "^/api/cron/daily\\-attendance\\-absences(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/daily\\-attendance\\-absences(?:/)?$"
+    },
+    {
+      "page": "/api/cron/setup-database",
+      "regex": "^/api/cron/setup\\-database(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/setup\\-database(?:/)?$"
+    },
+    {
+      "page": "/api/cron/weekly-content",
+      "regex": "^/api/cron/weekly\\-content(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cron/weekly\\-content(?:/)?$"
+    },
+    {
+      "page": "/appels",
+      "regex": "^/appels(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/appels(?:/)?$"
+    },
+    {
+      "page": "/assistant-ia",
+      "regex": "^/assistant\\-ia(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/assistant\\-ia(?:/)?$"
+    },
+    {
+      "page": "/base-prospects",
+      "regex": "^/base\\-prospects(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/base\\-prospects(?:/)?$"
+    },
+    {
+      "page": "/calendrier-technicien",
+      "regex": "^/calendrier\\-technicien(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/calendrier\\-technicien(?:/)?$"
+    },
+    {
+      "page": "/clients",
+      "regex": "^/clients(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/clients(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/documents",
+      "regex": "^/documents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/documents(?:/)?$"
+    },
+    {
+      "page": "/equipes",
+      "regex": "^/equipes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/equipes(?:/)?$"
+    },
+    {
+      "page": "/facturation",
+      "regex": "^/facturation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/facturation(?:/)?$"
+    },
+    {
+      "page": "/favicon.ico",
+      "regex": "^/favicon\\.ico(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/favicon\\.ico(?:/)?$"
+    },
+    {
+      "page": "/finance",
+      "regex": "^/finance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/finance(?:/)?$"
+    },
+    {
+      "page": "/fournisseurs",
+      "regex": "^/fournisseurs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/fournisseurs(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/parametres",
+      "regex": "^/parametres(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/parametres(?:/)?$"
+    },
+    {
+      "page": "/production",
+      "regex": "^/production(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/production(?:/)?$"
+    },
+    {
+      "page": "/projets",
+      "regex": "^/projets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/projets(?:/)?$"
+    },
+    {
+      "page": "/prospection",
+      "regex": "^/prospection(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/prospection(?:/)?$"
+    },
+    {
+      "page": "/relances",
+      "regex": "^/relances(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/relances(?:/)?$"
+    },
+    {
+      "page": "/rendez-vous",
+      "regex": "^/rendez\\-vous(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/rendez\\-vous(?:/)?$"
+    },
+    {
+      "page": "/rentabilite",
+      "regex": "^/rentabilite(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/rentabilite(?:/)?$"
+    },
+    {
+      "page": "/reporting",
+      "regex": "^/reporting(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reporting(?:/)?$"
+    },
+    {
+      "page": "/rh",
+      "regex": "^/rh(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/rh(?:/)?$"
+    },
+    {
+      "page": "/stocks",
+      "regex": "^/stocks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/stocks(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}
