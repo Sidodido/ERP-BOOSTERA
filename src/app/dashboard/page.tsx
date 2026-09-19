@@ -13,7 +13,34 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const metrics = await getDashboardMetrics();
+  let metrics;
+  try {
+    metrics = await getDashboardMetrics();
+  } catch (err: any) {
+    console.error("Dashboard metrics error:", err);
+    metrics = {
+      role: user.role,
+      isCommercial: user.role === "SALES_REP" || (user.role as any) === "COMMERCIAL",
+      isTechnician: user.role === "TECH_LEAD" || user.role === "DEVELOPER" || user.role === "DESIGNER",
+      isAdmin: user.role === "ADMIN" || user.role === "SALES_DIRECTOR",
+      myMonthlyGoals: [],
+      allTeamGoals: [],
+      totalProspects: 0,
+      newProspects: 0,
+      interestedProspects: 0,
+      convertedProspects: 0,
+      callsToday: 0,
+      totalCalls: 0,
+      upcomingAppointments: 0,
+      activeClients: 0,
+      totalContractValue: 0,
+      totalCollected: 0,
+      balanceRemaining: 0,
+      conversionRate: 0,
+      recentActivities: [],
+      salesReps: [],
+    };
+  }
 
   return (
     <AppShell>

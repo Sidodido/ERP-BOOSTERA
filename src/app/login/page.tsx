@@ -28,6 +28,28 @@ export default function LoginPage() {
     formData.append("password", password);
 
     try {
+      const apiRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.success) {
+          window.location.href = data.redirectUrl || "/dashboard";
+          return;
+        }
+        if (data.error) {
+          setErrorMessage(data.error);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback to Server Action
+    try {
       const res = await loginAction(formData);
       if (res?.error) {
         setErrorMessage(res.error);
@@ -37,7 +59,7 @@ export default function LoginPage() {
       if (err?.message?.includes("NEXT_REDIRECT") || err?.digest?.includes("NEXT_REDIRECT")) {
         return;
       }
-      setErrorMessage(err?.message || "Erreur serveur (500) lors de la connexion.");
+      setErrorMessage(err?.message || "Erreur lors de la connexion (Code 500).");
       setLoading(false);
     }
   };

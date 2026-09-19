@@ -361,6 +361,8 @@ try {
 const port = process.env.PORT || 3000;
 let nextApp = null;
 let initError = null;
+let nextAppReady = false;
+let preparePromise = null;
 
 async function bootstrap() {
   if (!next) {
@@ -388,7 +390,9 @@ async function bootstrap() {
 
   const dev = false;
   nextApp = next({ dev, dir: __dirname, quiet: true });
-  await nextApp.prepare();
+  preparePromise = nextApp.prepare();
+  await preparePromise;
+  nextAppReady = true;
   logDebug("> BOOSTERA ERP démarré à vitesse maximale !");
 }
 
@@ -410,6 +414,89 @@ const server = http.createServer(async (req, res) => {
     } else {
       res.end("Aucun log disponible");
     }
+    return;
+  }
+
+  // === NATIVE HIGH-SPEED AUTH LOGIN HANDLER ===
+  if (parsedUrl.pathname === "/api/auth/login" && req.method === "POST") {
+    let bodyData = "";
+    req.on("data", (chunk) => { bodyData += chunk; });
+    req.on("end", async () => {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      try {
+        const { email, password } = JSON.parse(bodyData || "{}");
+        if (!email || !password) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ error: "Email et mot de passe requis." }));
+        }
+
+        const prisma = getPrisma();
+        if (!prisma) {
+          res.writeHead(500);
+          return res.end(JSON.stringify({ error: "Base de données non accessible." }));
+        }
+
+        const user = await prisma.user.findUnique({
+          where: { email: email.trim().toLowerCase() },
+        });
+
+        if (!user || !user.isActive) {
+          res.writeHead(401);
+          return res.end(JSON.stringify({ error: "Identifiants invalides ou compte inactif." }));
+        }
+
+        let bcrypt = null;
+        try { bcrypt = require("bcryptjs"); } catch {
+          for (const p of possiblePaths) {
+            try { const c = path.join(p, "bcryptjs"); if (fs.existsSync(c)) { bcrypt = require(c); break; } } catch {}
+          }
+        }
+        if (!bcrypt) {
+          res.writeHead(500);
+          return res.end(JSON.stringify({ error: "Module bcryptjs non disponible." }));
+        }
+
+        const match = await bcrypt.compare(password, user.passwordHash);
+        if (!match) {
+          res.writeHead(401);
+          return res.end(JSON.stringify({ error: "Mot de passe incorrect." }));
+        }
+
+        let SignJWT = null;
+        try { SignJWT = require("jose").SignJWT; } catch {
+          for (const p of possiblePaths) {
+            try { const c = path.join(p, "jose"); if (fs.existsSync(c)) { SignJWT = require(c).SignJWT; break; } } catch {}
+          }
+        }
+
+        let token = "";
+        if (SignJWT) {
+          const secret = new TextEncoder().encode(process.env.JWT_SECRET || "boostera_super_secret_jwt_key_2026_production_grade_crm_saas");
+          token = await new SignJWT({
+            userId: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          })
+            .setProtectedHeader({ alg: "HS256" })
+            .setIssuedAt()
+            .setExpirationTime("7d")
+            .sign(secret);
+        }
+
+        res.setHeader("Set-Cookie", `boostera_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          success: true,
+          redirectUrl: "/dashboard",
+          user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        }));
+      } catch (authErr) {
+        logDebug("Native auth error: " + (authErr.stack || authErr.message));
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: "Erreur serveur : " + authErr.message }));
+      }
+    });
     return;
   }
 
@@ -569,15 +656,24 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (!nextApp) {
+  if (!nextAppReady && preparePromise) {
+    try {
+      await preparePromise;
+      nextAppReady = true;
+    } catch (prepErr) {
+      initError = prepErr;
+    }
+  }
+
+  if (!nextApp || !nextAppReady) {
     res.writeHead(503, { "Content-Type": "text/html; charset=utf-8" });
     res.end(`
       <!DOCTYPE html>
       <html>
-        <head><meta charset="utf-8"><meta http-equiv="refresh" content="3"></head>
+        <head><meta charset="utf-8"><meta http-equiv="refresh" content="2"></head>
         <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;padding:40px;text-align:center;">
           <h2>🚀 Démarrage de BOOSTERA ERP...</h2>
-          <p>Chargement des modules. Actualisation automatique dans 3 secondes...</p>
+          <p>Chargement des modules. Actualisation automatique dans 2 secondes...</p>
         </body>
       </html>
     `);
