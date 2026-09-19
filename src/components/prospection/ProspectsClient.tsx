@@ -411,12 +411,19 @@ export function ProspectsClient({
   const handleBulkImportConfirm = async () => {
     if (importedRows.length === 0) return;
     setIsLoading(true);
-    const BATCH_SIZE = 100;
+    const BATCH_SIZE = 250;
     const total = importedRows.length;
     let totalImported = 0;
     let totalDuplicates = 0;
     let totalInvalid = 0;
     let totalRelances = 0;
+
+    setImportProgress({
+      current: 0,
+      total,
+      percent: 0,
+      statusText: `Démarrage de l'importation (0 / ${total})...`,
+    });
 
     try {
       for (let i = 0; i < total; i += BATCH_SIZE) {
