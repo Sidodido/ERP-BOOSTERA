@@ -32,8 +32,8 @@
   "/reporting/page": "app/reporting/page.js",
   "/rh/page": "app/rh/page.js",
   "/stocks/page": "app/stocks/page.js",
-  "/activites/page": "app/activites/page.js",
-  "/assistant-ia/page": "app/assistant-ia/page.js",
   "/base-prospects/page": "app/base-prospects/page.js",
+  "/assistant-ia/page": "app/assistant-ia/page.js",
+  "/activites/page": "app/activites/page.js",
   "/calendrier-technicien/page": "app/calendrier-technicien/page.js"
 }

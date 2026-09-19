@@ -139,6 +139,12 @@ export function ProspectsClient({
 
   const [activeProspect, setActiveProspect] = useState<ProspectItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    statusText: string;
+  } | null>(null);
   const [isSyncingRelances, setIsSyncingRelances] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [transferringId, setTransferringId] = useState<string | null>(null);
@@ -400,19 +406,55 @@ export function ProspectsClient({
     }
   };
 
-  // Confirm uploaded file import
+  // Confirm uploaded file import with chunked processing (avoids server timeouts)
   const handleBulkImportConfirm = async () => {
     if (importedRows.length === 0) return;
     setIsLoading(true);
+    const BATCH_SIZE = 100;
+    const total = importedRows.length;
+    let totalImported = 0;
+    let totalDuplicates = 0;
+    let totalInvalid = 0;
+    let totalRelances = 0;
 
-    const res = await bulkImportProspects(importedRows, importAssignedToId || undefined);
-    setIsLoading(false);
-    setImportModalOpen(false);
-    setFeedbackMessage({
-      type: "success",
-      text: `✓ ${res.imported} nouveaux prospects importés avec succès | 🛡️ ${res.skippedDuplicates} doublons automatiquement éliminés (existants conservés intacts) | ⚡ ${res.autoRelancesCreated || 0} prospects contactés synchronisés vers les relances (+3j, +7j, +15j).`,
-    });
-    window.location.reload();
+    try {
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const chunk = importedRows.slice(i, i + BATCH_SIZE);
+        const currentCount = Math.min(i + chunk.length, total);
+        const percent = Math.round((currentCount / total) * 100);
+
+        setImportProgress({
+          current: currentCount,
+          total,
+          percent,
+          statusText: `Importation : ${currentCount} / ${total} (${percent}%)...`,
+        });
+
+        const res = await bulkImportProspects(chunk, importAssignedToId || undefined);
+        if (res) {
+          totalImported += res.imported || 0;
+          totalDuplicates += res.skippedDuplicates || 0;
+          totalInvalid += res.skippedInvalid || 0;
+          totalRelances += res.autoRelancesCreated || 0;
+        }
+      }
+
+      setImportModalOpen(false);
+      setFeedbackMessage({
+        type: "success",
+        text: `✓ ${totalImported} prospects importés avec succès | 🛡️ ${totalDuplicates} doublons automatiquement éliminés (existants conservés intacts) | ⚡ ${totalRelances} prospects contactés synchronisés vers les relances.`,
+      });
+      window.location.reload();
+    } catch (err: any) {
+      console.error("Bulk import error:", err);
+      setFeedbackMessage({
+        type: "error",
+        text: `Erreur lors de l'import : ${err?.message || "Erreur de connexion"}. (${totalImported} prospects ont pu être enregistrés en base).`,
+      });
+    } finally {
+      setIsLoading(false);
+      setImportProgress(null);
+    }
   };
 
   // Direct 1-Click Import from Local File
@@ -1928,18 +1970,46 @@ export function ProspectsClient({
             </div>
           )}
 
+          {importProgress && (
+            <div className="p-3.5 bg-emerald-950/40 border border-emerald-800/60 rounded-xl space-y-2 mt-2">
+              <div className="flex justify-between items-center text-xs font-semibold text-emerald-400">
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  {importProgress.statusText}
+                </span>
+                <span className="font-mono">{importProgress.percent}%</span>
+              </div>
+              <div className="w-full bg-neutral-800/80 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-2.5 rounded-full transition-all duration-300 ease-out shadow-[0_0_12px_rgba(16,185,129,0.5)]"
+                  style={{ width: `${importProgress.percent}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-neutral-400 text-center">
+                Traitement par lots sécurisés en cours. Veuillez ne pas fermer cette page.
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
-            <Button type="button" variant="outline" onClick={() => setImportModalOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading}
+              onClick={() => setImportModalOpen(false)}
+            >
               Annuler
             </Button>
             <Button
               type="button"
-              disabled={importedRows.length === 0}
+              disabled={importedRows.length === 0 || isLoading}
               isLoading={isLoading}
               onClick={handleBulkImportConfirm}
               className="bg-emerald-600 hover:bg-emerald-500"
             >
-              Importer les {importedRows.length} prospects
+              {importProgress
+                ? `Importation (${importProgress.percent}%)...`
+                : `Importer les ${importedRows.length} prospects`}
             </Button>
           </div>
         </div>

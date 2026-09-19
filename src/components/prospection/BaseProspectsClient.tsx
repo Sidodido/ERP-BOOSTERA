@@ -429,21 +429,33 @@ export function BaseProspectsClient({
   const handleConfirmImport = async () => {
     if (importedRows.length === 0) return;
     setIsLoading(true);
-    setImportStatus("Enregistrement des prospects en base...");
+    const BATCH_SIZE = 100;
+    const total = importedRows.length;
+    let totalImported = 0;
+    let totalDuplicates = 0;
 
     try {
-      const res = await bulkImportProspects(importedRows, importAssignedToId || undefined);
-      if ("error" in res && (res as any).error) {
-        setImportStatus(`Erreur : ${(res as any).error}`);
-      } else {
-        setImportStatus(`Import terminé avec succès ! ${res.imported} prospects ajoutés (${res.skippedDuplicates} doublons ignorés).`);
-        setTimeout(() => {
-          setImportModalOpen(false);
-          window.location.reload();
-        }, 1500);
+      for (let i = 0; i < total; i += BATCH_SIZE) {
+        const chunk = importedRows.slice(i, i + BATCH_SIZE);
+        const currentCount = Math.min(i + chunk.length, total);
+        const percent = Math.round((currentCount / total) * 100);
+
+        setImportStatus(`Importation en cours : ${currentCount} / ${total} (${percent}%)... Ne quittez pas.`);
+
+        const res = await bulkImportProspects(chunk, importAssignedToId || undefined);
+        if (res) {
+          totalImported += res.imported || 0;
+          totalDuplicates += res.skippedDuplicates || 0;
+        }
       }
+
+      setImportStatus(`Import terminé avec succès ! ${totalImported} prospects ajoutés (${totalDuplicates} doublons ignorés).`);
+      setTimeout(() => {
+        setImportModalOpen(false);
+        window.location.reload();
+      }, 1500);
     } catch (err: any) {
-      setImportStatus(`Erreur lors de l'importation : ${err.message}`);
+      setImportStatus(`Erreur lors de l'importation : ${err.message || "Erreur réseau"}`);
     } finally {
       setIsLoading(false);
     }
@@ -1829,11 +1841,20 @@ export function BaseProspectsClient({
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={() => setImportModalOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading}
+              onClick={() => setImportModalOpen(false)}
+            >
               Fermer
             </Button>
             {importedRows.length > 0 && (
-              <Button onClick={handleConfirmImport} isLoading={isLoading}>
+              <Button
+                onClick={handleConfirmImport}
+                isLoading={isLoading}
+                disabled={isLoading}
+              >
                 Importer {importedRows.length} prospects
               </Button>
             )}

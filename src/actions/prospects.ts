@@ -1291,6 +1291,26 @@ export async function bulkImportProspects(
   let autoRelancesCreated = 0;
   const errors: string[] = [];
 
+  interface ValidRowToInsert {
+    cleanCompany: string;
+    cleanPhone: string;
+    prospectionDate: Date | null;
+    sector: string;
+    address: string | null;
+    wilaya: string;
+    callStatus: string | null;
+    status: ProspectStatus;
+    rawState: string | null;
+    email: string | null;
+    response: string | null;
+    notes: string | null;
+    assignedToId: string;
+    isVirginProspect: boolean;
+    rowCallStatus?: string;
+  }
+
+  const validRowsToInsert: ValidRowToInsert[] = [];
+
   for (const row of rows) {
     if (!row.companyName || !row.phone) {
       skippedInvalid++;
@@ -1316,7 +1336,7 @@ export async function bulkImportProspects(
       continue;
     }
 
-    // Register in lookup set to prevent duplicates within the incoming Excel batch itself
+    // Enregistrement dans le Set pour éviter les doublons au sein du même lot
     for (const num of rowPhoneNumbers) {
       existingPhoneSet.add(num);
     }
@@ -1326,9 +1346,6 @@ export async function bulkImportProspects(
 
     const prospectionDate = parseExcelDate(row.date);
 
-    // DÉTECTION STRICTE LISTE VIERGE :
-    // Lorsqu'on importe une liste vierge (juste nom établissement, numéro, type/secteur),
-    // ne JAMAIS créer d'appel ni de relance automatique.
     const rawCallUpper = (row.callStatus || "").trim().toUpperCase();
     const rawStateUpper = (row.rawState || "").trim().toUpperCase();
 
@@ -1366,88 +1383,115 @@ export async function bulkImportProspects(
       }
     }
 
-    try {
-      const createdProspect = await prisma.prospect.create({
-        data: {
-          companyName: cleanCompany,
-          phone: cleanPhone,
-          prospectionDate: isVirginProspect ? null : prospectionDate,
-          sector: row.sector?.trim() || "Autre prestation",
-          address: row.address?.trim() || null,
-          wilaya: row.wilaya?.trim() || (row.address?.trim() ? row.address.trim() : "Alger"),
-          callStatus: isVirginProspect ? null : (row.callStatus?.trim() || null),
-          status: mappedStatus,
-          rawState: isVirginProspect ? null : (row.rawState?.trim() || null),
-          email: row.email?.trim() || null,
-          response: row.response?.trim() || null,
-          notes: row.notes?.trim() || null,
-          assignedToId: resolvedAssignedToId,
-          createdById: user.id,
-        },
-      });
+    validRowsToInsert.push({
+      cleanCompany,
+      cleanPhone,
+      prospectionDate,
+      sector: row.sector?.trim() || "Autre prestation",
+      address: row.address?.trim() || null,
+      wilaya: row.wilaya?.trim() || (row.address?.trim() ? row.address.trim() : "Alger"),
+      callStatus: isVirginProspect ? null : (row.callStatus?.trim() || null),
+      status: mappedStatus,
+      rawState: isVirginProspect ? null : (row.rawState?.trim() || null),
+      email: row.email?.trim() || null,
+      response: row.response?.trim() || null,
+      notes: row.notes?.trim() || null,
+      assignedToId: resolvedAssignedToId,
+      isVirginProspect,
+      rowCallStatus: row.callStatus?.trim(),
+    });
+  }
 
-      // Si liste vierge, on ne crée AUCUN historique d'appel
-      if (!isVirginProspect && row.callStatus && row.callStatus.trim()) {
-        const callData = mapCallStatusToCallData(row.callStatus);
-        if (callData) {
-          await prisma.call.create({
+  // Traitement simultané par micro-lots de 8 pour diviser le temps d'exécution par 8 sur la base Neon
+  const CONCURRENCY = 8;
+  for (let i = 0; i < validRowsToInsert.length; i += CONCURRENCY) {
+    const microBatch = validRowsToInsert.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      microBatch.map(async (item) => {
+        try {
+          const createdProspect = await prisma.prospect.create({
             data: {
-              prospectId: createdProspect.id,
-              userId: resolvedAssignedToId,
-              result: callData.result,
-              comment: `Import Excel: ${callData.comment}`,
-              durationSeconds: callData.durationSeconds,
-              calledAt: prospectionDate || new Date(),
+              companyName: item.cleanCompany,
+              phone: item.cleanPhone,
+              prospectionDate: item.isVirginProspect ? null : item.prospectionDate,
+              sector: item.sector,
+              address: item.address,
+              wilaya: item.wilaya,
+              callStatus: item.callStatus,
+              status: item.status,
+              rawState: item.rawState,
+              email: item.email,
+              response: item.response,
+              notes: item.notes,
+              assignedToId: item.assignedToId,
+              createdById: user.id,
             },
           });
+
+          // Si liste non vierge avec appel effectif
+          if (!item.isVirginProspect && item.rowCallStatus) {
+            const callData = mapCallStatusToCallData(item.rowCallStatus);
+            if (callData) {
+              await prisma.call.create({
+                data: {
+                  prospectId: createdProspect.id,
+                  userId: item.assignedToId,
+                  result: callData.result,
+                  comment: `Import Excel: ${callData.comment}`,
+                  durationSeconds: callData.durationSeconds,
+                  calledAt: item.prospectionDate || new Date(),
+                },
+              });
+            }
+          }
+
+          // Mise en relance automatique (+3j, +7j, +15j)
+          const isContactedEligible = !item.isVirginProspect && isProspectContactedForRelance(
+            item.rawState || undefined,
+            item.callStatus || undefined,
+            item.status
+          );
+
+          if (isContactedEligible) {
+            const now = Date.now();
+            await prisma.followUp.createMany({
+              data: [
+                {
+                  prospectId: createdProspect.id,
+                  userId: item.assignedToId,
+                  stepNumber: 1,
+                  scheduledAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
+                  status: FollowUpStatus.SCHEDULED,
+                  notes: "Relance Étape 1 (+3j) : Prospect contacté lors de l'import",
+                },
+                {
+                  prospectId: createdProspect.id,
+                  userId: item.assignedToId,
+                  stepNumber: 2,
+                  scheduledAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
+                  status: FollowUpStatus.SCHEDULED,
+                  notes: "Relance Étape 2 (+7j)",
+                },
+                {
+                  prospectId: createdProspect.id,
+                  userId: item.assignedToId,
+                  stepNumber: 3,
+                  scheduledAt: new Date(now + 15 * 24 * 60 * 60 * 1000),
+                  status: FollowUpStatus.SCHEDULED,
+                  notes: "Relance Étape 3 (+15j)",
+                },
+              ],
+            });
+            autoRelancesCreated++;
+          }
+
+          imported++;
+        } catch (err: any) {
+          errors.push(`Erreur pour ${item.cleanCompany}: ${err?.message || "inconnue"}`);
+          skippedInvalid++;
         }
-      }
-
-      // MISE EN RELANCE AUTOMATIQUE : Uniquement pour prospects contactés (hors liste vierge, pas de contact, pas intéressé)
-      const isContactedEligible = !isVirginProspect && isProspectContactedForRelance(
-        row.rawState,
-        row.callStatus,
-        mappedStatus
-      );
-
-      if (isContactedEligible) {
-        const now = Date.now();
-        await prisma.followUp.createMany({
-          data: [
-            {
-              prospectId: createdProspect.id,
-              userId: resolvedAssignedToId,
-              stepNumber: 1,
-              scheduledAt: new Date(now + 3 * 24 * 60 * 60 * 1000),
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 1 (+3j) : Prospect contacté lors de l'import",
-            },
-            {
-              prospectId: createdProspect.id,
-              userId: resolvedAssignedToId,
-              stepNumber: 2,
-              scheduledAt: new Date(now + 7 * 24 * 60 * 60 * 1000),
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 2 (+7j)",
-            },
-            {
-              prospectId: createdProspect.id,
-              userId: resolvedAssignedToId,
-              stepNumber: 3,
-              scheduledAt: new Date(now + 15 * 24 * 60 * 60 * 1000),
-              status: FollowUpStatus.SCHEDULED,
-              notes: "Relance Étape 3 (+15j)",
-            },
-          ],
-        });
-        autoRelancesCreated++;
-      }
-
-      imported++;
-    } catch (err: any) {
-      errors.push(`Erreur pour ${cleanCompany}: ${err?.message || "inconnue"}`);
-      skippedInvalid++;
-    }
+      })
+    );
   }
 
   await createAuditLog({
