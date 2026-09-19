@@ -1,7 +1,11 @@
+process.env.UV_THREADPOOL_SIZE = "1";
+process.env.NODE_ENV = "production";
+
 const http = require("http");
 const { parse } = require("url");
 const path = require("path");
 const fs = require("fs");
+
 
 // 0. Error logging to file for troubleshooting
 const debugLogFile = path.join(__dirname, "server_debug.log");

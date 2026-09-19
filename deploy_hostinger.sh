@@ -60,11 +60,13 @@ EOF
 echo "📦 Installation des modules..."
 npm install --omit=dev --no-fund --no-audit
 
-# 8. Démarrer avec PM2
-echo "🚀 Démarrage du serveur Node.js avec PM2..."
-pm2 delete boostera-erp 2>/dev/null || true
-pm2 start server.js --name "boostera-erp" --max-memory-restart 350M
-pm2 save
+# 8. Démarrer le serveur Node.js de manière ultra-légère
+echo "🚀 Démarrage du serveur Node.js..."
+killall -9 node pm2 2>/dev/null || true
+sleep 1
+nohup node --max-old-space-size=256 server.js > server_output.log 2>&1 &
+echo "✅ Serveur lancé en arrière-plan !"
+
 
 
 # 8. Nettoyer la page par défaut d'Hostinger dans le sous-domaine
