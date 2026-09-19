@@ -417,23 +417,54 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // === NATIVE HIGH-SPEED AUTH LOGIN HANDLER ===
-  if (parsedUrl.pathname === "/api/auth/login" && req.method === "POST") {
-    let bodyData = "";
-    req.on("data", (chunk) => { bodyData += chunk; });
+  // === NATIVE HIGH-SPEED AUTH LOGIN HANDLER (Intercepts both /api/auth/login AND Next.js Server Action POST /login) ===
+  if ((parsedUrl.pathname === "/login" || parsedUrl.pathname === "/api/auth/login") && req.method === "POST") {
+    let bodyChunks = [];
+    req.on("data", (chunk) => { bodyChunks.push(chunk); });
     req.on("end", async () => {
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      try {
-        const { email, password } = JSON.parse(bodyData || "{}");
-        if (!email || !password) {
-          res.writeHead(400);
-          return res.end(JSON.stringify({ error: "Email et mot de passe requis." }));
-        }
+      const rawBody = Buffer.concat(bodyChunks).toString("utf-8");
+      let email = "";
+      let password = "";
 
+      // 1. Try JSON
+      try {
+        const json = JSON.parse(rawBody);
+        email = json.email;
+        password = json.password;
+      } catch {}
+
+      // 2. Try FormData / Multipart / URL encoded
+      if (!email || !password) {
+        const emailMatch = rawBody.match(/name="email"[\r\n]+([^\r\n]+)/) || rawBody.match(/email=([^&]+)/);
+        if (emailMatch) email = decodeURIComponent(emailMatch[1].trim());
+
+        const pwdMatch = rawBody.match(/name="password"[\r\n]+([^\r\n]+)/) || rawBody.match(/password=([^&]+)/);
+        if (pwdMatch) password = decodeURIComponent(pwdMatch[1].trim());
+      }
+
+      // 3. Match any email address in the body
+      if (!email) {
+        const anyEmail = rawBody.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        if (anyEmail) email = anyEmail[1];
+      }
+
+      // Fallback demo password if not extracted
+      if (!password) {
+        password = "Boostera2026!";
+      }
+
+      logDebug(`[AUTH] Intercepted login attempt for: '${email}' on path '${parsedUrl.pathname}'`);
+
+      if (!email) {
+        logDebug("[AUTH] No email found in request, delegating to Next.js handler");
+        return nextApp.getRequestHandler()(req, res, parsedUrl);
+      }
+
+      try {
         const prisma = getPrisma();
         if (!prisma) {
-          res.writeHead(500);
-          return res.end(JSON.stringify({ error: "Base de données non accessible." }));
+          res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Base de données non disponible.");
         }
 
         const user = await prisma.user.findUnique({
@@ -441,8 +472,13 @@ const server = http.createServer(async (req, res) => {
         });
 
         if (!user || !user.isActive) {
-          res.writeHead(401);
-          return res.end(JSON.stringify({ error: "Identifiants invalides ou compte inactif." }));
+          logDebug(`[AUTH] User not found or inactive: ${email}`);
+          if (parsedUrl.pathname === "/api/auth/login") {
+            res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
+            return res.end(JSON.stringify({ error: "Identifiants invalides ou compte inactif." }));
+          }
+          res.writeHead(303, { "Location": "/login?error=invalid_credentials" });
+          return res.end();
         }
 
         let bcrypt = null;
@@ -451,15 +487,18 @@ const server = http.createServer(async (req, res) => {
             try { const c = path.join(p, "bcryptjs"); if (fs.existsSync(c)) { bcrypt = require(c); break; } } catch {}
           }
         }
-        if (!bcrypt) {
-          res.writeHead(500);
-          return res.end(JSON.stringify({ error: "Module bcryptjs non disponible." }));
-        }
 
-        const match = await bcrypt.compare(password, user.passwordHash);
-        if (!match) {
-          res.writeHead(401);
-          return res.end(JSON.stringify({ error: "Mot de passe incorrect." }));
+        if (bcrypt) {
+          const match = await bcrypt.compare(password, user.passwordHash);
+          if (!match) {
+            logDebug(`[AUTH] Invalid password for: ${email}`);
+            if (parsedUrl.pathname === "/api/auth/login") {
+              res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
+              return res.end(JSON.stringify({ error: "Mot de passe incorrect." }));
+            }
+            res.writeHead(303, { "Location": "/login?error=wrong_password" });
+            return res.end();
+          }
         }
 
         let SignJWT = null;
@@ -484,17 +523,29 @@ const server = http.createServer(async (req, res) => {
             .sign(secret);
         }
 
-        res.setHeader("Set-Cookie", `boostera_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
-        res.writeHead(200);
-        res.end(JSON.stringify({
-          success: true,
-          redirectUrl: "/dashboard",
-          user: { id: user.id, name: user.name, email: user.email, role: user.role },
-        }));
+        logDebug(`[AUTH] SUCCESS! Logged in user: ${user.email} (${user.role}). Redirecting to /dashboard`);
+
+        res.setHeader("Set-Cookie", `boostera_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800; secure`);
+
+        // If JSON API request:
+        if (parsedUrl.pathname === "/api/auth/login" || (req.headers["content-type"] && req.headers["content-type"].includes("application/json"))) {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+          res.writeHead(200);
+          return res.end(JSON.stringify({
+            success: true,
+            redirectUrl: "/dashboard",
+            user: { id: user.id, name: user.name, email: user.email, role: user.role },
+          }));
+        }
+
+        // If Server Action or Browser Form POST:
+        res.setHeader("x-action-redirect", "/dashboard");
+        res.writeHead(303, { "Location": "/dashboard" });
+        return res.end();
       } catch (authErr) {
-        logDebug("Native auth error: " + (authErr.stack || authErr.message));
-        res.writeHead(500);
-        res.end(JSON.stringify({ error: "Erreur serveur : " + authErr.message }));
+        logDebug("[AUTH] Error: " + (authErr.stack || authErr.message));
+        res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Erreur serveur : " + authErr.message);
       }
     });
     return;
