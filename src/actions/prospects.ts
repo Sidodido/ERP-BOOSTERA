@@ -132,11 +132,15 @@ export async function getProspects(params: ProspectFilterParams = {}) {
 }
 
 export async function getProspectsOverviewStats() {
-  await requireAuth();
+  const user = await requireAuth();
+  const isPrivileged = ["ADMIN", "SALES_DIRECTOR"].includes(user.role);
+  const userFilter: any = isPrivileged ? {} : { assignedToId: user.id };
+
   const [total, virgin, interested, converted, scheduledAppointments] = await Promise.all([
-    prisma.prospect.count(),
+    prisma.prospect.count({ where: userFilter }),
     prisma.prospect.count({
       where: {
+        ...userFilter,
         status: { not: ProspectStatus.CONVERTED },
         source: { not: "APPELS" },
         AND: [
@@ -157,14 +161,19 @@ export async function getProspectsOverviewStats() {
     }),
     prisma.prospect.count({
       where: {
+        ...userFilter,
         status: { in: [ProspectStatus.INTERESTED, ProspectStatus.MEETING_SCHEDULED] },
       },
     }),
     prisma.prospect.count({
-      where: { status: ProspectStatus.CONVERTED },
+      where: { ...userFilter, status: ProspectStatus.CONVERTED },
     }),
     prisma.appointment.count({
-      where: { status: "SCHEDULED", prospectId: { not: null } },
+      where: {
+        status: "SCHEDULED",
+        prospectId: { not: null },
+        ...(isPrivileged ? {} : { userId: user.id }),
+      },
     }),
   ]);
 
