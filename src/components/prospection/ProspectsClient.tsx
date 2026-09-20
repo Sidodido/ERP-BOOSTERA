@@ -749,9 +749,14 @@ export function ProspectsClient({
     setFeedbackMessage({ type: "success", text: "Prospect supprimé avec succès." });
   };
 
-  // Filter prospects : STRICTEMENT les lignes vierges (— Appel —, — Résultat —, Réponse..., Remarque...)
+  // Filter prospects : les prospects restent dans la file même en cours de saisie ;
+  // seul le clic sur "+ Appels" les retire et les déplace vers la section Appels
   const filtered = prospects.filter((p) => {
-    if (!isVirginProspect(p)) {
+    if (
+      p.rawState === "TRANSFERE_APPELS" ||
+      p.callStatus === "TRANSFERE_APPELS" ||
+      p.status === "CONVERTED"
+    ) {
       return false;
     }
 

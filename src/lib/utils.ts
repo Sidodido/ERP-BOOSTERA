@@ -575,12 +575,9 @@ export function mapCallStatusToCallData(status?: string | null): {
  * (non encore transféré vers les appels et la base de données via le clic sur le bouton +)
  */
 export function isVirginProspect(p: {
-  status: string;
+  status?: string | null;
   callStatus?: string | null;
   rawState?: string | null;
-  _count?: { calls?: number; appointments?: number };
-  calls?: any[];
-  appointments?: any[];
   response?: string | null;
   notes?: string | null;
 }): boolean {
@@ -597,8 +594,27 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // Le prospect reste dans la file de prospection tant qu'il n'a pas été transféré via (+ Appels)
+  // 3. Statut d'appel : doit être vierge ("— Appel —")
+  const rawCall = (p.callStatus || "").trim().toUpperCase();
+  if (rawCall && !["—", "-", "VIERGE", "AUCUN", "NON EFFECTUE", "NON EFFECTUÉ"].includes(rawCall)) {
+    return false;
+  }
+
+  // 4. Résultat d'appel : doit être vierge ("— Résultat —")
+  const rawState = (p.rawState || "").trim().toUpperCase();
+  if (rawState && !["NOUVEAU", "NEW", "AUCUN", "VIERGE", "—", "-"].includes(rawState)) {
+    return false;
+  }
+
+  // 5. Réponse : doit être vide ("Réponse...")
+  if (p.response && p.response.trim()) {
+    return false;
+  }
+
+  // 6. Remarque : doit être vide ("Remarque...")
+  if (p.notes && p.notes.trim()) {
+    return false;
+  }
+
   return true;
 }
-
-

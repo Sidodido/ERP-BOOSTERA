@@ -42,6 +42,42 @@ export async function getProspects(params: ProspectFilterParams = {}) {
       {
         OR: [
           { rawState: null },
+          { rawState: "" },
+          { rawState: "—" },
+          { rawState: "-" },
+          { rawState: "VIERGE" },
+          { rawState: "AUCUN" },
+          { rawState: "NOUVEAU" },
+          { rawState: "NEW" },
+        ],
+      },
+      {
+        OR: [
+          { callStatus: null },
+          { callStatus: "" },
+          { callStatus: "—" },
+          { callStatus: "-" },
+          { callStatus: "VIERGE" },
+          { callStatus: "AUCUN" },
+          { callStatus: "NON EFFECTUE" },
+          { callStatus: "NON EFFECTUÉ" },
+        ],
+      },
+      {
+        OR: [
+          { response: null },
+          { response: "" },
+        ],
+      },
+      {
+        OR: [
+          { notes: null },
+          { notes: "" },
+        ],
+      },
+      {
+        OR: [
+          { rawState: null },
           { rawState: { not: "TRANSFERE_APPELS" } },
         ],
       },
@@ -141,6 +177,42 @@ export async function getProspectsOverviewStats() {
           {
             OR: [
               { rawState: null },
+              { rawState: "" },
+              { rawState: "—" },
+              { rawState: "-" },
+              { rawState: "VIERGE" },
+              { rawState: "AUCUN" },
+              { rawState: "NOUVEAU" },
+              { rawState: "NEW" },
+            ],
+          },
+          {
+            OR: [
+              { callStatus: null },
+              { callStatus: "" },
+              { callStatus: "—" },
+              { callStatus: "-" },
+              { callStatus: "VIERGE" },
+              { callStatus: "AUCUN" },
+              { callStatus: "NON EFFECTUE" },
+              { callStatus: "NON EFFECTUÉ" },
+            ],
+          },
+          {
+            OR: [
+              { response: null },
+              { response: "" },
+            ],
+          },
+          {
+            OR: [
+              { notes: null },
+              { notes: "" },
+            ],
+          },
+          {
+            OR: [
+              { rawState: null },
               { rawState: { not: "TRANSFERE_APPELS" } },
             ],
           },
@@ -185,10 +257,35 @@ export async function getCalledProspects(params: ProspectFilterParams = {}) {
   const whereClause: any = {
     AND: [
       isPrivileged ? {} : { assignedToId: user.id },
+      { status: { not: ProspectStatus.CONVERTED } },
       {
         OR: [
           { rawState: "TRANSFERE_APPELS" },
           { callStatus: "TRANSFERE_APPELS" },
+          {
+            AND: [
+              { callStatus: { not: null } },
+              { callStatus: { notIn: ["", "—", "-", "VIERGE", "AUCUN", "NON EFFECTUE", "NON EFFECTUÉ"] } },
+            ],
+          },
+          {
+            AND: [
+              { rawState: { not: null } },
+              { rawState: { notIn: ["", "—", "-", "VIERGE", "AUCUN", "NOUVEAU", "NEW"] } },
+            ],
+          },
+          {
+            AND: [
+              { response: { not: null } },
+              { response: { not: "" } },
+            ],
+          },
+          {
+            AND: [
+              { notes: { not: null } },
+              { notes: { not: "" } },
+            ],
+          },
         ],
       },
     ],
