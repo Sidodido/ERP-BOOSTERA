@@ -60,6 +60,8 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
       const saved = localStorage.getItem("crm_followups_view_mode");
       if (saved === "cards" || saved === "list") {
         setViewMode(saved);
+      } else if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setViewMode("cards");
       }
     } catch {}
   }, []);

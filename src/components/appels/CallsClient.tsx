@@ -652,30 +652,30 @@ export function CallsClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           {/* View Mode Toggle */}
-          <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
+          <div className="flex flex-wrap bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
               onClick={() => setActiveTab("prospects10")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 activeTab === "prospects10"
                   ? "bg-neutral-800 text-white shadow-xs"
                   : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
               <Table className="w-3.5 h-3.5" />
-              <span>Tableau 10 Colonnes</span>
+              <span>Tableau (10 Col)</span>
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 activeTab === "history"
                   ? "bg-neutral-800 text-white shadow-xs"
                   : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>Historique Récent ({calls.length})</span>
+              <span>Historique ({calls.length})</span>
             </button>
           </div>
 
@@ -685,10 +685,10 @@ export function CallsClient({
               setActiveProspect(null);
               setCallModalOpen(true);
             }}
-            className="gap-1.5 shadow-md shadow-blue-500/20"
+            className="gap-1.5 shadow-md shadow-blue-500/20 text-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Enregistrer un Appel</span>
+            <span>+ Appel</span>
           </Button>
         </div>
       </div>
@@ -824,8 +824,8 @@ export function CallsClient({
           </div>
 
           {/* TABLEAU EXACTEMENT IDENTIQUE A PROSPECTION */}
-          <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-xl">
-            <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700">
+          <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-xl w-full min-w-0">
+            <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700 min-w-0">
               <table className="w-full text-left text-xs whitespace-nowrap">
                 <thead className="bg-neutral-950/90 border-b border-neutral-800 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                   <tr>

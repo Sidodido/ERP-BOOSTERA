@@ -118,38 +118,38 @@ export function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 sticky top-0 z-20 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/80 px-4 sm:px-6 flex items-center justify-between gap-3">
+    <header className="h-16 sticky top-0 z-20 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3 w-full">
       {/* Left side: Hamburger on mobile + Search Input */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
         <button
           type="button"
           onClick={toggleMobile}
-          className="p-2 -ml-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-xl md:hidden transition-colors cursor-pointer"
+          className="p-2 -ml-1 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-xl md:hidden transition-colors cursor-pointer shrink-0"
           title="Menu de navigation"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         {/* Search Input */}
-        <div className="relative w-44 sm:w-80">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+        <div className="relative w-32 xs:w-40 sm:w-80 transition-all">
+          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="Recherche globale..."
-            className="w-full h-9 pl-9 pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
+            placeholder="Recherche..."
+            className="w-full h-8.5 sm:h-9 pl-8 sm:pl-9 pr-2.5 sm:pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
           />
         </div>
       </div>
 
 
       {/* Right Actions */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         {/* Pointage Rapide */}
         <HeaderAttendancePill />
 
-        {/* Role Badge */}
+        {/* Role Badge (Masqué sur mobile pour éviter la surcharge) */}
         {userRole && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] font-semibold text-blue-400">
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] font-semibold text-blue-400">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>{userRole}</span>
           </div>
@@ -171,7 +171,7 @@ export function Header({ userName, userRole }: HeaderProps) {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-92 sm:w-96 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-4 space-y-3 z-50 animate-in fade-in zoom-in-95 max-h-[85vh] flex flex-col">
+            <div className="absolute right-[-1rem] sm:right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-4 space-y-3 z-50 animate-in fade-in zoom-in-95 max-h-[85vh] flex flex-col">
               <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-neutral-100">Notifications</span>

@@ -49,31 +49,31 @@ export function Modal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
       <div
         className={cn(
-          "w-full bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150",
+          "w-full bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150",
           maxWidthStyles[maxWidth]
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
-          <div>
-            <h3 className="text-base font-semibold text-neutral-100">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-neutral-800 shrink-0">
+          <div className="min-w-0 pr-2">
+            <h3 className="text-sm sm:text-base font-semibold text-neutral-100 truncate">{title}</h3>
             {description && (
-              <p className="text-xs text-neutral-400 mt-0.5">{description}</p>
+              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5 line-clamp-1">{description}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-4 custom-scrollbar">{children}</div>
+        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar min-w-0">{children}</div>
       </div>
     </div>
   );

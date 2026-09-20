@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   APPOINTMENT_TYPES,
@@ -125,6 +125,24 @@ export function AppointmentsClient({
   const [appointments, setAppointments] = useState<AppointmentItem[]>(initialAppointments);
   const [followUps, setFollowUps] = useState<any[]>(initialFollowUps);
   const [viewMode, setViewMode] = useState<"calendar" | "list" | "relances_rdv">("calendar");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_appointments_view_mode");
+      if (saved === "calendar" || saved === "list" || saved === "relances_rdv") {
+        setViewMode(saved as any);
+      } else if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setViewMode("list");
+      }
+    } catch {}
+  }, []);
+
+  const handleSetViewMode = (mode: "calendar" | "list" | "relances_rdv") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("crm_appointments_view_mode", mode);
+    } catch {}
+  };
 
   // Filters for Relances Post-RDV
   const [relanceSearch, setRelanceSearch] = useState("");
@@ -726,41 +744,41 @@ export function AppointmentsClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           {/* View Toggle */}
-          <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
+          <div className="flex flex-wrap bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
               onClick={() => setViewMode("calendar")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 viewMode === "calendar"
                   ? "bg-neutral-800 text-white shadow-xs"
                   : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
               <CalendarDays className="w-3.5 h-3.5" />
-              <span>Vue Calendrier</span>
+              <span>Calendrier</span>
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 viewMode === "list"
                   ? "bg-neutral-800 text-white shadow-xs"
                   : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
               <List className="w-3.5 h-3.5" />
-              <span>Vue Liste ({appointments.length})</span>
+              <span>Liste ({appointments.length})</span>
             </button>
             <button
               onClick={() => setViewMode("relances_rdv")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 viewMode === "relances_rdv"
-                  ? "bg-purple-600 text-white shadow-xs"
+                  ? "bg-neutral-800 text-white shadow-xs"
                   : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>Relances Post-RDV ({followUps.length})</span>
+              <span>Relances ({followUps.length})</span>
             </button>
           </div>
 
@@ -835,20 +853,23 @@ export function AppointmentsClient({
             </div>
           </div>
 
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 text-center">
-            {WEEK_DAYS.map((wDay) => (
-              <div
-                key={wDay}
-                className="py-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 bg-neutral-950/60 rounded-lg border border-neutral-800/50"
-              >
-                {wDay}
+          {/* Calendar Day Grid Scroll Wrapper */}
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700 pb-2 w-full min-w-0">
+            <div className="min-w-[620px] space-y-2">
+              {/* Weekday Headers */}
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {WEEK_DAYS.map((wDay) => (
+                  <div
+                    key={wDay}
+                    className="py-2 text-[11px] font-bold uppercase tracking-wider text-neutral-400 bg-neutral-950/60 rounded-lg border border-neutral-800/50"
+                  >
+                    {wDay}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          {/* Calendar Day Cells Grid */}
-          <div className="grid grid-cols-7 gap-1.5">
+              {/* Calendar Day Cells Grid */}
+              <div className="grid grid-cols-7 gap-1.5">
             {calendarDays.map((dayItem, idx) => {
               const dayNum = dayItem.date.getDate();
 
@@ -950,6 +971,8 @@ export function AppointmentsClient({
                 </div>
               );
             })}
+              </div>
+            </div>
           </div>
         </div>
       )}

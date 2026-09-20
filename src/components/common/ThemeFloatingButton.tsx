@@ -16,10 +16,10 @@ export function ThemeFloatingButton() {
   );
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 select-none">
+    <div className="fixed bottom-20 right-3 sm:bottom-4 sm:right-4 z-40 flex flex-col items-end gap-2 select-none">
       {/* Expanded Palette Dock */}
       {expanded && (
-        <div className="p-3 rounded-2xl bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/80 shadow-2xl space-y-2.5 animate-in fade-in slide-in-from-bottom-3 duration-200 w-72">
+        <div className="p-3 rounded-2xl bg-neutral-900/95 backdrop-blur-xl border border-neutral-700/80 shadow-2xl space-y-2.5 animate-in fade-in slide-in-from-bottom-3 duration-200 w-[calc(100vw-2rem)] sm:w-72 max-w-xs">
           <div className="flex items-center justify-between px-1 pb-1.5 border-b border-neutral-800 text-[11px]">
             <span className="font-bold text-neutral-200 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-amber-400" />

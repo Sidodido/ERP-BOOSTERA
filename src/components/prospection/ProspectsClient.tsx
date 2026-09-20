@@ -130,6 +130,17 @@ export function ProspectsClient({
   const [selectedCommercial, setSelectedCommercial] = useState("");
   const [tableViewMode, setTableViewMode] = useState<"table10" | "cards">("table10");
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_prospection_view_mode");
+      if (saved === "cards" || saved === "table10") {
+        setTableViewMode(saved);
+      } else if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setTableViewMode("cards");
+      }
+    } catch {}
+  }, []);
+
   // Modals state
   const [newModalOpen, setNewModalOpen] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
@@ -899,7 +910,7 @@ export function ProspectsClient({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {/* Badge Fiches Vierges */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900/90 border border-amber-500/30 rounded-xl text-xs shadow-xs">
             <Flame className="w-3.5 h-3.5 text-amber-400" />
@@ -909,8 +920,11 @@ export function ProspectsClient({
           {/* View Mode Toggle */}
           <div className="flex bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
             <button
-              onClick={() => setTableViewMode("table10")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              onClick={() => {
+                setTableViewMode("table10");
+                try { localStorage.setItem("crm_prospection_view_mode", "table10"); } catch {}
+              }}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 tableViewMode === "table10" ? "bg-neutral-800 text-white shadow-xs" : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
@@ -918,8 +932,11 @@ export function ProspectsClient({
               <span>Tableau</span>
             </button>
             <button
-              onClick={() => setTableViewMode("cards")}
-              className={`flex items-center gap-1.5 px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+              onClick={() => {
+                setTableViewMode("cards");
+                try { localStorage.setItem("crm_prospection_view_mode", "cards"); } catch {}
+              }}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
                 tableViewMode === "cards" ? "bg-neutral-800 text-white shadow-xs" : "text-neutral-400 hover:text-neutral-200"
               }`}
             >
@@ -932,19 +949,19 @@ export function ProspectsClient({
             variant="outline"
             size="sm"
             onClick={() => setImportModalOpen(true)}
-            className="gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 cursor-pointer"
+            className="gap-1.5 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 cursor-pointer text-xs"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Importer Excel</span>
+            <span className="hidden xs:inline">Importer</span> Excel
           </Button>
 
           <Button
             size="sm"
             onClick={() => setNewModalOpen(true)}
-            className="gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer"
+            className="gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer text-xs"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Nouveau Prospect</span>
+            <span>Nouveau</span>
           </Button>
         </div>
       </div>
@@ -1074,8 +1091,8 @@ export function ProspectsClient({
 
       {/* VUE 1 : TABLEAU 10 COLONNES + COLONNE COMMERCIALE */}
       {tableViewMode === "table10" && (
-        <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-xl">
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700">
+        <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-2xl overflow-hidden shadow-xl w-full min-w-0">
+          <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700 min-w-0">
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead className="bg-neutral-950/90 border-b border-neutral-800 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                 <tr>

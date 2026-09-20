@@ -58,7 +58,7 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-neutral-900 to-indigo-950/30 border border-blue-500/20 shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-neutral-900 to-indigo-950/30 border border-blue-500/20 shadow-lg">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 text-[10px] font-bold uppercase tracking-wider border border-blue-500/30">
@@ -66,7 +66,7 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
             </span>
             <span className="text-xs text-neutral-400 capitalize">{currentDate}</span>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-100 mt-1 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-neutral-100 mt-1 flex items-center gap-2">
             Bonjour {userName || "Commercial"} 👋
           </h1>
           <p className="text-xs text-neutral-400 mt-0.5">
@@ -75,23 +75,23 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
         </div>
 
         {/* Quick Actions */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <Link href="/prospection?modal=new">
-            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 cursor-pointer">
+            <Button size="sm" className="gap-1.5 bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 cursor-pointer text-xs">
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Nouveau Prospect</span>
             </Button>
           </Link>
           <Link href="/appels">
-            <Button variant="secondary" size="sm" className="gap-1.5 border-neutral-700 cursor-pointer">
+            <Button variant="secondary" size="sm" className="gap-1.5 border-neutral-700 cursor-pointer text-xs">
               <PhoneOutgoing className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Journal Appels</span>
+              <span>Appels</span>
             </Button>
           </Link>
           <Link href="/rendez-vous">
-            <Button variant="outline" size="sm" className="gap-1.5 border-neutral-700 cursor-pointer">
+            <Button variant="outline" size="sm" className="gap-1.5 border-neutral-700 cursor-pointer text-xs">
               <Calendar className="w-3.5 h-3.5 text-purple-400" />
-              <span>Rendez-vous</span>
+              <span>RDV</span>
             </Button>
           </Link>
         </div>
@@ -119,7 +119,7 @@ export function CommercialDashboard({ metrics, userName }: CommercialDashboardPr
       />
 
       {/* Row 1: Key Commercial KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3.5">
         <KpiCard
           title="Mes Prospects"
           value={data.myProspectsCount}

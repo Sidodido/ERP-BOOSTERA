@@ -525,8 +525,8 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
       </div>
 
       {/* Clients Table */}
-      <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
+      <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl overflow-hidden shadow-xl w-full min-w-0">
+        <div className="w-full overflow-x-auto scrollbar-thin scrollbar-thumb-neutral-700 min-w-0">
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-950/80 border-b border-neutral-800 text-neutral-400">
               <tr>
