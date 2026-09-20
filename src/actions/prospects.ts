@@ -36,9 +36,22 @@ export async function getProspects(params: ProspectFilterParams = {}) {
   }
 
   if (params.onlyVirgin) {
-    whereClause.rawState = { not: "TRANSFERE_APPELS" };
-    whereClause.callStatus = { not: "TRANSFERE_APPELS" };
-    whereClause.status = { not: ProspectStatus.CONVERTED };
+    whereClause.AND = whereClause.AND || [];
+    whereClause.AND.push(
+      { status: { not: ProspectStatus.CONVERTED } },
+      {
+        OR: [
+          { rawState: null },
+          { rawState: { not: "TRANSFERE_APPELS" } },
+        ],
+      },
+      {
+        OR: [
+          { callStatus: null },
+          { callStatus: { not: "TRANSFERE_APPELS" } },
+        ],
+      }
+    );
   } else if (params.status) {
     whereClause.status = params.status;
   }
@@ -123,9 +136,21 @@ export async function getProspectsOverviewStats() {
     prisma.prospect.count(),
     prisma.prospect.count({
       where: {
-        rawState: { not: "TRANSFERE_APPELS" },
-        callStatus: { not: "TRANSFERE_APPELS" },
         status: { not: ProspectStatus.CONVERTED },
+        AND: [
+          {
+            OR: [
+              { rawState: null },
+              { rawState: { not: "TRANSFERE_APPELS" } },
+            ],
+          },
+          {
+            OR: [
+              { callStatus: null },
+              { callStatus: { not: "TRANSFERE_APPELS" } },
+            ],
+          },
+        ],
       },
     }),
     prisma.prospect.count({

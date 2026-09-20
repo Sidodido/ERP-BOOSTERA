@@ -584,7 +584,7 @@ export function isVirginProspect(p: {
   response?: string | null;
   notes?: string | null;
 }): boolean {
-  // Condition stricte : seul le clic sur "+ Appel" déplace le prospect vers la section Appels
+  // 1. Déplacé explicitement vers les appels via le clic sur le bouton (+ Appels)
   if (
     p.rawState === "TRANSFERE_APPELS" ||
     p.callStatus === "TRANSFERE_APPELS"
@@ -592,11 +592,12 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // Déjà converti en client actif
+  // 2. Déjà converti en client actif
   if (p.status === "CONVERTED") {
     return false;
   }
 
+  // Le prospect reste dans la file de prospection tant qu'il n'a pas été transféré via (+ Appels)
   return true;
 }
 
