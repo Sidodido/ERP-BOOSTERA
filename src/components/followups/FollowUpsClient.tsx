@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { FOLLOWUP_STATUSES } from "@/lib/constants";
 import { FollowUpStatus } from "@prisma/client";
-import { formatDate, toLocalDateString } from "@/lib/utils";
+import { formatDate, toLocalDateString, buildWhatsAppUrl } from "@/lib/utils";
+import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
 import { trackCommunicationClick } from "@/lib/tracking";
 import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
 import { Modal } from "@/components/ui/Modal";
@@ -587,21 +588,43 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         <Phone className="w-3 h-3" />
                         <span>Téléphone :</span>
                       </span>
-                      <a
-                        href={`tel:${item.prospect.phone}`}
-                        onClick={() => {
-                          trackCommunicationClick({
-                            type: "PHONE",
-                            targetName: item.prospect.companyName || item.prospect.contactName,
-                            phone: item.prospect.phone,
-                            entityType: "PROSPECT",
-                            entityId: item.prospect.id,
-                          });
-                        }}
-                        className="text-emerald-400 font-mono font-semibold hover:underline flex items-center gap-1"
-                      >
-                        {item.prospect.phone}
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={`tel:${item.prospect.phone}`}
+                          onClick={() => {
+                            trackCommunicationClick({
+                              type: "PHONE",
+                              targetName: item.prospect.companyName || item.prospect.contactName,
+                              phone: item.prospect.phone,
+                              entityType: "PROSPECT",
+                              entityId: item.prospect.id,
+                            });
+                          }}
+                          className="text-emerald-400 font-mono font-semibold hover:underline flex items-center gap-1"
+                        >
+                          {item.prospect.phone}
+                        </a>
+                        {item.prospect.phone && (
+                          <a
+                            href={buildWhatsAppUrl(item.prospect.phone, item.prospect.companyName, item.prospect.contactName)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => {
+                              trackCommunicationClick({
+                                type: "WHATSAPP",
+                                targetName: item.prospect.companyName || item.prospect.contactName,
+                                phone: item.prospect.phone,
+                                entityType: "PROSPECT",
+                                entityId: item.prospect.id,
+                              });
+                            }}
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] transition-all shadow-2xs hover:scale-110 cursor-pointer shrink-0"
+                            title={`Envoyer un WhatsApp à ${item.prospect.companyName}`}
+                          >
+                            <WhatsAppIcon className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -792,24 +815,47 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         )}
                       </td>
 
-                      {/* 2. Téléphone */}
+                      {/* 2. Téléphone & WhatsApp */}
                       <td className="py-3 px-3 font-mono text-[11px]">
-                        <a
-                          href={`tel:${item.prospect.phone}`}
-                          onClick={() => {
-                            trackCommunicationClick({
-                              type: "PHONE",
-                              targetName: item.prospect.companyName || item.prospect.contactName,
-                              phone: item.prospect.phone,
-                              entityType: "PROSPECT",
-                              entityId: item.prospect.id,
-                            });
-                          }}
-                          className="text-emerald-400 hover:underline flex items-center gap-1"
-                        >
-                          <Phone className="w-3 h-3" />
-                          <span>{item.prospect.phone}</span>
-                        </a>
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`tel:${item.prospect.phone}`}
+                            onClick={() => {
+                              trackCommunicationClick({
+                                type: "PHONE",
+                                targetName: item.prospect.companyName || item.prospect.contactName,
+                                phone: item.prospect.phone,
+                                entityType: "PROSPECT",
+                                entityId: item.prospect.id,
+                              });
+                            }}
+                            className="text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>{item.prospect.phone}</span>
+                          </a>
+
+                          {item.prospect.phone && (
+                            <a
+                              href={buildWhatsAppUrl(item.prospect.phone, item.prospect.companyName, item.prospect.contactName)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => {
+                                trackCommunicationClick({
+                                  type: "WHATSAPP",
+                                  targetName: item.prospect.companyName || item.prospect.contactName,
+                                  phone: item.prospect.phone,
+                                  entityType: "PROSPECT",
+                                  entityId: item.prospect.id,
+                                });
+                              }}
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] transition-all shadow-2xs hover:scale-110 cursor-pointer shrink-0"
+                              title={`Envoyer un message WhatsApp à ${item.prospect.companyName}`}
+                            >
+                              <WhatsAppIcon className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
                       </td>
 
                       {/* 3. Secteur */}
@@ -1099,7 +1145,20 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-400">Téléphone :</span>
-                <span className="font-mono text-emerald-400">{targetFollowUp.prospect.phone}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-emerald-400">{targetFollowUp.prospect.phone}</span>
+                  {targetFollowUp.prospect.phone && (
+                    <a
+                      href={buildWhatsAppUrl(targetFollowUp.prospect.phone, targetFollowUp.prospect.companyName, targetFollowUp.prospect.contactName)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 transition-all cursor-pointer"
+                      title="Ouvrir WhatsApp"
+                    >
+                      <WhatsAppIcon className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
               </div>
               {targetFollowUp.prospect.notes && (
                 <div className="flex items-start justify-between gap-2 pt-1 border-t border-neutral-900">
