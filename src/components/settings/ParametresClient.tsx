@@ -986,17 +986,23 @@ export function ParametresClient({
                         {u.phone || "—"}
                       </td>
                       <td className="py-3 px-4">
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleUpdateUserRole(u.id, e.target.value as Role)}
-                          className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
-                        >
-                          {ROLES.map((r) => (
-                            <option key={r.key} value={r.key}>
-                              {r.label}
-                            </option>
-                          ))}
-                        </select>
+                        {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/40 text-xs font-medium text-indigo-300">
+                            <Shield className="w-3 h-3 text-indigo-400" /> Administrateur
+                          </span>
+                        ) : (
+                          <select
+                            value={u.role}
+                            onChange={(e) => handleUpdateUserRole(u.id, e.target.value as Role)}
+                            className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                          >
+                            {ROLES.map((r) => (
+                              <option key={r.key} value={r.key}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span
@@ -1010,16 +1016,26 @@ export function ParametresClient({
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => handleToggleUserActive(u.id, u.isActive)}
-                          className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                            u.isActive
-                              ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
-                              : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
-                          }`}
-                        >
-                          {u.isActive ? "Désactiver" : "Réactiver"}
-                        </button>
+                        {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-neutral-400 bg-neutral-800/60 border border-neutral-700/40"
+                            title="Compte administrateur protégé : impossible à désactiver"
+                          >
+                            <Lock className="w-3 h-3 text-amber-400" />
+                            Protégé
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleToggleUserActive(u.id, u.isActive)}
+                            className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                              u.isActive
+                                ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
+                                : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
+                            }`}
+                          >
+                            {u.isActive ? "Désactiver" : "Réactiver"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

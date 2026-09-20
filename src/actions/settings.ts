@@ -305,6 +305,18 @@ export async function updateUserAction(
     throw new Error("Permission refusée");
   }
 
+  const targetUser = await prisma.user.findUnique({ where: { id } });
+  if (!targetUser) throw new Error("Utilisateur introuvable");
+
+  if (targetUser.role === "ADMIN" || targetUser.email === "admin@boostera.dz") {
+    if (data.isActive === false) {
+      throw new Error("Impossible de désactiver le compte administrateur.");
+    }
+    if (data.role && data.role !== "ADMIN") {
+      throw new Error("Impossible de modifier le rôle du compte administrateur.");
+    }
+  }
+
   await prisma.user.update({
     where: { id },
     data,
