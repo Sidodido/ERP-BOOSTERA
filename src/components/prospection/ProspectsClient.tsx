@@ -1014,20 +1014,63 @@ export function ProspectsClient({
           ))}
         </select>
 
-        <select
-          value={selectedCommercial}
-          onChange={(e) => setSelectedCommercial(e.target.value)}
-          className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
-        >
-          <option value="">Tous les commerciaux</option>
-          <option value="unassigned">Non assigné</option>
-          {salesUsers.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name}
-            </option>
-          ))}
-        </select>
+        {canDelete ? (
+          <select
+            value={selectedCommercial}
+            onChange={(e) => setSelectedCommercial(e.target.value)}
+            className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Tous les commerciaux</option>
+            <option value="unassigned">Non assigné</option>
+            {salesUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div className="h-9 px-3 text-xs bg-neutral-900/90 border border-neutral-800 rounded-xl text-emerald-400 flex items-center gap-1.5 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Ma liste vierge ({filtered.length})</span>
+          </div>
+        )}
       </div>
+
+      {/* Onglets rapides par commercial pour isoler strictement chaque liste vierge */}
+      {canDelete && (
+        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-neutral-900/60 border border-neutral-800/80 rounded-xl text-xs">
+          <span className="text-[11px] font-semibold text-neutral-400 mr-1">Filtrer par commercial :</span>
+          <button
+            onClick={() => setSelectedCommercial("")}
+            className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer text-xs border ${
+              selectedCommercial === ""
+                ? "bg-blue-600 text-white border-blue-500 shadow-xs"
+                : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
+            }`}
+          >
+            Tous ({prospects.length})
+          </button>
+          {salesUsers.map((u) => {
+            const countForUser = prospects.filter((p) => p.assignedTo?.id === u.id).length;
+            return (
+              <button
+                key={u.id}
+                onClick={() => setSelectedCommercial(u.id)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer text-xs border flex items-center gap-1.5 ${
+                  selectedCommercial === u.id
+                    ? "bg-emerald-600 text-white border-emerald-500 shadow-xs"
+                    : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-white"
+                }`}
+              >
+                <span>{u.name}</span>
+                <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-neutral-800 text-neutral-300 font-bold">
+                  {countForUser}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* VUE 1 : TABLEAU 10 COLONNES + COLONNE COMMERCIALE */}
       {tableViewMode === "table10" && (
