@@ -26,7 +26,6 @@
   "/production/page": "app/production/page.js",
   "/projets/[id]/page": "app/projets/[id]/page.js",
   "/projets/page": "app/projets/page.js",
-  "/prospection/page": "app/prospection/page.js",
   "/relances/page": "app/relances/page.js",
   "/rendez-vous/page": "app/rendez-vous/page.js",
   "/rentabilite/page": "app/rentabilite/page.js",
@@ -36,5 +35,6 @@
   "/activites/page": "app/activites/page.js",
   "/assistant-ia/page": "app/assistant-ia/page.js",
   "/base-prospects/page": "app/base-prospects/page.js",
-  "/calendrier-technicien/page": "app/calendrier-technicien/page.js"
+  "/calendrier-technicien/page": "app/calendrier-technicien/page.js",
+  "/prospection/page": "app/prospection/page.js"
 }

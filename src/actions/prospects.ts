@@ -39,42 +39,7 @@ export async function getProspects(params: ProspectFilterParams = {}) {
     whereClause.AND = whereClause.AND || [];
     whereClause.AND.push(
       { status: { not: ProspectStatus.CONVERTED } },
-      {
-        OR: [
-          { rawState: null },
-          { rawState: "" },
-          { rawState: "—" },
-          { rawState: "-" },
-          { rawState: "VIERGE" },
-          { rawState: "AUCUN" },
-          { rawState: "NOUVEAU" },
-          { rawState: "NEW" },
-        ],
-      },
-      {
-        OR: [
-          { callStatus: null },
-          { callStatus: "" },
-          { callStatus: "—" },
-          { callStatus: "-" },
-          { callStatus: "VIERGE" },
-          { callStatus: "AUCUN" },
-          { callStatus: "NON EFFECTUE" },
-          { callStatus: "NON EFFECTUÉ" },
-        ],
-      },
-      {
-        OR: [
-          { response: null },
-          { response: "" },
-        ],
-      },
-      {
-        OR: [
-          { notes: null },
-          { notes: "" },
-        ],
-      },
+      { source: { not: "APPELS" } },
       {
         OR: [
           { rawState: null },
@@ -173,43 +138,8 @@ export async function getProspectsOverviewStats() {
     prisma.prospect.count({
       where: {
         status: { not: ProspectStatus.CONVERTED },
+        source: { not: "APPELS" },
         AND: [
-          {
-            OR: [
-              { rawState: null },
-              { rawState: "" },
-              { rawState: "—" },
-              { rawState: "-" },
-              { rawState: "VIERGE" },
-              { rawState: "AUCUN" },
-              { rawState: "NOUVEAU" },
-              { rawState: "NEW" },
-            ],
-          },
-          {
-            OR: [
-              { callStatus: null },
-              { callStatus: "" },
-              { callStatus: "—" },
-              { callStatus: "-" },
-              { callStatus: "VIERGE" },
-              { callStatus: "AUCUN" },
-              { callStatus: "NON EFFECTUE" },
-              { callStatus: "NON EFFECTUÉ" },
-            ],
-          },
-          {
-            OR: [
-              { response: null },
-              { response: "" },
-            ],
-          },
-          {
-            OR: [
-              { notes: null },
-              { notes: "" },
-            ],
-          },
           {
             OR: [
               { rawState: null },
@@ -806,6 +736,7 @@ export async function transferProspectToAppelsAction(prospectId: string) {
       status: prospect.status === ProspectStatus.NEW ? ProspectStatus.CONTACTED : prospect.status,
       callStatus: prospect.callStatus || "A CONTACTER",
       rawState: "TRANSFERE_APPELS",
+      source: "APPELS",
       assignedToId: prospect.assignedToId || user.id,
       prospectionDate: prospect.prospectionDate || new Date(),
     },

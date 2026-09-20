@@ -26,7 +26,6 @@
   "/production/page": "/production",
   "/projets/[id]/page": "/projets/[id]",
   "/projets/page": "/projets",
-  "/prospection/page": "/prospection",
   "/relances/page": "/relances",
   "/rendez-vous/page": "/rendez-vous",
   "/rentabilite/page": "/rentabilite",
@@ -36,5 +35,6 @@
   "/activites/page": "/activites",
   "/assistant-ia/page": "/assistant-ia",
   "/base-prospects/page": "/base-prospects",
-  "/calendrier-technicien/page": "/calendrier-technicien"
+  "/calendrier-technicien/page": "/calendrier-technicien",
+  "/prospection/page": "/prospection"
 }
