@@ -39,6 +39,10 @@ interface FollowUpItem {
     phone: string;
     sector: string;
     wilaya: string;
+    notes?: string | null;
+    response?: string | null;
+    rawState?: string | null;
+    callStatus?: string | null;
   };
   user: { id: string; name: string };
 }
@@ -112,7 +116,9 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
       f.prospect.sector.toLowerCase().includes(q) ||
       f.prospect.wilaya.toLowerCase().includes(q) ||
       f.user.name.toLowerCase().includes(q) ||
-      (f.notes && f.notes.toLowerCase().includes(q))
+      (f.notes && f.notes.toLowerCase().includes(q)) ||
+      (f.prospect.notes && f.prospect.notes.toLowerCase().includes(q)) ||
+      (f.prospect.response && f.prospect.response.toLowerCase().includes(q))
     );
   });
 
@@ -597,11 +603,28 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                     </div>
                   </div>
 
-                  {/* Notes */}
-                  {item.notes && (
-                    <p className="text-[11px] text-neutral-400 italic bg-neutral-950/40 p-2 rounded-lg border border-neutral-850">
-                      "{item.notes}"
-                    </p>
+                  {/* Prospect Remarks & Follow-up Notes */}
+                  {(item.prospect.notes || item.prospect.response || item.notes) && (
+                    <div className="space-y-1.5 pt-1">
+                      {item.prospect.notes && (
+                        <div className="bg-amber-500/10 border border-amber-500/25 p-2.5 rounded-xl text-xs text-amber-200">
+                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1 mb-0.5">
+                            💬 Remarque prospect :
+                          </span>
+                          <p className="font-medium text-amber-100 whitespace-normal">{item.prospect.notes}</p>
+                        </div>
+                      )}
+                      {item.prospect.response && item.prospect.response !== item.prospect.notes && (
+                        <p className="text-[11px] text-neutral-300 px-1">
+                          <span className="text-neutral-500 font-semibold">Réponse :</span> {item.prospect.response}
+                        </p>
+                      )}
+                      {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes && (
+                        <p className="text-[11px] text-neutral-400 italic bg-neutral-950/40 p-2 rounded-lg border border-neutral-850 whitespace-normal">
+                          Note relance : "{item.notes}"
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -708,6 +731,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                   <th className="py-3 px-3">PROSPECT / CLIENT</th>
                   <th className="py-3 px-3">TÉLÉPHONE</th>
                   <th className="py-3 px-3">SECTEUR</th>
+                  <th className="py-3 px-3 min-w-[220px] max-w-[320px] text-amber-400">REMARQUES DU PROSPECT</th>
                   <th className="py-3 px-3">DATE PRÉVUE</th>
                   <th className="py-3 px-3 text-center">ÉTAPE</th>
                   <th className="py-3 px-3">STATUT</th>
@@ -718,7 +742,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               <tbody className="divide-y divide-neutral-800/60 font-medium text-neutral-300">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-neutral-500 font-normal">
+                    <td colSpan={9} className="py-12 text-center text-neutral-500 font-normal">
                       Aucune relance correspondant au filtre sélectionné.
                     </td>
                   </tr>
@@ -791,7 +815,46 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         {item.prospect.sector}
                       </td>
 
-                      {/* 4. Date Prévue */}
+                      {/* 4. Remarques du prospect */}
+                      <td className="py-3 px-3 min-w-[220px] max-w-[320px]">
+                        {item.prospect.notes || item.prospect.response || (item.notes && !item.notes.startsWith("Relance Étape")) ? (
+                          <div className="space-y-1">
+                            {item.prospect.notes && (
+                              <div
+                                className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5 rounded-lg max-w-[300px]"
+                                title={item.prospect.notes}
+                              >
+                                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                                  💬 Remarque :
+                                </span>
+                                <p className="font-medium whitespace-normal line-clamp-2 text-amber-100">
+                                  {item.prospect.notes}
+                                </p>
+                              </div>
+                            )}
+                            {item.prospect.response && item.prospect.response !== item.prospect.notes && (
+                              <p
+                                className="text-[11px] text-neutral-300 whitespace-normal line-clamp-1 truncate pl-1"
+                                title={item.prospect.response}
+                              >
+                                <span className="text-neutral-500 font-semibold">Rép :</span> {item.prospect.response}
+                              </p>
+                            )}
+                            {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes && (
+                              <p
+                                className="text-[10px] text-neutral-400 italic whitespace-normal line-clamp-1 pl-1"
+                                title={item.notes}
+                              >
+                                Note : {item.notes}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-neutral-600 text-xs italic pl-1">—</span>
+                        )}
+                      </td>
+
+                      {/* 5. Date Prévue */}
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1.5">
                           <span className={`font-semibold ${isOverdue ? "text-rose-400 font-bold" : "text-neutral-200"}`}>
@@ -1036,6 +1099,12 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                 <span className="text-neutral-400">Téléphone :</span>
                 <span className="font-mono text-emerald-400">{targetFollowUp.prospect.phone}</span>
               </div>
+              {targetFollowUp.prospect.notes && (
+                <div className="flex items-start justify-between gap-2 pt-1 border-t border-neutral-900">
+                  <span className="text-neutral-400 shrink-0">Remarque existante :</span>
+                  <span className="text-amber-300 font-medium text-right">{targetFollowUp.prospect.notes}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-neutral-400">Date initiale :</span>
                 <div className="flex items-center gap-1.5">
