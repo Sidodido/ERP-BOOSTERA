@@ -18,20 +18,21 @@ export interface ProspectFilterParams {
   status?: ProspectStatus;
   assignedToId?: string;
   onlyVirgin?: boolean;
+  isGlobalView?: boolean;
 }
 
 export async function getProspects(params: ProspectFilterParams = {}) {
   const user = await requireAuth();
 
-  // If user is a SALES_REP, by default restrict to their assigned leads unless director/admin
+  // If user is a SALES_REP, by default restrict to their assigned leads unless director/admin or global directory view
   const isPrivileged = ["ADMIN", "SALES_DIRECTOR"].includes(user.role);
 
   const whereClause: any = {};
 
-  if (!isPrivileged) {
-    whereClause.assignedToId = user.id;
-  } else if (params.assignedToId) {
+  if (params.assignedToId) {
     whereClause.assignedToId = params.assignedToId;
+  } else if (!isPrivileged && !params.isGlobalView) {
+    whereClause.assignedToId = user.id;
   }
 
   if (params.onlyVirgin) {
