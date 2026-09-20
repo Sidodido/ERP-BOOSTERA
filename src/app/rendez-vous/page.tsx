@@ -16,13 +16,11 @@ export default async function RendezVousPage() {
   ]);
 
   const prospectsList = await prisma.prospect.findMany({
-    where: ["ADMIN", "SALES_DIRECTOR"].includes(user.role) ? {} : { assignedToId: user.id },
     select: { id: true, companyName: true, phone: true, sector: true, status: true },
     orderBy: { companyName: "asc" },
   });
 
   const clientsList = await prisma.client.findMany({
-    where: ["ADMIN", "SALES_DIRECTOR"].includes(user.role) ? {} : { assignedToId: user.id },
     select: { id: true, companyName: true, phone: true },
     orderBy: { companyName: "asc" },
   });

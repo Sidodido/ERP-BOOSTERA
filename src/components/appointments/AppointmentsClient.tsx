@@ -53,7 +53,28 @@ import {
   Check,
   CreditCard,
   AlertTriangle,
+  Users,
 } from "lucide-react";
+
+const getCommercialBadgeStyle = (name?: string, id?: string) => {
+  const palettes = [
+    { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-500/30", dot: "bg-blue-400" },
+    { bg: "bg-emerald-500/15", text: "text-emerald-300", border: "border-emerald-500/30", dot: "bg-emerald-400" },
+    { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-500/30", dot: "bg-purple-400" },
+    { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30", dot: "bg-amber-400" },
+    { bg: "bg-rose-500/15", text: "text-rose-300", border: "border-rose-500/30", dot: "bg-rose-400" },
+    { bg: "bg-cyan-500/15", text: "text-cyan-300", border: "border-cyan-500/30", dot: "bg-cyan-400" },
+    { bg: "bg-indigo-500/15", text: "text-indigo-300", border: "border-indigo-500/30", dot: "bg-indigo-400" },
+  ];
+  if (!name && !id) return palettes[0];
+  const str = name || id || "";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % palettes.length;
+  return palettes[index];
+};
 
 interface AppointmentItem {
   id: string;
@@ -149,6 +170,9 @@ export function AppointmentsClient({
   const [relanceStepFilter, setRelanceStepFilter] = useState("");
   const [relanceStatusFilter, setRelanceStatusFilter] = useState("");
 
+  // Commercial Filter: "ALL" for all commercials, or specific user ID
+  const [selectedCommercialId, setSelectedCommercialId] = useState<string>("ALL");
+
   // Current Calendar Month & Year
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
@@ -188,6 +212,7 @@ export function AppointmentsClient({
     type: "COMMERCIAL_VISIT" as AppointmentType,
     targetType: "prospect" as "prospect" | "client",
     targetId: prospectsList[0]?.id || "",
+    assignedUserId: currentUserId || salesUsers[0]?.id || "",
     date: toLocalDateString(new Date()),
     startTime: "14:00",
     endTime: "15:00",
@@ -427,6 +452,7 @@ export function AppointmentsClient({
       notes: form.notes,
       prospectId: form.targetType === "prospect" ? form.targetId : undefined,
       clientId: form.targetType === "client" ? form.targetId : undefined,
+      assignedUserId: form.assignedUserId,
     });
 
     setIsLoading(false);
@@ -631,6 +657,12 @@ export function AppointmentsClient({
       const prospect = item.prospect;
       if (!prospect) return false;
 
+      const matchesCommercial =
+        !selectedCommercialId ||
+        selectedCommercialId === "ALL" ||
+        item.userId === selectedCommercialId ||
+        item.user?.id === selectedCommercialId;
+
       const matchesSearch =
         !relanceSearch ||
         prospect.companyName?.toLowerCase().includes(relanceSearch.toLowerCase()) ||
@@ -645,9 +677,16 @@ export function AppointmentsClient({
         (relanceStatusFilter === "COMPLETED" && lastAppt?.status === "COMPLETED") ||
         (relanceStatusFilter === "CANCELLED" && lastAppt?.status === "CANCELLED");
 
-      return matchesSearch && matchesStep && matchesStatus;
+      return matchesCommercial && matchesSearch && matchesStep && matchesStatus;
     });
-  }, [followUps, relanceSearch, relanceStepFilter, relanceStatusFilter]);
+  }, [followUps, selectedCommercialId, relanceSearch, relanceStepFilter, relanceStatusFilter]);
+
+  const filteredAppointments = useMemo(() => {
+    if (!selectedCommercialId || selectedCommercialId === "ALL") {
+      return appointments;
+    }
+    return appointments.filter((a) => a.user?.id === selectedCommercialId);
+  }, [appointments, selectedCommercialId]);
 
   // Calendar Grid Computations
   const year = currentDate.getFullYear();
@@ -681,7 +720,7 @@ export function AppointmentsClient({
         dateStr,
         isCurrentMonth: false,
         isToday: dateStr === todayStr,
-        appointments: appointments.filter(
+        appointments: filteredAppointments.filter(
           (a) => toLocalDateString(a.startTime) === dateStr
         ),
       });
@@ -696,7 +735,7 @@ export function AppointmentsClient({
         dateStr,
         isCurrentMonth: true,
         isToday: dateStr === todayStr,
-        appointments: appointments.filter(
+        appointments: filteredAppointments.filter(
           (a) => toLocalDateString(a.startTime) === dateStr
         ),
       });
@@ -712,91 +751,161 @@ export function AppointmentsClient({
         dateStr,
         isCurrentMonth: false,
         isToday: dateStr === todayStr,
-        appointments: appointments.filter(
+        appointments: filteredAppointments.filter(
           (a) => toLocalDateString(a.startTime) === dateStr
         ),
       });
     }
 
     return days;
-  }, [year, month, appointments]);
+  }, [year, month, filteredAppointments]);
 
   const monthAppointmentsCount = useMemo(() => {
-    return appointments.filter((a) => {
+    return filteredAppointments.filter((a) => {
       const d = new Date(a.startTime);
       return d.getFullYear() === year && d.getMonth() === month;
     }).length;
-  }, [appointments, year, month]);
+  }, [filteredAppointments, year, month]);
 
   return (
     <div className="space-y-6">
       {/* Top Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
-            Gestion & Organisation des Rendez-vous
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
-              {appointments.length} RDV au total
-            </span>
-          </h1>
-          <p className="text-xs text-neutral-400 mt-1">
-            Agenda commercial interactif : visualisez, planifiez et convertissez vos prospects en clients officiels
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
-          {/* View Toggle */}
-          <div className="flex flex-wrap bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setViewMode("calendar")}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                viewMode === "calendar"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <CalendarDays className="w-3.5 h-3.5" />
-              <span>Calendrier</span>
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                viewMode === "list"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <List className="w-3.5 h-3.5" />
-              <span>Liste ({appointments.length})</span>
-            </button>
-            <button
-              onClick={() => setViewMode("relances_rdv")}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
-                viewMode === "relances_rdv"
-                  ? "bg-neutral-800 text-white shadow-xs"
-                  : "text-neutral-400 hover:text-neutral-200"
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Relances ({followUps.length})</span>
-            </button>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
+              Gestion & Organisation des Rendez-vous
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-semibold">
+                {filteredAppointments.length} RDV {selectedCommercialId === "ALL" ? "au total" : "filtré(s)"}
+              </span>
+            </h1>
+            <p className="text-xs text-neutral-400 mt-1">
+              Agenda commercial interactif : visualisez, planifiez et convertissez vos prospects en clients officiels
+            </p>
           </div>
 
-          <Button
-            size="sm"
-            onClick={() => {
-              setForm((prev) => ({
-                ...prev,
-                date: toLocalDateString(new Date()),
-                title: "",
-              }));
-              setNewModalOpen(true);
-            }}
-            className="gap-1.5 shadow-md shadow-blue-500/20"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Nouveau RDV</span>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+            {/* View Toggle */}
+            <div className="flex flex-wrap bg-neutral-900 border border-neutral-800 rounded-xl p-1 text-xs">
+              <button
+                onClick={() => setViewMode("calendar")}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                  viewMode === "calendar"
+                    ? "bg-neutral-800 text-white shadow-xs"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>Calendrier</span>
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-neutral-800 text-white shadow-xs"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Liste ({filteredAppointments.length})</span>
+              </button>
+              <button
+                onClick={() => setViewMode("relances_rdv")}
+                className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 font-semibold rounded-lg transition-colors cursor-pointer ${
+                  viewMode === "relances_rdv"
+                    ? "bg-neutral-800 text-white shadow-xs"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Relances ({filteredFollowUps.length})</span>
+              </button>
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => {
+                setForm((prev) => ({
+                  ...prev,
+                  date: toLocalDateString(new Date()),
+                  title: "",
+                }));
+                setNewModalOpen(true);
+              }}
+              className="gap-1.5 shadow-md shadow-blue-500/20"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nouveau RDV</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Commercial Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-neutral-900/60 border border-neutral-800 rounded-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs shadow-xs">
+              <Users className="w-4 h-4 text-purple-400 shrink-0" />
+              <span className="text-neutral-400 font-medium whitespace-nowrap">Filtrer par commercial :</span>
+              <select
+                value={selectedCommercialId}
+                onChange={(e) => setSelectedCommercialId(e.target.value)}
+                className="bg-transparent text-neutral-100 font-semibold focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="ALL" className="bg-neutral-900 text-neutral-100">
+                  Tous les commerciaux ({appointments.length} RDV)
+                </option>
+                {salesUsers.map((u) => {
+                  const count = appointments.filter((a) => a.user?.id === u.id).length;
+                  return (
+                    <option key={u.id} value={u.id} className="bg-neutral-900 text-neutral-100">
+                      {u.name} {u.id === currentUserId ? "(Moi)" : ""} ({count} RDV)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Quick Filter Shortcuts */}
+            <div className="flex items-center bg-neutral-950/80 border border-neutral-800 rounded-xl p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedCommercialId("ALL")}
+                className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                  selectedCommercialId === "ALL"
+                    ? "bg-purple-600 text-white shadow-sm font-semibold"
+                    : "text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                Tous ({appointments.length})
+              </button>
+              {currentUserId && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCommercialId(currentUserId)}
+                  className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                    selectedCommercialId === currentUserId
+                      ? "bg-purple-600 text-white shadow-sm font-semibold"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  Mes RDV ({appointments.filter((a) => a.user?.id === currentUserId).length})
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Active filter indication */}
+          <div className="text-xs text-neutral-400 flex items-center gap-1.5 px-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>
+              Affichage :{" "}
+              <strong className="text-neutral-200">
+                {selectedCommercialId === "ALL"
+                  ? "Tous les commerciaux réunis"
+                  : salesUsers.find((u) => u.id === selectedCommercialId)?.name || "Commercial sélectionné"}
+              </strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -909,8 +1018,8 @@ export function AppointmentsClient({
                   </div>
 
                   {/* Appointments list inside cell */}
-                  <div className="space-y-1 my-1 overflow-hidden">
-                    {dayItem.appointments.slice(0, 3).map((appt) => {
+                  <div className="space-y-1.5 my-1 overflow-hidden">
+                    {dayItem.appointments.slice(0, 4).map((appt) => {
                       const startTimeStr = new Date(appt.startTime).toLocaleTimeString("fr-FR", {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -922,12 +1031,13 @@ export function AppointmentsClient({
                       const isCompleted = appt.status === "COMPLETED";
                       const isCancelled = appt.status === "CANCELLED";
                       const isRelance = appt.type === "PHONE" || appt.title.toLowerCase().includes("relance");
+                      const commBadge = getCommercialBadgeStyle(appt.user?.name, appt.user?.id);
 
                       return (
                         <div
                           key={appt.id}
                           onClick={() => openAppointmentDetail(appt)}
-                          className={`px-1.5 py-1 rounded-md text-[10px] font-medium border truncate cursor-pointer transition-all hover:scale-[1.02] flex items-center justify-between gap-1 ${
+                          className={`px-1.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-all hover:scale-[1.02] flex flex-col gap-0.5 ${
                             isCompleted
                               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                               : isCancelled
@@ -936,30 +1046,38 @@ export function AppointmentsClient({
                               ? "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
                               : "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
                           }`}
-                          title={`${isRelance ? "📞 Relance : " : ""}${startTimeStr} - ${targetName} (${appt.title})`}
+                          title={`${isRelance ? "📞 Relance : " : ""}${startTimeStr} - ${targetName} (${appt.title}) — Commercial : ${appt.user?.name || "Non assigné"}`}
                         >
-                          <span className="font-mono font-bold shrink-0 flex items-center gap-1">
-                            {isRelance && <Phone className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
-                            {startTimeStr}
-                          </span>
-                          <span className="truncate">{targetName}</span>
-                          {isRelance ? (
-                            <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
-                              Relance
+                          <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                            <span className="font-mono font-bold shrink-0 flex items-center gap-1">
+                              {isRelance && <Phone className="w-2.5 h-2.5 text-amber-400 shrink-0" />}
+                              {startTimeStr}
                             </span>
-                          ) : appt.prospect ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                          ) : null}
+                            <span className="truncate font-semibold text-neutral-100">{targetName}</span>
+                            {isRelance ? (
+                              <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
+                                Relance
+                              </span>
+                            ) : appt.prospect ? (
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1 text-[9px] truncate">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${commBadge.dot}`} />
+                            <span className={`truncate ${commBadge.text} font-medium`}>
+                              {appt.user?.name ? appt.user.name.replace(/ \([^)]*\)/, "") : "Commercial"}
+                            </span>
+                          </div>
                         </div>
                       );
                     })}
 
-                    {dayItem.appointments.length > 3 && (
+                    {dayItem.appointments.length > 4 && (
                       <p
                         onClick={() => openNewForDate(dayItem.dateStr)}
                         className="text-[9px] font-semibold text-blue-400 cursor-pointer hover:underline text-center"
                       >
-                        +{dayItem.appointments.length - 3} autres
+                        +{dayItem.appointments.length - 4} autres
                       </p>
                     )}
                   </div>
@@ -980,17 +1098,18 @@ export function AppointmentsClient({
       {/* 2. VUE LISTE DETAILLEE */}
       {viewMode === "list" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {appointments.length === 0 && (
+          {filteredAppointments.length === 0 && (
             <div className="col-span-full py-16 text-center text-neutral-500 bg-neutral-900/40 rounded-2xl border border-neutral-800">
-              Aucun rendez-vous programmé pour le moment.
+              Aucun rendez-vous trouvé pour les filtres sélectionnés.
             </div>
           )}
 
-          {appointments.map((appt) => {
+          {filteredAppointments.map((appt) => {
             const statusConfig = APPOINTMENT_STATUSES[appt.status] || {
               label: appt.status,
               color: "bg-neutral-800 text-neutral-300",
             };
+            const commBadge = getCommercialBadgeStyle(appt.user?.name, appt.user?.id);
 
             const targetName = appt.prospect?.companyName || appt.client?.companyName || "Entreprise";
             const isProspect = !!appt.prospect;
@@ -1004,9 +1123,13 @@ export function AppointmentsClient({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusConfig.color}`}>
                           {statusConfig.label}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1 ${commBadge.bg} ${commBadge.text} ${commBadge.border}`}>
+                          <User className="w-2.5 h-2.5 shrink-0" />
+                          <span>{appt.user?.name || "Commercial"}</span>
                         </span>
                         {isProspect && (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
@@ -1461,9 +1584,10 @@ export function AppointmentsClient({
             {/* Appointment Meta info */}
             <div className="grid grid-cols-2 gap-3 text-xs bg-neutral-900/60 p-3.5 rounded-xl border border-neutral-800">
               <div className="space-y-1">
-                <span className="text-neutral-400 font-medium">Date & Heure :</span>
-                <p className="font-semibold text-neutral-200 text-sm">
-                  {formatDateTime(selectedAppointment.startTime)}
+                <span className="text-neutral-400 font-medium">Commercial assigné :</span>
+                <p className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span>{selectedAppointment.user?.name || "Non assigné"}</span>
                 </p>
               </div>
 
@@ -1471,6 +1595,13 @@ export function AppointmentsClient({
                 <span className="text-neutral-400 font-medium">Type & Durée :</span>
                 <p className="font-semibold text-neutral-200">
                   {APPOINTMENT_TYPES[selectedAppointment.type]} ({selectedAppointment.durationMin} min)
+                </p>
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <span className="text-neutral-400 font-medium">Date & Heure :</span>
+                <p className="font-semibold text-neutral-200 text-sm">
+                  {formatDateTime(selectedAppointment.startTime)}
                 </p>
               </div>
 
@@ -1673,6 +1804,22 @@ export function AppointmentsClient({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
+              <label className="text-xs font-medium text-neutral-300">Commercial assigné *</label>
+              <select
+                value={form.assignedUserId}
+                onChange={(e) => setForm({ ...form, assignedUserId: e.target.value })}
+                className="w-full h-10 px-3 text-sm bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100"
+                required
+              >
+                {salesUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} {u.id === currentUserId ? "(Moi)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-neutral-300">Type de RDV</label>
               <select
                 value={form.type}
@@ -1686,18 +1833,18 @@ export function AppointmentsClient({
                 ))}
               </select>
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-neutral-300">Type de contact</label>
-              <select
-                value={form.targetType}
-                onChange={(e) => setForm({ ...form, targetType: e.target.value as any })}
-                className="w-full h-10 px-3 text-sm bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100"
-              >
-                <option value="prospect">Prospect</option>
-                <option value="client">Client Officiel</option>
-              </select>
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-neutral-300">Type de contact</label>
+            <select
+              value={form.targetType}
+              onChange={(e) => setForm({ ...form, targetType: e.target.value as any })}
+              className="w-full h-10 px-3 text-sm bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100"
+            >
+              <option value="prospect">Prospect</option>
+              <option value="client">Client Officiel</option>
+            </select>
           </div>
 
           <div className="space-y-1.5">

@@ -30,7 +30,29 @@ import {
   ArrowRight,
   X,
   AlertCircle,
+  Users,
+  User,
 } from "lucide-react";
+
+const getCommercialBadgeStyle = (name?: string, id?: string) => {
+  const palettes = [
+    { bg: "bg-blue-500/15", text: "text-blue-300", border: "border-blue-500/30", dot: "bg-blue-400" },
+    { bg: "bg-emerald-500/15", text: "text-emerald-300", border: "border-emerald-500/30", dot: "bg-emerald-400" },
+    { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-500/30", dot: "bg-purple-400" },
+    { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30", dot: "bg-amber-400" },
+    { bg: "bg-rose-500/15", text: "text-rose-300", border: "border-rose-500/30", dot: "bg-rose-400" },
+    { bg: "bg-cyan-500/15", text: "text-cyan-300", border: "border-cyan-500/30", dot: "bg-cyan-400" },
+    { bg: "bg-indigo-500/15", text: "text-indigo-300", border: "border-indigo-500/30", dot: "bg-indigo-400" },
+  ];
+  if (!name && !id) return palettes[0];
+  const str = name || id || "";
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % palettes.length;
+  return palettes[index];
+};
 
 interface ClientItem {
   id: string;
@@ -62,6 +84,7 @@ interface Props {
   initialClients: ClientItem[];
   salesUsers: { id: string; name: string }[];
   userRole?: string;
+  currentUserId?: string;
 }
 
 function calculateEndDate(startStr: string, months: number): string {
@@ -139,13 +162,14 @@ export const CUSTOM_DELIVERABLES_SUGGESTIONS = [
   },
 ];
 
-export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
+export function ClientsClient({ initialClients, salesUsers, userRole, currentUserId }: Props) {
   const isCommercial =
     userRole === "SALES_REP" ||
     userRole === "COMMERCIAL" ||
     Boolean(userRole?.toLowerCase().includes("commercial"));
 
   const [clients, setClients] = useState<ClientItem[]>(initialClients);
+  const [selectedCommercialId, setSelectedCommercialId] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedSector, setSelectedSector] = useState("");
@@ -184,7 +208,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
     contractStart: initialStart,
     contractEnd: calculateEndDate(initialStart, initialDuration),
     notes: "",
-    assignedToId: salesUsers[0]?.id || "",
+    assignedToId: currentUserId || salesUsers[0]?.id || "",
     status: "IN_PREPARATION" as ClientStatus,
   });
 
@@ -328,7 +352,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
       contractStart: initialStart,
       contractEnd: calculateEndDate(initialStart, initialDuration),
       notes: "",
-      assignedToId: salesUsers[0]?.id || "",
+      assignedToId: currentUserId || salesUsers[0]?.id || "",
       status: "IN_PREPARATION" as ClientStatus,
     });
     setCustomDeliverables([
@@ -370,18 +394,24 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
   };
 
   const filtered = clients.filter((c) => {
+    const matchesCommercial =
+      !selectedCommercialId ||
+      selectedCommercialId === "ALL" ||
+      c.assignedTo?.id === selectedCommercialId;
+
     const matchesSearch =
       !search ||
       c.companyName.toLowerCase().includes(search.toLowerCase()) ||
       (c.brandName && c.brandName.toLowerCase().includes(search.toLowerCase())) ||
       (c.contactName && c.contactName.toLowerCase().includes(search.toLowerCase())) ||
-      c.phone.includes(search);
+      c.phone.includes(search) ||
+      (c.assignedTo?.name && c.assignedTo.name.toLowerCase().includes(search.toLowerCase()));
 
     const matchesStatus = !selectedStatus || c.status === selectedStatus;
     const matchesSector = !selectedSector || c.sector === selectedSector;
     const matchesOffer = !selectedOffer || c.offerType === selectedOffer;
 
-    return matchesSearch && matchesStatus && matchesSector && matchesOffer;
+    return matchesCommercial && matchesSearch && matchesStatus && matchesSector && matchesOffer;
   });
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -444,9 +474,9 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center gap-2">
-            {isCommercial ? "Portefeuille Clients" : "Portefeuille Clients (CRM 360°)"}
+            Portefeuille Clients
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-semibold">
-              {filtered.length} clients signés
+              {filtered.length} client{filtered.length > 1 ? "s" : ""} signé{filtered.length > 1 ? "s" : ""} {selectedCommercialId === "ALL" ? "(Tous les commerciaux)" : "filtré(s)"}
             </span>
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
@@ -472,56 +502,123 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
       </div>
 
       {/* Filters Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-neutral-900/60 border border-neutral-800 p-3 rounded-2xl">
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-          <input
-            type="text"
-            placeholder="Rechercher entreprise, contact..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
-          />
+      <div className="space-y-3 bg-neutral-900/60 border border-neutral-800 p-3 rounded-2xl">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+            <input
+              type="text"
+              placeholder="Rechercher entreprise, contact..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 rounded-xl px-2.5 h-9">
+            <Users className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <select
+              value={selectedCommercialId}
+              onChange={(e) => setSelectedCommercialId(e.target.value)}
+              className="w-full text-xs bg-transparent text-neutral-200 focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="ALL" className="bg-neutral-900 text-neutral-100">
+                Tous les commerciaux ({clients.length})
+              </option>
+              {salesUsers.map((u) => {
+                const count = clients.filter((c) => c.assignedTo?.id === u.id).length;
+                return (
+                  <option key={u.id} value={u.id} className="bg-neutral-900 text-neutral-100">
+                    {u.name} {u.id === currentUserId ? "(Moi)" : ""} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <select
+            value={selectedSector}
+            onChange={(e) => setSelectedSector(e.target.value)}
+            className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Tous les secteurs</option>
+            {SECTORS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Tous les statuts</option>
+            {Object.entries(CLIENT_STATUSES).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <select
-          value={selectedSector}
-          onChange={(e) => setSelectedSector(e.target.value)}
-          className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
-        >
-          <option value="">Tous les secteurs</option>
-          {SECTORS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        {/* Secondary filters row & quick shortcuts */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-neutral-800/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedOffer}
+              onChange={(e) => setSelectedOffer(e.target.value)}
+              className="h-8 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Toutes les offres</option>
+              {Object.entries(OFFER_TYPES).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
 
-        <select
-          value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
-          className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
-        >
-          <option value="">Tous les statuts</option>
-          {Object.entries(CLIENT_STATUSES).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v.label}
-            </option>
-          ))}
-        </select>
+            {currentUserId && (
+              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCommercialId("ALL")}
+                  className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                    selectedCommercialId === "ALL"
+                      ? "bg-blue-600 text-white shadow-xs font-semibold"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  Tous ({clients.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCommercialId(currentUserId)}
+                  className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                    selectedCommercialId === currentUserId
+                      ? "bg-blue-600 text-white shadow-xs font-semibold"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  Mes clients ({clients.filter((c) => c.assignedTo?.id === currentUserId).length})
+                </button>
+              </div>
+            )}
+          </div>
 
-        <select
-          value={selectedOffer}
-          onChange={(e) => setSelectedOffer(e.target.value)}
-          className="h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
-        >
-          <option value="">Toutes les offres</option>
-          {Object.entries(OFFER_TYPES).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v}
-            </option>
-          ))}
-        </select>
+          <div className="text-xs text-neutral-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>
+              Affichage :{" "}
+              <strong className="text-neutral-200">
+                {selectedCommercialId === "ALL"
+                  ? "Tous les commerciaux réunis (synchronisé)"
+                  : salesUsers.find((u) => u.id === selectedCommercialId)?.name || "Commercial sélectionné"}
+              </strong>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Clients Table */}
@@ -530,8 +627,9 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-950/80 border-b border-neutral-800 text-neutral-400">
               <tr>
-                <th className="py-3 px-4 font-semibold min-w-[240px]">Entreprise & Marque</th>
+                <th className="py-3 px-4 font-semibold min-w-[220px]">Entreprise & Marque</th>
                 <th className="py-3 px-4 font-semibold min-w-[140px]">Secteur / Wilaya</th>
+                <th className="py-3 px-4 font-semibold min-w-[150px]">Commercial en charge</th>
                 <th className="py-3 px-4 font-semibold min-w-[160px]">Offre Commerciale</th>
                 <th className="py-3 px-4 font-semibold min-w-[180px] whitespace-nowrap">Contrat & Forfait</th>
                 <th className="py-3 px-4 font-semibold min-w-[140px] whitespace-nowrap">Statut</th>
@@ -543,7 +641,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
             <tbody className="divide-y divide-neutral-800/60">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={isCommercial ? 5 : 6} className="py-12 text-center text-neutral-500">
+                  <td colSpan={isCommercial ? 6 : 7} className="py-12 text-center text-neutral-500">
                     Aucun client enregistré pour l'instant.
                   </td>
                 </tr>
@@ -555,6 +653,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
                   color: "bg-neutral-800 text-neutral-300 border-neutral-700",
                   dot: "bg-neutral-400",
                 };
+                const commBadge = getCommercialBadgeStyle(client.assignedTo?.name, client.assignedTo?.id);
 
                 return (
                   <tr key={client.id} className="hover:bg-neutral-800/30 transition-colors group">
@@ -579,6 +678,17 @@ export function ClientsClient({ initialClients, salesUsers, userRole }: Props) {
                     <td className="py-3 px-4">
                       <p className="font-medium text-neutral-200">{client.sector}</p>
                       <p className="text-[10px] text-neutral-500">{client.wilaya || "Algérie"}</p>
+                    </td>
+
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {client.assignedTo ? (
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shadow-2xs ${commBadge.bg} ${commBadge.text} ${commBadge.border}`}>
+                          <User className="w-3 h-3 shrink-0" />
+                          <span>{client.assignedTo.name}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-neutral-500 italic">Non assigné</span>
+                      )}
                     </td>
 
                     <td className="py-3 px-4">

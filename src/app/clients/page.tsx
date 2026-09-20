@@ -20,7 +20,7 @@ export default async function ClientsPage() {
 
   return (
     <AppShell>
-      <ClientsClient initialClients={clients as any} salesUsers={salesUsers} userRole={user.role} />
+      <ClientsClient initialClients={clients as any} salesUsers={salesUsers} userRole={user.role} currentUserId={user.id} />
     </AppShell>
   );
 }

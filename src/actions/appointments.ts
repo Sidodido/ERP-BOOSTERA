@@ -84,13 +84,10 @@ export async function getAppointments(params: {
   month?: number;
   year?: number;
 } = {}) {
-  const user = await requireAuth();
-  const isPrivileged = ["ADMIN", "SALES_DIRECTOR"].includes(user.role);
+  await requireAuth();
 
   const whereClause: any = {};
-  if (!isPrivileged) {
-    whereClause.userId = user.id;
-  } else if (params.userId) {
+  if (params.userId && params.userId !== "ALL") {
     whereClause.userId = params.userId;
   }
 
@@ -294,13 +291,14 @@ export async function rescheduleAppointmentAction(data: {
   return { success: true, appointment: updated };
 }
 
-export async function getPostAppointmentFollowUps() {
+export async function getPostAppointmentFollowUps(params: {
+  userId?: string;
+} = {}) {
   const user = await requireAuth();
-  const isPrivileged = ["ADMIN", "SALES_DIRECTOR"].includes(user.role);
 
   const whereClause: any = {};
-  if (!isPrivileged) {
-    whereClause.userId = user.id;
+  if (params.userId && params.userId !== "ALL") {
+    whereClause.userId = params.userId;
   }
 
   // Ensure any completed or cancelled appointment has its 3 follow-up steps

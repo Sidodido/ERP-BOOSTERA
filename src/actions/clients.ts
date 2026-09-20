@@ -31,13 +31,13 @@ export async function getClients(params: {
   status?: ClientStatus;
   sector?: string;
   offerType?: OfferType;
+  assignedToId?: string;
 } = {}) {
-  const user = await requireAuth();
-  const isPrivileged = ["ADMIN", "SALES_DIRECTOR", "ACCOUNTANT"].includes(user.role);
+  await requireAuth();
 
   const whereClause: any = {};
-  if (!isPrivileged) {
-    whereClause.assignedToId = user.id;
+  if (params.assignedToId && params.assignedToId !== "ALL") {
+    whereClause.assignedToId = params.assignedToId;
   }
 
   if (params.status) {
@@ -128,11 +128,6 @@ export async function getClientDetail(id: string) {
 
   if (!client) return null;
 
-  // Commercial restrictions
-  const isPrivileged = ["ADMIN", "SALES_DIRECTOR", "ACCOUNTANT", "TECH_LEAD"].includes(user.role);
-  if (!isPrivileged && client.assignedToId !== user.id) {
-    throw new Error("FORBIDDEN");
-  }
   return client;
 }
 
