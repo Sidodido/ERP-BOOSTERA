@@ -584,7 +584,7 @@ export function isVirginProspect(p: {
   response?: string | null;
   notes?: string | null;
 }): boolean {
-  // 1. Déplacé explicitement vers les appels et la base via le bouton (+)
+  // Condition stricte : seul le clic sur "+ Appel" déplace le prospect vers la section Appels
   if (
     p.rawState === "TRANSFERE_APPELS" ||
     p.callStatus === "TRANSFERE_APPELS"
@@ -592,48 +592,8 @@ export function isVirginProspect(p: {
     return false;
   }
 
-  // 2. Déjà converti en client actif
+  // Déjà converti en client actif
   if (p.status === "CONVERTED") {
-    return false;
-  }
-
-  // 3. Statut autre que NOUVEAU
-  if (p.status && p.status !== "NEW") {
-    return false;
-  }
-
-  // 4. Appel : doit être strictement vierge pour afficher "— Appel —" dans le sélecteur
-  const rawCall = (p.callStatus || "").trim().toUpperCase();
-  const isCallVirgin = !rawCall || ["—", "-", "VIERGE", "AUCUN"].includes(rawCall);
-  if (!isCallVirgin) {
-    return false;
-  }
-
-  // 5. Résultat d'appel : doit être strictement vierge pour afficher "— Résultat —"
-  const rawState = (p.rawState || "").trim().toUpperCase();
-  const isStateVirgin = !rawState || ["NOUVEAU", "NEW", "AUCUN", "VIERGE", "—", "-"].includes(rawState);
-  if (!isStateVirgin) {
-    return false;
-  }
-
-  // 6. Présence d'historique d'appels ou de rendez-vous
-  const hasCalls = (p.calls && p.calls.length > 0) || (p._count && (p._count.calls || 0) > 0);
-  if (hasCalls) {
-    return false;
-  }
-
-  const hasAppointments = (p.appointments && p.appointments.length > 0) || (p._count && (p._count.appointments || 0) > 0);
-  if (hasAppointments) {
-    return false;
-  }
-
-  // 7. Présence d'une réponse : doit être vide pour afficher le placeholder "Réponse..."
-  if (p.response && p.response.trim()) {
-    return false;
-  }
-
-  // 8. Présence d'une remarque : doit être vide pour afficher le placeholder "Remarque..."
-  if (p.notes && p.notes.trim()) {
     return false;
   }
 

@@ -36,48 +36,9 @@ export async function getProspects(params: ProspectFilterParams = {}) {
   }
 
   if (params.onlyVirgin) {
-    whereClause.status = ProspectStatus.NEW;
-    whereClause.AND = whereClause.AND || [];
-    whereClause.AND.push(
-      {
-        OR: [
-          { callStatus: null },
-          { callStatus: "" },
-          { callStatus: "—" },
-          { callStatus: "-" },
-          { callStatus: "VIERGE" },
-        ],
-      },
-      {
-        OR: [
-          { rawState: null },
-          { rawState: "" },
-          { rawState: "NOUVEAU" },
-          { rawState: "NEW" },
-          { rawState: "VIERGE" },
-          { rawState: "—" },
-          { rawState: "-" },
-        ],
-      },
-      {
-        OR: [
-          { response: null },
-          { response: "" },
-        ],
-      },
-      {
-        OR: [
-          { notes: null },
-          { notes: "" },
-        ],
-      },
-      {
-        calls: { none: {} },
-      },
-      {
-        appointments: { none: {} },
-      }
-    );
+    whereClause.rawState = { not: "TRANSFERE_APPELS" };
+    whereClause.callStatus = { not: "TRANSFERE_APPELS" };
+    whereClause.status = { not: ProspectStatus.CONVERTED };
   } else if (params.status) {
     whereClause.status = params.status;
   }
@@ -162,28 +123,9 @@ export async function getProspectsOverviewStats() {
     prisma.prospect.count(),
     prisma.prospect.count({
       where: {
-        status: ProspectStatus.NEW,
-        AND: [
-          {
-            OR: [
-              { callStatus: null },
-              { callStatus: "" },
-              { callStatus: "NON EFFECTUE" },
-              { callStatus: "PAS DE CONTACT" },
-            ],
-          },
-          {
-            OR: [
-              { rawState: null },
-              { rawState: "" },
-              { rawState: "NOUVEAU" },
-              { rawState: "VIERGE" },
-              { rawState: "PAS DE CONTACT" },
-            ],
-          },
-          { calls: { none: {} } },
-          { appointments: { none: {} } },
-        ],
+        rawState: { not: "TRANSFERE_APPELS" },
+        callStatus: { not: "TRANSFERE_APPELS" },
+        status: { not: ProspectStatus.CONVERTED },
       },
     }),
     prisma.prospect.count({
@@ -220,9 +162,8 @@ export async function getCalledProspects(params: ProspectFilterParams = {}) {
       isPrivileged ? {} : { assignedToId: user.id },
       {
         OR: [
-          { callStatus: { in: ["EFFECTUE", "A RAPPELER", "PAS DE REPONSE", "OCCUPE", "INJOIGNABLE", "A CONTACTER", "TRANSFERE_APPELS"] } },
-          { rawState: { in: ["TRANSFERE_APPELS", "A CONTACTER"] } },
-          { calls: { some: {} } },
+          { rawState: "TRANSFERE_APPELS" },
+          { callStatus: "TRANSFERE_APPELS" },
         ],
       },
     ],
