@@ -2145,6 +2145,9 @@ export function AppointmentsClient({
                   <p className="text-[10px] text-neutral-400">
                     Ajoutez ce rendez-vous dans Google Agenda ou exportez au format .ics
                   </p>
+                  <p className="text-[10px] text-blue-300/80 mt-0.5">
+                    👥 Invités inclus : zidanesidahmed18@gmail.com, toufikzidane325@gmail.com
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -2487,6 +2490,9 @@ export function AppointmentsClient({
                 </span>
                 <span className="text-[11px] text-neutral-400 block">
                   Ouvre et pré-remplit automatiquement l&apos;événement Google Agenda dès la confirmation.
+                </span>
+                <span className="text-[10px] text-blue-300/80 block mt-0.5">
+                  👥 Invités automatiques : zidanesidahmed18@gmail.com, toufikzidane325@gmail.com
                 </span>
               </div>
             </div>

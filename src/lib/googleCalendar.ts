@@ -2,6 +2,11 @@
  * Utilitaires pour l'intégration de Google Calendar (Google Agenda) et format iCal (.ics)
  */
 
+export const DEFAULT_CALENDAR_ATTENDEES = [
+  "zidanesidahmed18@gmail.com",
+  "toufikzidane325@gmail.com",
+];
+
 export interface CalendarEventData {
   title: string;
   startTime: Date | string;
@@ -13,6 +18,7 @@ export interface CalendarEventData {
   targetEmail?: string | null;
   assignedUserName?: string | null;
   crmUrl?: string | null;
+  attendees?: string[];
 }
 
 /**
@@ -24,7 +30,7 @@ function formatUtcForGoogle(date: Date): string {
 
 /**
  * Construit l'URL officielle Google Calendar (Google Agenda)
- * Permet l'ajout en 1 clic ou l'ouverture automatique
+ * Permet l'ajout en 1 clic ou l'ouverture automatique avec invités pré-remplis
  */
 export function buildGoogleCalendarUrl(event: CalendarEventData): string {
   const startDate = new Date(event.startTime);
@@ -37,6 +43,14 @@ export function buildGoogleCalendarUrl(event: CalendarEventData): string {
     ? `[RDV CRM] ${event.title} — ${event.targetName}`
     : `[RDV CRM] ${event.title}`;
 
+  const allAttendees = Array.from(
+    new Set([
+      ...DEFAULT_CALENDAR_ATTENDEES,
+      ...(event.attendees || []),
+      ...(event.targetEmail ? [event.targetEmail] : []),
+    ])
+  ).filter(Boolean);
+
   const descriptionParts: string[] = [];
   if (event.targetName) {
     descriptionParts.push(`🏢 Client / Prospect : ${event.targetName}`);
@@ -45,10 +59,13 @@ export function buildGoogleCalendarUrl(event: CalendarEventData): string {
     descriptionParts.push(`📞 Téléphone : ${event.targetPhone}`);
   }
   if (event.targetEmail) {
-    descriptionParts.push(`✉️ Email : ${event.targetEmail}`);
+    descriptionParts.push(`✉️ Email client : ${event.targetEmail}`);
   }
   if (event.assignedUserName) {
     descriptionParts.push(`👤 Commercial assigné : ${event.assignedUserName}`);
+  }
+  if (allAttendees.length > 0) {
+    descriptionParts.push(`👥 Invités / Participants : ${allAttendees.join(", ")}`);
   }
   if (event.location) {
     descriptionParts.push(`📍 Lieu : ${event.location}`);
@@ -66,6 +83,11 @@ export function buildGoogleCalendarUrl(event: CalendarEventData): string {
     dates: `${startStr}/${endStr}`,
     details: fullDescription,
   });
+
+  if (allAttendees.length > 0) {
+    // In Google Calendar template URLs, 'add' specifies the attendee emails (comma-separated)
+    params.append("add", allAttendees.join(","));
+  }
 
   if (event.location && event.location.trim() !== "") {
     params.append("location", event.location.trim());
@@ -89,16 +111,29 @@ export function downloadIcsFile(event: CalendarEventData) {
     ? `[RDV CRM] ${event.title} - ${event.targetName}`
     : `[RDV CRM] ${event.title}`;
 
+  const allAttendees = Array.from(
+    new Set([
+      ...DEFAULT_CALENDAR_ATTENDEES,
+      ...(event.attendees || []),
+      ...(event.targetEmail ? [event.targetEmail] : []),
+    ])
+  ).filter(Boolean);
+
   const summary = eventTitle.replace(/\n/g, " ");
   const location = (event.location || "").replace(/\n/g, " ");
   const description = [
     event.targetName ? `Contact: ${event.targetName}` : "",
     event.targetPhone ? `Tel: ${event.targetPhone}` : "",
     event.assignedUserName ? `Commercial: ${event.assignedUserName}` : "",
+    allAttendees.length > 0 ? `Invités: ${allAttendees.join(", ")}` : "",
     event.description ? `Notes: ${event.description}` : "",
   ]
     .filter(Boolean)
     .join("\\n");
+
+  const attendeeIcsLines = allAttendees.map(
+    (email) => `ATTENDEE;CUTYPE=INDIVIDUAL;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${email}`
+  );
 
   const icsContent = [
     "BEGIN:VCALENDAR",
@@ -114,6 +149,7 @@ export function downloadIcsFile(event: CalendarEventData) {
     `SUMMARY:${summary}`,
     location ? `LOCATION:${location}` : "",
     description ? `DESCRIPTION:${description}` : "",
+    ...attendeeIcsLines,
     "STATUS:CONFIRMED",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -131,3 +167,4 @@ export function downloadIcsFile(event: CalendarEventData) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
