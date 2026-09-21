@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   MapPin,
@@ -32,15 +32,19 @@ import {
   Tag,
   Check,
   Building,
+  Upload,
+  Key,
+  Copy,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
   searchGoogleMapsProspectsAction,
   parseGoogleMapsTextAction,
   importGoogleMapsProspectsAction,
+  checkProspectsDuplicatesAction,
   type GoogleMapsProspectItem,
 } from "@/actions/googleMapsProspects";
-import { formatDzPhoneDisplay } from "@/lib/phoneUtils";
+import { cleanDzPhone, formatDzPhoneDisplay } from "@/lib/phoneUtils";
 import { SECTORS, WILAYAS } from "@/lib/constants";
 import { WILAYA_COMMUNES, SECTOR_SUBCATEGORIES } from "@/lib/googleMapsConstants";
 
@@ -67,7 +71,7 @@ const POPULAR_QUERIES = [
 ];
 
 export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMapsImporterClientProps) {
-  const [activeTab, setActiveTab] = useState<"SEARCH" | "PASTE">("SEARCH");
+  const [activeTab, setActiveTab] = useState<"SEARCH" | "PASTE" | "FILE">("SEARCH");
 
   // Search Basic State
   const [searchQuery, setSearchQuery] = useState("clinique");
@@ -78,16 +82,41 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedCommune, setSelectedCommune] = useState("Toutes les communes");
   const [selectedSubCategory, setSelectedSubCategory] = useState("");
-  const [onlyWithPhone, setOnlyWithPhone] = useState(true);
+  const [onlyWithPhone, setOnlyWithPhone] = useState(false);
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState(false);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [minReviews, setMinReviews] = useState<number>(0);
 
+  // Google Places API Key (optional)
+  const [showApiKeySettings, setShowApiKeySettings] = useState(false);
+  const [googleApiKey, setGoogleApiKey] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedKey = localStorage.getItem("crm_gplaces_api_key") || "";
+      if (savedKey) setGoogleApiKey(savedKey);
+    }
+  }, []);
+
+  const handleSaveApiKey = (key: string) => {
+    setGoogleApiKey(key);
+    if (typeof window !== "undefined") {
+      if (key.trim()) {
+        localStorage.setItem("crm_gplaces_api_key", key.trim());
+      } else {
+        localStorage.removeItem("crm_gplaces_api_key");
+      }
+    }
+  };
+
   // Paste Mode State
   const [pastedText, setPastedText] = useState("");
   const [pasteWilaya, setPasteWilaya] = useState("Alger");
   const [pasteSector, setPasteSector] = useState("Cabinet médical");
+
+  // File Upload State
+  const [fileName, setFileName] = useState("");
 
   // Assignment & Campaign Options
   const [distributionMode, setDistributionMode] = useState<"SINGLE" | "ROUND_ROBIN">("SINGLE");
@@ -158,6 +187,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
           minRating: minRating > 0 ? minRating : undefined,
           minReviews: minReviews > 0 ? minReviews : undefined,
           limit: 100,
+          googleApiKey: googleApiKey.trim() || undefined,
         });
 
         if (res.success && res.prospects) {
@@ -230,6 +260,200 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
         });
       }
     });
+  };
+
+  // 1-Click Clipboard Import Action
+  const handleClipboardImport = async () => {
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        setFeedback({
+          type: "error",
+          message: "L'accès au presse-papier n'est pas supporté par ce navigateur. Utilisez le copier-coller standard.",
+        });
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        setFeedback({
+          type: "info",
+          message: "Votre presse-papier est vide. Copiez d'abord des résultats ou une fiche depuis Google Maps.",
+        });
+        return;
+      }
+      setPastedText(text);
+      setActiveTab("PASTE");
+      setFeedback(null);
+
+      startSearching(async () => {
+        try {
+          const res = await parseGoogleMapsTextAction({
+            rawText: text,
+            defaultWilaya: selectedWilaya,
+            defaultSector: selectedSector,
+          });
+
+          if (res.success && res.prospects) {
+            setProspects(res.prospects);
+            const initialSelection: Record<string, boolean> = {};
+            res.prospects.forEach((p) => {
+              if (!p.isDuplicate && p.phone) {
+                initialSelection[p.id] = true;
+              }
+            });
+            setSelectedIds(initialSelection);
+
+            const newCount = res.prospects.filter((p) => !p.isDuplicate).length;
+            setFeedback({
+              type: "success",
+              message: `📋 ${res.prospects.length} prospects extraits en 1 clic depuis votre presse-papier (${newCount} nouveaux qualifiés) !`,
+            });
+          }
+        } catch (err: any) {
+          setFeedback({
+            type: "error",
+            message: err?.message || "Erreur lors de l'analyse du presse-papier.",
+          });
+        }
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: "Permission de lecture du presse-papier refusée par votre navigateur. Collez manuellement avec Ctrl+V.",
+      });
+    }
+  };
+
+  // File Upload (CSV / XLSX) Handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setFeedback(null);
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const rows: any[] = XLSX.utils.sheet_to_json(ws);
+
+        if (!rows || rows.length === 0) {
+          setFeedback({ type: "error", message: "Le fichier importé est vide." });
+          return;
+        }
+
+        // Auto-detect columns
+        const rawProspects: GoogleMapsProspectItem[] = [];
+        const seenKeys = new Set<string>();
+
+        rows.forEach((row, idx) => {
+          // Find company name
+          const nameKey = Object.keys(row).find((k) =>
+            /name|nom|title|titre|company|entreprise|etablissement|raison\s*sociale/i.test(k)
+          );
+          const name = nameKey ? String(row[nameKey] || "").trim() : "";
+          if (!name || name.length < 2) return;
+
+          // Find phone
+          const phoneKey = Object.keys(row).find((k) =>
+            /phone|tel|telephone|numéro|numero|mobile|contact/i.test(k)
+          );
+          const rawPhone = phoneKey ? String(row[phoneKey] || "") : "";
+          const cleanPhone = cleanDzPhone(rawPhone);
+
+          // Find address
+          const addrKey = Object.keys(row).find((k) =>
+            /address|adresse|street|rue|location/i.test(k)
+          );
+          const address = addrKey ? String(row[addrKey] || "").trim() : "";
+
+          // Find wilaya
+          const wilayaKey = Object.keys(row).find((k) =>
+            /wilaya|city|ville|state|region/i.test(k)
+          );
+          const wilaya = wilayaKey ? String(row[wilayaKey] || "").trim() : selectedWilaya;
+
+          // Find sector / category
+          const secKey = Object.keys(row).find((k) =>
+            /category|categorie|sector|secteur|type|industry/i.test(k)
+          );
+          const sector = secKey ? String(row[secKey] || "").trim() : selectedSector;
+
+          // Find rating & reviews
+          const ratingKey = Object.keys(row).find((k) => /rating|note|stars/i.test(k));
+          const ratingVal = ratingKey ? parseFloat(String(row[ratingKey]).replace(",", ".")) : undefined;
+
+          const reviewsKey = Object.keys(row).find((k) => /review|reviews|avis/i.test(k));
+          const reviewsVal = reviewsKey ? parseInt(String(row[reviewsKey]).replace(/\D/g, ""), 10) : undefined;
+
+          // Find website
+          const siteKey = Object.keys(row).find((k) => /website|site|url|web/i.test(k));
+          const website = siteKey ? String(row[siteKey] || "").trim() : undefined;
+
+          // Dedupe inside uploaded file
+          const dedupeKey = `${name.toLowerCase()}_${cleanPhone || address.toLowerCase()}`;
+          if (seenKeys.has(dedupeKey)) return;
+          seenKeys.add(dedupeKey);
+
+          rawProspects.push({
+            id: `file_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+            companyName: name,
+            phone: cleanPhone,
+            formattedPhone: cleanPhone ? formatDzPhoneDisplay(cleanPhone) : "",
+            address: address || `${wilaya}, Algérie`,
+            wilaya: wilaya || selectedWilaya,
+            sector: sector || selectedSector,
+            rating: isNaN(ratingVal as number) ? undefined : ratingVal,
+            reviewsCount: isNaN(reviewsVal as number) ? undefined : reviewsVal,
+            website,
+            source: `Fichier (${file.name})`,
+          });
+        });
+
+        if (rawProspects.length === 0) {
+          setFeedback({
+            type: "error",
+            message: "Aucune entreprise valide n'a pu être extraite des colonnes du fichier.",
+          });
+          return;
+        }
+
+        // Check duplicates against Prisma
+        startSearching(async () => {
+          try {
+            const verified = await checkProspectsDuplicatesAction(rawProspects);
+            setProspects(verified);
+
+            const initialSelection: Record<string, boolean> = {};
+            verified.forEach((p) => {
+              if (!p.isDuplicate && p.phone) {
+                initialSelection[p.id] = true;
+              }
+            });
+            setSelectedIds(initialSelection);
+
+            const newCount = verified.filter((p) => !p.isDuplicate).length;
+            setFeedback({
+              type: "success",
+              message: `📂 ${verified.length} établissements importés depuis "${file.name}" (${newCount} nouveaux prospects qualifiés) !`,
+            });
+          } catch (err: any) {
+            setFeedback({
+              type: "error",
+              message: err?.message || "Erreur lors de la vérification des doublons du fichier.",
+            });
+          }
+        });
+      } catch (err: any) {
+        setFeedback({
+          type: "error",
+          message: "Format de fichier invalide. Veuillez importer un fichier .xlsx ou .csv valide.",
+        });
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   // Selection helpers
@@ -392,67 +616,171 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
       </div>
 
       {/* Mode Tabs */}
-      <div className="flex items-center gap-2 border-b border-neutral-800 pb-1">
-        <button
-          onClick={() => setActiveTab("SEARCH")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-all cursor-pointer ${
-            activeTab === "SEARCH"
-              ? "bg-neutral-800/90 text-blue-400 border-b-2 border-blue-500 shadow-sm"
-              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
-          }`}
-        >
-          <Search className="w-4 h-4" />
-          <span>Recherche Directe & Avancée</span>
-          {activeFiltersCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-500 text-white">
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 pb-1">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button
+            onClick={() => setActiveTab("SEARCH")}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl transition-all cursor-pointer ${
+              activeTab === "SEARCH"
+                ? "bg-neutral-800/90 text-blue-400 border-b-2 border-blue-500 shadow-sm"
+                : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
+            }`}
+          >
+            <Search className="w-4 h-4" />
+            <span>Recherche Directe</span>
+            {activeFiltersCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-500 text-white">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => setActiveTab("PASTE")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-t-xl transition-all cursor-pointer ${
-            activeTab === "PASTE"
-              ? "bg-neutral-800/90 text-blue-400 border-b-2 border-blue-500 shadow-sm"
-              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
-          }`}
-        >
-          <ClipboardPaste className="w-4 h-4" />
-          <span>Copier / Coller Google Maps</span>
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-bold">
-            Extracteur
-          </span>
-        </button>
+          <button
+            onClick={() => setActiveTab("PASTE")}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl transition-all cursor-pointer ${
+              activeTab === "PASTE"
+                ? "bg-neutral-800/90 text-blue-400 border-b-2 border-blue-500 shadow-sm"
+                : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4" />
+            <span>Copier-Coller Maps</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-bold hidden sm:inline">
+              Extracteur
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("FILE")}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold rounded-t-xl transition-all cursor-pointer ${
+              activeTab === "FILE"
+                ? "bg-neutral-800/90 text-blue-400 border-b-2 border-blue-500 shadow-sm"
+                : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50"
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            <span>Fichier CSV / Excel</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-300 font-bold hidden sm:inline">
+              Scraper
+            </span>
+          </button>
+        </div>
+
+        {/* Quick Actions in tab bar */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleClipboardImport}
+            className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Extraire instantanément tout ce qui est copié dans votre presse-papier"
+          >
+            <ClipboardPaste className="w-3.5 h-3.5 text-emerald-400" />
+            <span>📋 Coller 1-Clic</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowApiKeySettings(!showApiKeySettings)}
+            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer ${
+              googleApiKey
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                : "bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 border-neutral-700"
+            }`}
+            title="Configurer une clé API Google Places officielle"
+          >
+            <Key className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Clé API Google</span>
+            {googleApiKey && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+          </button>
+        </div>
       </div>
+
+      {/* Google Places API Key Settings Panel */}
+      {showApiKeySettings && (
+        <div className="p-4 rounded-2xl bg-neutral-950 border border-amber-500/30 space-y-2.5 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+              <Key className="w-4 h-4" />
+              Clé API Google Places Officielle (Optionnel)
+            </span>
+            <span className="text-[11px] text-neutral-400">
+              Offre Google Cloud : 200$/mois offerts (~40 000 requêtes gratuites)
+            </span>
+          </div>
+          <p className="text-xs text-neutral-400">
+            En renseignant votre clé API Google Places, le CRM extrait directement les données officielles de Google Maps avec 100% des numéros de téléphone vérifiés, avis récents et coordonnées exactes.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="password"
+              value={googleApiKey}
+              onChange={(e) => handleSaveApiKey(e.target.value)}
+              placeholder="Collez votre clé API Google Maps (ex: AIzaSy...)"
+              className="flex-1 px-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 font-mono focus:outline-none focus:border-amber-500"
+            />
+            {googleApiKey && (
+              <button
+                type="button"
+                onClick={() => handleSaveApiKey("")}
+                className="px-3 py-2 text-xs text-rose-400 hover:text-rose-300 transition cursor-pointer"
+              >
+                Supprimer
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Mode 1: Search Form with Advanced Search */}
       {activeTab === "SEARCH" && (
         <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4 shadow-sm">
-          {/* Preset Chips */}
-          <div>
-            <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">
-              Recherches fréquentes en Algérie :
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {POPULAR_QUERIES.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={() => {
-                    setSearchQuery(item.query);
-                    setSelectedSector(item.sector);
-                    setSelectedSubCategory("");
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer border ${
-                    searchQuery === item.query
-                      ? "bg-blue-600/30 text-blue-300 border-blue-500/50"
-                      : "bg-neutral-800/60 text-neutral-300 border-neutral-700/60 hover:bg-neutral-750 hover:text-white"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+          {/* Preset Chips & Direct Google Maps Search Link */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">
+                Recherches fréquentes en Algérie :
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {POPULAR_QUERIES.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      setSearchQuery(item.query);
+                      setSelectedSector(item.sector);
+                      setSelectedSubCategory("");
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer border ${
+                      searchQuery === item.query
+                        ? "bg-blue-600/30 text-blue-300 border-blue-500/50"
+                        : "bg-neutral-800/60 text-neutral-300 border-neutral-700/60 hover:bg-neutral-750 hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Direct Link to Google Maps in new tab */}
+            <a
+              href={`https://www.google.com/maps/search/${encodeURIComponent(
+                [
+                  searchQuery,
+                  selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                  selectedWilaya,
+                  "Algerie",
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-2 px-3 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer self-stretch sm:self-auto justify-center"
+              title="Ouvrir cette requête en direct dans Google Maps pour copier les fiches"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+              <span>Ouvrir sur Google Maps</span>
+            </a>
           </div>
 
           {/* Primary Filters Grid */}
@@ -526,7 +854,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                 title="Afficher/masquer les options de recherche avancée"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
-                <span>Filtres Avancés</span>
+                <span>Filtres</span>
                 {activeFiltersCount > 0 && (
                   <span className="w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center font-bold">
                     {activeFiltersCount}
@@ -669,7 +997,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                   <span>Uniquement avec numéro de téléphone (Appel immédiat)</span>
                 </label>
 
-                {/* Only Without Website (Prime Prospect for Web Agency) */}
+                {/* Only Without Website */}
                 <label className="flex items-center gap-2 text-neutral-300 cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -712,9 +1040,18 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
               <ClipboardPaste className="w-4 h-4 text-emerald-400" />
               Copiez-collez les résultats de recherche Google Maps ou des listes d'entreprises :
             </span>
-            <button
-              onClick={() =>
-                setPastedText(`Clinique Médico Chirurgicale El Azhar
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleClipboardImport}
+                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" />
+                <span>Coller depuis le presse-papier</span>
+              </button>
+              <button
+                onClick={() =>
+                  setPastedText(`Clinique Médico Chirurgicale El Azhar
 4,3 (682) · Clinique privée
 Rue Ahmed Ouaked, Dely Ibrahim
 023 37 55 55
@@ -728,11 +1065,12 @@ Hôtel Mercure Aéroport Alger
 4,1 (1500) · Hôtel 4 étoiles
 BP 12 5 Route de l'Aéroport, Bab Ezzouar
 021 24 59 70`)
-              }
-              className="text-xs text-blue-400 hover:text-blue-300 underline cursor-pointer"
-            >
-              Insérer un exemple de test
-            </button>
+                }
+                className="text-xs text-blue-400 hover:text-blue-300 underline cursor-pointer"
+              >
+                Insérer un exemple de test
+              </button>
+            </div>
           </div>
 
           <textarea
@@ -795,6 +1133,53 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
                     <span>Extraire les Prospects</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mode 3: File Upload Tab (CSV / XLSX) */}
+      {activeTab === "FILE" && (
+        <div className="p-6 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-xs font-bold text-neutral-200 flex items-center gap-2">
+              <Upload className="w-4 h-4 text-indigo-400" />
+              Importer des prospects depuis un fichier (CSV ou Excel .xlsx)
+            </span>
+            <span className="text-xs text-neutral-400">
+              Compatible avec Instant Data Scraper, G-Maps Extractor, Apify, Octoparse
+            </span>
+          </div>
+
+          <div className="border-2 border-dashed border-neutral-750 hover:border-indigo-500/50 rounded-2xl p-8 text-center transition bg-neutral-950/40 relative group">
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileUpload}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 group-hover:bg-indigo-600/20 text-indigo-400 flex items-center justify-center transition border border-indigo-500/20">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-neutral-200">
+                  {fileName ? (
+                    <span className="text-emerald-400 font-bold">Fichier sélectionné : {fileName}</span>
+                  ) : (
+                    "Glissez-déposez votre fichier ici, ou cliquez pour parcourir"
+                  )}
+                </p>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Détection automatique des colonnes (Nom d'entreprise, Téléphone, Adresse, Wilaya, Secteur, Note, Avis, Site)
+                </p>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-xl bg-indigo-600 group-hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition pointer-events-none"
+              >
+                Parcourir les fichiers (.csv, .xlsx)
               </button>
             </div>
           </div>
