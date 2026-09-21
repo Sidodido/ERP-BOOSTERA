@@ -6,6 +6,7 @@ import { createAuditLog } from "@/lib/audit";
 import { AppointmentType, AppointmentStatus, ProspectStatus, CallResult, FollowUpStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { dispatchAppointmentCreatedNotifications } from "@/actions/notifications";
+import { buildGoogleCalendarUrl } from "@/lib/googleCalendar";
 
 export async function createAppointmentAction(data: {
   title: string;
@@ -97,7 +98,18 @@ export async function createAppointmentAction(data: {
   revalidatePath("/appels");
   revalidatePath("/dashboard");
   revalidatePath("/equipes");
-  return { success: true, appointment: appt };
+
+  const googleCalendarUrl = buildGoogleCalendarUrl({
+    title: appt.title,
+    startTime: appt.startTime,
+    endTime: appt.endTime,
+    location: appt.location,
+    description: appt.notes,
+    targetName: appt.prospect?.companyName || appt.client?.companyName || null,
+    assignedUserName: appt.user?.name || null,
+  });
+
+  return { success: true, appointment: appt, googleCalendarUrl };
 }
 
 export async function getAppointments(params: {

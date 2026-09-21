@@ -32,6 +32,7 @@ import {
   CustomOfferCalculationResult,
   mergeRemarkWithSummary,
 } from "@/components/clients/CustomOfferConfigurator";
+import { buildGoogleCalendarUrl, downloadIcsFile } from "@/lib/googleCalendar";
 import {
   Calendar as CalendarIcon,
   Calendar,
@@ -56,6 +57,8 @@ import {
   AlertTriangle,
   Users,
   Trash2,
+  ExternalLink,
+  Download,
 } from "lucide-react";
 
 const getCommercialBadgeStyle = (name?: string, id?: string) => {
@@ -221,6 +224,9 @@ export function AppointmentsClient({
     location: "",
     notes: "",
   });
+
+  // Google Calendar Auto-sync option
+  const [syncGoogleCalendar, setSyncGoogleCalendar] = useState(true);
 
   // Search state for prospect/client selection in New Appointment modal
   const [targetSearchQuery, setTargetSearchQuery] = useState("");
@@ -500,13 +506,29 @@ export function AppointmentsClient({
     setNewModalOpen(false);
 
     if (res.success && res.appointment) {
+      if (syncGoogleCalendar) {
+        const calUrl =
+          (res as any).googleCalendarUrl ||
+          buildGoogleCalendarUrl({
+            title: form.title,
+            startTime: startDateTime,
+            endTime: endDateTime,
+            location: form.location,
+            description: form.notes,
+            targetName: selectedTarget?.companyName,
+            targetPhone: (selectedTarget as any)?.phone,
+            assignedUserName: salesUsers.find((u) => u.id === form.assignedUserId)?.name,
+          });
+        window.open(calUrl, "_blank", "noopener,noreferrer");
+      }
+
       setAppointments((prev) => [...prev, res.appointment as any]);
       setFeedbackMessage({
         type: "success",
-        text: `Rendez-vous "${form.title}" planifié avec succès ! L'indicateur RDV est passé au vert dans la prospection et les appels.`,
+        text: `Rendez-vous "${form.title}" planifié avec succès ${syncGoogleCalendar ? "et ouvert dans Google Calendar" : ""} ! L'indicateur RDV est passé au vert.`,
       });
+      router.refresh();
     }
-    window.location.reload();
   };
 
   // Update Status with remark & automatic follow-up creation
@@ -1174,6 +1196,24 @@ export function AppointmentsClient({
                           </a>
                         </>
                       )}
+                      <a
+                        href={buildGoogleCalendarUrl({
+                          title: appt.title,
+                          startTime: appt.startTime,
+                          endTime: appt.endTime,
+                          location: appt.location,
+                          description: appt.notes,
+                          targetName: appt.prospect?.companyName || appt.client?.companyName || null,
+                          targetPhone: phone || null,
+                          assignedUserName: appt.user?.name || null,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg bg-neutral-850 hover:bg-blue-600/20 text-neutral-400 hover:text-blue-400 transition"
+                        title="Ajouter à Google Agenda (Google Calendar)"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                      </a>
                       <button
                         type="button"
                         onClick={() => openAppointmentDetail(appt)}
@@ -1476,6 +1516,25 @@ export function AppointmentsClient({
                       >
                         Fiche RDV
                       </button>
+                      <a
+                        href={buildGoogleCalendarUrl({
+                          title: appt.title,
+                          startTime: appt.startTime,
+                          endTime: appt.endTime,
+                          location: appt.location,
+                          description: appt.notes,
+                          targetName: targetName,
+                          targetPhone: appt.prospect?.phone || appt.client?.phone || null,
+                          assignedUserName: appt.user.name,
+                        })}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2 py-1 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white border border-blue-500/20 rounded-lg text-[10px] font-semibold transition-colors flex items-center gap-1"
+                        title="Ajouter à Google Agenda"
+                      >
+                        <Calendar className="w-3 h-3" />
+                        <span>Agenda</span>
+                      </a>
                       <button
                         type="button"
                         onClick={(e) => handleDeleteAppointment(appt.id, e)}
@@ -2070,6 +2129,68 @@ export function AppointmentsClient({
               </div>
             )}
 
+            {/* GOOGLE CALENDAR & ICAL EXPORT */}
+            <div className="p-3.5 rounded-2xl bg-neutral-900/90 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-2xs">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                    <span>Synchroniser avec votre agenda</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 font-normal border border-blue-500/20">
+                      Google Calendar
+                    </span>
+                  </h4>
+                  <p className="text-[10px] text-neutral-400">
+                    Ajoutez ce rendez-vous dans Google Agenda ou exportez au format .ics
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={buildGoogleCalendarUrl({
+                    title: selectedAppointment.title,
+                    startTime: selectedAppointment.startTime,
+                    endTime: selectedAppointment.endTime,
+                    location: selectedAppointment.location,
+                    description: selectedAppointment.notes,
+                    targetName: selectedAppointment.prospect?.companyName || selectedAppointment.client?.companyName || null,
+                    targetPhone: selectedAppointment.prospect?.phone || selectedAppointment.client?.phone || null,
+                    targetEmail: selectedAppointment.prospect?.email || null,
+                    assignedUserName: selectedAppointment.user?.name || null,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 transition-all cursor-pointer"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Google Agenda</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadIcsFile({
+                      title: selectedAppointment.title,
+                      startTime: selectedAppointment.startTime,
+                      endTime: selectedAppointment.endTime,
+                      location: selectedAppointment.location,
+                      description: selectedAppointment.notes,
+                      targetName: selectedAppointment.prospect?.companyName || selectedAppointment.client?.companyName || null,
+                      targetPhone: selectedAppointment.prospect?.phone || selectedAppointment.client?.phone || null,
+                      targetEmail: selectedAppointment.prospect?.email || null,
+                      assignedUserName: selectedAppointment.user?.name || null,
+                    })
+                  }
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-medium border border-neutral-700 transition-all cursor-pointer"
+                  title="Télécharger fichier .ics standard pour Outlook ou Apple Calendar"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>.ics</span>
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
               <button
                 type="button"
@@ -2353,6 +2474,32 @@ export function AppointmentsClient({
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             placeholder="Contrat à signer, portfolio à présenter..."
           />
+
+          {/* Option Synchronisation Google Calendar */}
+          <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0">
+                <Calendar className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-neutral-100 block">
+                  Ajouter à Google Agenda (Google Calendar)
+                </span>
+                <span className="text-[11px] text-neutral-400 block">
+                  Ouvre et pré-remplit automatiquement l&apos;événement Google Agenda dès la confirmation.
+                </span>
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                checked={syncGoogleCalendar}
+                onChange={(e) => setSyncGoogleCalendar(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
             <Button type="button" variant="outline" onClick={() => setNewModalOpen(false)}>
