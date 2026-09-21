@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   APPOINTMENT_TYPES,
@@ -219,6 +219,45 @@ export function AppointmentsClient({
     location: "",
     notes: "",
   });
+
+  // Search state for prospect/client selection in New Appointment modal
+  const [targetSearchQuery, setTargetSearchQuery] = useState("");
+  const [isTargetDropdownOpen, setIsTargetDropdownOpen] = useState(false);
+  const targetDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        targetDropdownRef.current &&
+        !targetDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsTargetDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedTarget = useMemo(() => {
+    if (form.targetType === "prospect") {
+      return prospectsList.find((p) => p.id === form.targetId);
+    }
+    return clientsList.find((c) => c.id === form.targetId);
+  }, [form.targetType, form.targetId, prospectsList, clientsList]);
+
+  const filteredTargets = useMemo(() => {
+    const list = form.targetType === "prospect" ? prospectsList : clientsList;
+    if (!targetSearchQuery.trim()) {
+      return list.slice(0, 60);
+    }
+    const q = targetSearchQuery.toLowerCase().trim();
+    return list.filter((item) => {
+      const name = (item.companyName || "").toLowerCase();
+      const phone = (item.phone || "").toLowerCase();
+      const sector = ((item as any).sector || "").toLowerCase();
+      return name.includes(q) || phone.includes(q) || sector.includes(q);
+    }).slice(0, 60);
+  }, [form.targetType, prospectsList, clientsList, targetSearchQuery]);
 
   // Helper to calculate end date from start date and duration
   const calculateEndDate = (startDate: string, months: number) => {
@@ -1839,7 +1878,13 @@ export function AppointmentsClient({
             <label className="text-xs font-medium text-neutral-300">Type de contact</label>
             <select
               value={form.targetType}
-              onChange={(e) => setForm({ ...form, targetType: e.target.value as any })}
+              onChange={(e) => {
+                const newType = e.target.value as "prospect" | "client";
+                const defaultId = newType === "prospect" ? (prospectsList[0]?.id || "") : (clientsList[0]?.id || "");
+                setForm({ ...form, targetType: newType, targetId: defaultId });
+                setTargetSearchQuery("");
+                setIsTargetDropdownOpen(false);
+              }}
               className="w-full h-10 px-3 text-sm bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100"
             >
               <option value="prospect">Prospect</option>
@@ -1847,28 +1892,165 @@ export function AppointmentsClient({
             </select>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-neutral-300">
-              {form.targetType === "prospect" ? "Sélectionner le prospect *" : "Sélectionner le client *"}
-            </label>
-            <select
-              value={form.targetId}
-              onChange={(e) => setForm({ ...form, targetId: e.target.value })}
-              className="w-full h-10 px-3 text-sm bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100"
-              required
-            >
-              {form.targetType === "prospect"
-                ? prospectsList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.companyName} {p.phone ? `(${p.phone})` : ""}
-                    </option>
-                  ))
-                : clientsList.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.companyName} {c.phone ? `(${c.phone})` : ""}
-                    </option>
-                  ))}
-            </select>
+          <div className="space-y-1.5" ref={targetDropdownRef}>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-blue-400" />
+                <span>{form.targetType === "prospect" ? "Sélectionner le prospect *" : "Sélectionner le client *"}</span>
+              </label>
+              <span className="text-[11px] text-neutral-500">
+                {form.targetType === "prospect"
+                  ? `${prospectsList.length} prospects disponibles`
+                  : `${clientsList.length} clients disponibles`}
+              </span>
+            </div>
+
+            {/* Selected Target Card */}
+            {selectedTarget && (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-blue-600/10 border border-blue-500/30 text-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center shrink-0 font-bold text-xs">
+                    <Check className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="truncate">
+                    <div className="font-bold text-neutral-100 truncate flex items-center gap-2">
+                      <span className="truncate">{selectedTarget.companyName}</span>
+                      {(selectedTarget as any).sector && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 shrink-0 font-normal">
+                          {(selectedTarget as any).sector}
+                        </span>
+                      )}
+                    </div>
+                    {selectedTarget.phone && (
+                      <div className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5 font-mono">
+                        <Phone className="w-3 h-3 text-emerald-400" />
+                        <span>{selectedTarget.phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTargetDropdownOpen((prev) => !prev);
+                    setTargetSearchQuery("");
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 font-semibold px-2.5 py-1 rounded-lg hover:bg-blue-600/20 transition cursor-pointer shrink-0 ml-2"
+                >
+                  {isTargetDropdownOpen ? "Fermer recherche" : "🔍 Rechercher / Changer"}
+                </button>
+              </div>
+            )}
+
+            {/* Search Input & Dropdown Panel */}
+            {(!selectedTarget || isTargetDropdownOpen) && (
+              <div className="relative animate-in fade-in slide-in-from-top-1">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-blue-400" />
+                  <input
+                    type="text"
+                    value={targetSearchQuery}
+                    onChange={(e) => {
+                      setTargetSearchQuery(e.target.value);
+                      setIsTargetDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsTargetDropdownOpen(true)}
+                    placeholder={
+                      form.targetType === "prospect"
+                        ? "🔍 Tapez pour chercher par nom ou téléphone (ex: AnyTime, 0542...)"
+                        : "🔍 Tapez pour chercher un client par nom ou téléphone..."
+                    }
+                    className="w-full h-10 pl-9 pr-8 text-xs bg-neutral-900 border border-blue-500/50 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+                    autoFocus={isTargetDropdownOpen}
+                  />
+                  {targetSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setTargetSearchQuery("")}
+                      className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-200 cursor-pointer text-xs p-1"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown list */}
+                <div className="mt-1 max-h-60 overflow-y-auto rounded-xl bg-neutral-900 border border-neutral-750 shadow-2xl divide-y divide-neutral-800">
+                  <div className="p-2 bg-neutral-950/90 sticky top-0 flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-800 z-10">
+                    <span className="font-semibold text-neutral-300">
+                      {filteredTargets.length} {form.targetType === "prospect" ? "prospect(s)" : "client(s)"} disponible(s)
+                      {targetSearchQuery && ` pour "${targetSearchQuery}"`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsTargetDropdownOpen(false)}
+                      className="text-neutral-400 hover:text-white cursor-pointer px-1 py-0.5 rounded hover:bg-neutral-800 text-[10px]"
+                    >
+                      Fermer ✕
+                    </button>
+                  </div>
+
+                  {filteredTargets.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-neutral-500">
+                      Aucun {form.targetType === "prospect" ? "prospect" : "client"} trouvé pour « {targetSearchQuery} »
+                    </div>
+                  ) : (
+                    filteredTargets.map((item) => {
+                      const isSelected = item.id === form.targetId;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setForm((prev) => ({
+                              ...prev,
+                              targetId: item.id,
+                              title: prev.title ? prev.title : `RDV Commercial — ${item.companyName}`,
+                            }));
+                            setIsTargetDropdownOpen(false);
+                            setTargetSearchQuery("");
+                          }}
+                          className={`w-full p-2.5 text-left transition flex items-center justify-between cursor-pointer hover:bg-neutral-800/80 ${
+                            isSelected ? "bg-blue-600/15 border-l-2 border-blue-500" : ""
+                          }`}
+                        >
+                          <div className="truncate pr-2">
+                            <div className="font-semibold text-xs text-neutral-100 flex items-center gap-2">
+                              <span className="truncate">{item.companyName}</span>
+                              {(item as any).sector && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-normal shrink-0">
+                                  {(item as any).sector}
+                                </span>
+                              )}
+                            </div>
+                            {item.phone && (
+                              <div className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5 font-mono">
+                                <Phone className="w-3 h-3 text-emerald-500" />
+                                <span>{item.phone}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {isSelected ? (
+                            <span className="text-blue-400 font-bold text-xs shrink-0 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Sélectionné</span>
+                            </span>
+                          ) : (
+                            <span className="text-neutral-500 text-xs hover:text-blue-400 shrink-0">
+                              Choisir →
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Hidden native input for form validation */}
+            <input type="hidden" name="targetId" value={form.targetId} required />
           </div>
 
           <div className="grid grid-cols-3 gap-2">
