@@ -82,6 +82,10 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
   const [selectedCommune, setSelectedCommune] = useState("Toutes les communes");
   const [searchQuery, setSearchQuery] = useState(""); // optional refine keyword
 
+  // Engine & Quantity Mode: Gemini AI (Default) vs Hybrid vs Maps
+  const [searchEngine, setSearchEngine] = useState<"GEMINI" | "HYBRID" | "MAPS">("GEMINI");
+  const [targetCount, setTargetCount] = useState<number>(50);
+
   // Advanced Search Filters State
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showRefineKeyword, setShowRefineKeyword] = useState(false);
@@ -174,7 +178,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
     searchQuery,
   ]);
 
-  // Search Action: Direct by Sector
+  // Search Action: Direct by Sector with Gemini AI or Maps
   const handleSearch = () => {
     if (!selectedSector) return;
     setFeedback(null);
@@ -191,7 +195,9 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
           onlyWithWebsite,
           minRating: minRating > 0 ? minRating : undefined,
           minReviews: minReviews > 0 ? minReviews : undefined,
-          limit: 100,
+          limit: targetCount,
+          engine: searchEngine,
+          targetCount: targetCount,
           googleApiKey: googleApiKey.trim() || undefined,
         });
 
@@ -213,15 +219,21 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                 selectedSubCategory ? ` (${selectedSubCategory})` : ""
               } à ${selectedWilaya}${
                 selectedCommune !== "Toutes les communes" ? ` (${selectedCommune})` : ""
-              }. Essayez d'élargir la commune ou d'utiliser le bouton "Ouvrir sur Google Maps".`,
+              }. Essayez d'élargir la commune ou d'utiliser le mode IA Gemini.`,
             });
           } else {
             const newCount = res.prospects.filter((p) => !p.isDuplicate).length;
+            const isGemini = (res as any).source === "GEMINI_AI";
             setFeedback({
               type: "success",
-              message: `${res.prospects.length} établissements trouvés dans le secteur "${selectedSector}" (${newCount} nouveaux prospects qualifiés prêts à importer).`,
+              message: `${isGemini ? "✨ IA Gemini : " : ""}${res.prospects.length} établissements extraits dans le secteur "${selectedSector}" (${newCount} nouveaux prospects qualifiés prêts à être importés).`,
             });
           }
+        } else if (!res.success) {
+          setFeedback({
+            type: "error",
+            message: (res as any).error || "Erreur lors de la recherche du secteur.",
+          });
         }
       } catch (err: any) {
         setFeedback({
@@ -875,87 +887,173 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
             )}
           </div>
 
-          {/* Section 3: Action Buttons Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <div className="flex items-center gap-2">
-              {/* Toggle advanced qualification filters */}
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer h-[38px] ${
-                  showAdvanced || activeFiltersCount > 0
-                    ? "bg-blue-600/20 text-blue-300 border-blue-500/40"
-                    : "bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 border-neutral-700"
-                }`}
-                title="Filtres de qualification (téléphone, note, avis, site web)"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
-                <span>Critères avancés</span>
-                {activeFiltersCount > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center font-bold">
-                    {activeFiltersCount}
-                  </span>
-                )}
-                {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </button>
+          {/* Section 3: Engine Mode & Quantity Selector */}
+          <div className="pt-2 border-t border-neutral-800/80 space-y-3">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 p-3 rounded-2xl bg-neutral-950/90 border border-blue-500/20 shadow-inner">
+              {/* Engine Tabs */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  Moteur de recherche :
+                </span>
+                <div className="flex rounded-xl bg-neutral-900 p-1 border border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => setSearchEngine("GEMINI")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      searchEngine === "GEMINI"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    <span>🤖 IA Gemini</span>
+                    <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500/30 text-emerald-300 font-extrabold uppercase">
+                      Volume élevé
+                    </span>
+                  </button>
 
-              {/* Optional keyword toggle button */}
-              <button
-                type="button"
-                onClick={() => setShowRefineKeyword(!showRefineKeyword)}
-                className={`py-2 px-3 rounded-xl border text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer h-[38px] ${
-                  showRefineKeyword || searchQuery.trim()
-                    ? "bg-neutral-800 text-blue-300 border-blue-500/40"
-                    : "bg-neutral-900/60 hover:bg-neutral-800 text-neutral-400 border-neutral-800"
-                }`}
-                title="Ajouter un mot-clé ou nom d'enseigne précis si besoin"
-              >
-                <Search className="w-3.5 h-3.5" />
-                <span>{showRefineKeyword ? "Masquer mot-clé" : "+ Mot-clé spécifique"}</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchEngine("HYBRID")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      searchEngine === "HYBRID"
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    <span>⚡ Hybride (IA + Maps)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSearchEngine("MAPS")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                      searchEngine === "MAPS"
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    <span>🗺️ Cartographie Pure</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Volume / Quantity selector */}
+              {searchEngine !== "MAPS" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-neutral-400">Quantité souhaitée :</span>
+                  <div className="flex items-center gap-1">
+                    {[30, 50, 75].map((cnt) => (
+                      <button
+                        key={cnt}
+                        type="button"
+                        onClick={() => setTargetCount(cnt)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                          targetCount === cnt
+                            ? "bg-blue-600/30 text-blue-300 border-blue-500/50"
+                            : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white"
+                        }`}
+                      >
+                        {cnt} fiches
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
-              {/* Direct Link to Google Maps */}
-              <a
-                href={`https://www.google.com/maps/search/${encodeURIComponent(
-                  [
-                    selectedSubCategory || selectedSector,
-                    selectedCommune !== "Toutes les communes" ? selectedCommune : "",
-                    selectedWilaya,
-                    "Algérie",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="py-2 px-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer h-[38px]"
-                title="Ouvrir directement cette recherche sectorielle sur Google Maps"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-                <span>Ouvrir sur Maps</span>
-              </a>
+            {/* Action Buttons Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex items-center gap-2">
+                {/* Toggle advanced qualification filters */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer h-[38px] ${
+                    showAdvanced || activeFiltersCount > 0
+                      ? "bg-blue-600/20 text-blue-300 border-blue-500/40"
+                      : "bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 border-neutral-700"
+                  }`}
+                  title="Filtres de qualification (téléphone, note, avis, site web)"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Critères avancés</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center font-bold">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                  {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
 
-              {/* Main Search Button: 100% Direct by Sector */}
-              <button
-                type="button"
-                onClick={handleSearch}
-                disabled={isSearching || !selectedSector}
-                className="py-2 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer h-[38px] min-w-[170px]"
-              >
-                {isSearching ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Recherche en cours...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Rechercher "{selectedSector}"</span>
-                  </>
-                )}
-              </button>
+                {/* Optional keyword toggle button */}
+                <button
+                  type="button"
+                  onClick={() => setShowRefineKeyword(!showRefineKeyword)}
+                  className={`py-2 px-3 rounded-xl border text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer h-[38px] ${
+                    showRefineKeyword || searchQuery.trim()
+                      ? "bg-neutral-800 text-blue-300 border-blue-500/40"
+                      : "bg-neutral-900/60 hover:bg-neutral-800 text-neutral-400 border-neutral-800"
+                  }`}
+                  title="Ajouter un mot-clé ou nom d'enseigne précis si besoin"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>{showRefineKeyword ? "Masquer mot-clé" : "+ Mot-clé spécifique"}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+                {/* Direct Link to Google Maps */}
+                <a
+                  href={`https://www.google.com/maps/search/${encodeURIComponent(
+                    [
+                      selectedSubCategory || selectedSector,
+                      selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                      selectedWilaya,
+                      "Algérie",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2 px-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer h-[38px]"
+                  title="Ouvrir directement cette recherche sectorielle sur Google Maps"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Ouvrir sur Maps</span>
+                </a>
+
+                {/* Main Search Button: 100% Direct by Sector */}
+                <button
+                  type="button"
+                  onClick={handleSearch}
+                  disabled={isSearching || !selectedSector}
+                  className={`py-2 px-5 rounded-xl disabled:opacity-50 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg cursor-pointer h-[38px] min-w-[200px] ${
+                    searchEngine === "GEMINI"
+                      ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 shadow-indigo-600/30"
+                      : "bg-blue-600 hover:bg-blue-500 shadow-blue-600/20"
+                  }`}
+                >
+                  {isSearching ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Extraction en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        {searchEngine === "GEMINI"
+                          ? `Générer ${targetCount}+ Fiches avec l'IA`
+                          : searchEngine === "HYBRID"
+                          ? `Recherche Hybride (${targetCount}+)`
+                          : `Rechercher "${selectedSector}"`}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
