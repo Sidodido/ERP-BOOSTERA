@@ -727,6 +727,28 @@ export function AppointmentsClient({
     return appointments.filter((a) => a.user?.id === selectedCommercialId);
   }, [appointments, selectedCommercialId]);
 
+  // Today's Appointments Computation
+  const todayStr = toLocalDateString(new Date());
+
+  const todayFormatted = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      }).format(new Date());
+    } catch {
+      return "Aujourd'hui";
+    }
+  }, []);
+
+  const todayAppointments = useMemo(() => {
+    return filteredAppointments
+      .filter((a) => toLocalDateString(a.startTime) === todayStr)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [filteredAppointments, todayStr]);
+
   // Calendar Grid Computations
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -746,8 +768,6 @@ export function AppointmentsClient({
       isToday: boolean;
       appointments: AppointmentItem[];
     }[] = [];
-
-    const todayStr = toLocalDateString(new Date());
 
     // Previous month padding days
     const prevMonthLastDay = new Date(year, month, 0).getDate();
@@ -960,6 +980,176 @@ export function AppointmentsClient({
           <span>{feedbackMessage.text}</span>
         </div>
       )}
+
+      {/* SECTION RENDEZ-VOUS DU JOUR */}
+      <div className="bg-gradient-to-br from-neutral-900/90 via-neutral-900/80 to-neutral-950 border border-neutral-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
+        {/* En-tête de la section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800/80">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600/20 to-purple-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0 shadow-xs">
+              <CalendarDays className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm sm:text-base font-bold text-neutral-100 flex items-center gap-2">
+                  <span>Rendez-vous du jour</span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    {todayAppointments.length} RDV aujourd'hui
+                  </span>
+                </h3>
+              </div>
+              <p className="text-xs text-neutral-400 capitalize mt-0.5">
+                {todayFormatted}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => openNewForDate(todayStr)}
+              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Planifier un RDV aujourd'hui</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Liste des rendez-vous du jour ou état vide */}
+        {todayAppointments.length === 0 ? (
+          <div className="py-6 px-4 text-center rounded-xl bg-neutral-950/40 border border-dashed border-neutral-800/80 flex flex-col items-center justify-center gap-2">
+            <div className="w-9 h-9 rounded-full bg-neutral-800/60 text-neutral-400 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-neutral-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-neutral-300">
+                Aucun rendez-vous planifié pour aujourd'hui
+              </p>
+              <p className="text-[11px] text-neutral-500 mt-0.5">
+                Tous vos créneaux du jour sont libres pour la prospection ou le suivi client.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openNewForDate(todayStr)}
+              className="mt-1 text-xs text-blue-400 hover:text-blue-300 font-semibold cursor-pointer underline"
+            >
+              + Planifier un rendez-vous maintenant
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {todayAppointments.map((appt) => {
+              const d = new Date(appt.startTime);
+              const endD = new Date(appt.endTime);
+              const startH = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+              const endH = `${String(endD.getHours()).padStart(2, "0")}:${String(endD.getMinutes()).padStart(2, "0")}`;
+              const targetName = appt.prospect?.companyName || appt.client?.companyName || appt.title;
+              const phone = appt.prospect?.phone || appt.client?.phone;
+              const sector = appt.prospect?.sector;
+              const badge = getCommercialBadgeStyle(appt.user?.name, appt.user?.id);
+
+              const statusBadge =
+                appt.status === "COMPLETED"
+                  ? { bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", label: "✓ Effectué" }
+                  : appt.status === "CANCELLED"
+                  ? { bg: "bg-rose-500/15 text-rose-300 border-rose-500/30", label: "✗ Annulé" }
+                  : { bg: "bg-blue-500/15 text-blue-300 border-blue-500/30", label: "⏳ Planifié" };
+
+              return (
+                <div
+                  key={appt.id}
+                  onClick={() => openAppointmentDetail(appt)}
+                  className="p-3.5 rounded-xl bg-neutral-950/70 border border-neutral-800 hover:border-blue-500/50 hover:bg-neutral-900/90 transition-all cursor-pointer shadow-sm group flex flex-col justify-between relative space-y-3"
+                >
+                  {/* Ligne 1 : Horaires + Badge statut */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-750 text-blue-400 font-mono text-xs font-bold shrink-0">
+                      <Clock className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{startH} - {endH}</span>
+                    </div>
+
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${statusBadge.bg}`}>
+                      {statusBadge.label}
+                    </span>
+                  </div>
+
+                  {/* Ligne 2 : Informations Prospect / Client */}
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-neutral-100 group-hover:text-blue-300 transition-colors line-clamp-1 flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                      <span>{targetName}</span>
+                    </h4>
+
+                    {appt.title && appt.title !== targetName && (
+                      <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
+                        {appt.title}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {sector && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400 border border-neutral-750 font-medium">
+                          {sector}
+                        </span>
+                      )}
+
+                      {appt.location && (
+                        <span className="text-[10px] text-neutral-400 flex items-center gap-1 truncate max-w-[180px]">
+                          <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />
+                          <span className="truncate">{appt.location}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Ligne 3 : Commercial + Actions directes (Appel, WhatsApp, Gérer) */}
+                  <div className="pt-2 border-t border-neutral-850 flex items-center justify-between gap-2 text-xs">
+                    {/* Badge commercial */}
+                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-medium ${badge.bg} ${badge.border} ${badge.text}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                      <span className="truncate max-w-[110px]">{appt.user?.name || "Assigné"}</span>
+                    </div>
+
+                    {/* Raccourcis d'appel & détails */}
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      {phone && (
+                        <>
+                          <a
+                            href={`tel:${phone}`}
+                            className="p-1.5 rounded-lg bg-neutral-850 hover:bg-emerald-600/20 text-neutral-300 hover:text-emerald-400 transition"
+                            title={`Appeler ${phone}`}
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                          <a
+                            href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-neutral-850 hover:bg-emerald-600/20 text-neutral-300 hover:text-emerald-400 transition"
+                            title="Message WhatsApp"
+                          >
+                            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                          </a>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openAppointmentDetail(appt)}
+                        className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold transition cursor-pointer"
+                      >
+                        Gérer →
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* 1. VUE CALENDRIER INTERACTIF */}
       {viewMode === "calendar" && (
