@@ -25,6 +25,7 @@ import fs from "fs/promises";
 import path from "path";
 import { syncSubscriptionTasksForClients } from "@/actions/production";
 import { awardClientSigningCommissionAction } from "@/actions/rh";
+import { dispatchClientCreatedNotifications } from "@/actions/notifications";
 
 export async function getClients(params: {
   search?: string;
@@ -189,6 +190,9 @@ export async function createClientAction(data: {
       assignedToId: data.assignedToId || user.id,
       status: data.status || ClientStatus.IN_PREPARATION,
     },
+    include: {
+      assignedTo: { select: { name: true } },
+    },
   });
 
   await createAuditLog({
@@ -198,6 +202,20 @@ export async function createClientAction(data: {
     entityId: client.id,
     details: { companyName: client.companyName },
   });
+
+  // Notifier TOUS les collaborateurs de la création du client
+  try {
+    await dispatchClientCreatedNotifications({
+      clientId: client.id,
+      companyName: client.companyName,
+      offerType: client.offerType,
+      creatorName: user.name,
+      monthlyFee: Number(client.monthlyFee) || undefined,
+      assignedUserName: client.assignedTo?.name || null,
+    });
+  } catch (notifErr) {
+    console.warn("Erreur envoi notification client:", notifErr);
+  }
 
   // Attribuer automatiquement la commission de signature selon le pack (STARTER=500, SILVER=1000, GOLD=1500 DA)
   try {

@@ -14,11 +14,16 @@ export async function getUserNotificationsAction() {
       userId: user.id,
       ...(isCommercial
         ? {
-            type: { not: "CONTENT_AI" },
-            NOT: [
-              { title: { contains: "Planning Semaine", mode: "insensitive" } },
-              { title: { contains: "publication", mode: "insensitive" } },
-              { message: { contains: "publication", mode: "insensitive" } },
+            OR: [
+              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] } },
+              {
+                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] },
+                NOT: [
+                  { title: { contains: "Planning Semaine", mode: "insensitive" } },
+                  { title: { contains: "publication", mode: "insensitive" } },
+                  { message: { contains: "publication", mode: "insensitive" } },
+                ],
+              },
             ],
           }
         : {}),
@@ -33,11 +38,16 @@ export async function getUserNotificationsAction() {
       isRead: false,
       ...(isCommercial
         ? {
-            type: { not: "CONTENT_AI" },
-            NOT: [
-              { title: { contains: "Planning Semaine", mode: "insensitive" } },
-              { title: { contains: "publication", mode: "insensitive" } },
-              { message: { contains: "publication", mode: "insensitive" } },
+            OR: [
+              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] } },
+              {
+                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] },
+                NOT: [
+                  { title: { contains: "Planning Semaine", mode: "insensitive" } },
+                  { title: { contains: "publication", mode: "insensitive" } },
+                  { message: { contains: "publication", mode: "insensitive" } },
+                ],
+              },
             ],
           }
         : {}),
@@ -123,5 +133,101 @@ export async function dispatchTaskNotifications(params: {
     });
   } catch (err) {
     console.warn("Error dispatching task notification:", err);
+  }
+}
+
+/**
+ * Notifier TOUS les collaborateurs lors de la création d'un rendez-vous
+ */
+export async function dispatchAppointmentCreatedNotifications(params: {
+  appointmentId: string;
+  title: string;
+  startTime: Date;
+  creatorName: string;
+  location?: string | null;
+  prospectName?: string | null;
+  assignedUserName?: string | null;
+}) {
+  try {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    if (users.length === 0) return;
+
+    const dateStr = params.startTime.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const targetLabel = params.prospectName ? ` avec "${params.prospectName}"` : "";
+    const locLabel = params.location ? ` (${params.location})` : "";
+    const assignedLabel =
+      params.assignedUserName && params.assignedUserName !== params.creatorName
+        ? ` • Assigné à : ${params.assignedUserName}`
+        : "";
+
+    const message = `Rendez-vous "${params.title}"${targetLabel} prévu le ${dateStr}${locLabel} (planifié par ${params.creatorName}${assignedLabel}).`;
+
+    await prisma.notification.createMany({
+      data: users.map((u) => ({
+        userId: u.id,
+        title: "📅 Nouveau Rendez-vous planifié",
+        message,
+        type: "APPOINTMENT",
+        link: "/rendez-vous",
+      })),
+    });
+  } catch (err) {
+    console.warn("Erreur notification rendez-vous:", err);
+  }
+}
+
+/**
+ * Notifier TOUS les collaborateurs lors de la création d'un nouveau client
+ */
+export async function dispatchClientCreatedNotifications(params: {
+  clientId: string;
+  companyName: string;
+  offerType: string;
+  creatorName: string;
+  monthlyFee?: number;
+  assignedUserName?: string | null;
+}) {
+  try {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+
+    if (users.length === 0) return;
+
+    const packLabel = params.offerType ? ` (Pack ${params.offerType})` : "";
+    const feeLabel =
+      params.monthlyFee && params.monthlyFee > 0
+        ? ` • ${params.monthlyFee.toLocaleString("fr-FR")} DA/mois`
+        : "";
+    const assignedLabel =
+      params.assignedUserName && params.assignedUserName !== params.creatorName
+        ? ` • Commercial : ${params.assignedUserName}`
+        : "";
+
+    const message = `Le client "${params.companyName}"${packLabel}${feeLabel} a été enregistré avec succès par ${params.creatorName}${assignedLabel}.`;
+
+    await prisma.notification.createMany({
+      data: users.map((u) => ({
+        userId: u.id,
+        title: "🎉 Nouveau Client créé",
+        message,
+        type: "CLIENT",
+        link: "/clients",
+      })),
+    });
+  } catch (err) {
+    console.warn("Erreur notification client:", err);
   }
 }

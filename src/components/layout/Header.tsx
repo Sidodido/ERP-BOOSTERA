@@ -244,7 +244,15 @@ export function Header({ userName, userRole }: HeaderProps) {
                       </p>
                       {n.link && (
                         <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-400 hover:underline font-medium">
-                          <span>Voir le projet</span>
+                          <span>
+                            {n.link.startsWith("/rendez-vous")
+                              ? "Voir le rendez-vous"
+                              : n.link.startsWith("/clients")
+                              ? "Voir le client"
+                              : n.link.startsWith("/projets")
+                              ? "Voir le projet"
+                              : "Voir les détails"}
+                          </span>
                           <ExternalLink className="w-2.5 h-2.5" />
                         </div>
                       )}

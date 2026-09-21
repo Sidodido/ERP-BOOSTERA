@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { AppointmentType, AppointmentStatus, ProspectStatus, CallResult, FollowUpStatus } from "@prisma/client";
 import { revalidatePath } from "next/cache";
+import { dispatchAppointmentCreatedNotifications } from "@/actions/notifications";
 
 export async function createAppointmentAction(data: {
   title: string;
@@ -33,6 +34,11 @@ export async function createAppointmentAction(data: {
       clientId: data.clientId || null,
       userId: data.assignedUserId || user.id,
       status: AppointmentStatus.SCHEDULED,
+    },
+    include: {
+      prospect: { select: { companyName: true } },
+      client: { select: { companyName: true } },
+      user: { select: { name: true } },
     },
   });
 
@@ -70,6 +76,21 @@ export async function createAppointmentAction(data: {
     entityId: appt.id,
     details: { title: appt.title, type: appt.type, date: appt.startTime },
   });
+
+  // Notifier TOUS les collaborateurs
+  try {
+    await dispatchAppointmentCreatedNotifications({
+      appointmentId: appt.id,
+      title: appt.title,
+      startTime: appt.startTime,
+      creatorName: user.name,
+      location: appt.location,
+      prospectName: appt.prospect?.companyName || appt.client?.companyName || null,
+      assignedUserName: appt.user?.name || null,
+    });
+  } catch (notifErr) {
+    console.warn("Erreur envoi notification rendez-vous:", notifErr);
+  }
 
   revalidatePath("/rendez-vous");
   revalidatePath("/prospection");
