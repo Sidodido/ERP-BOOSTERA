@@ -2,11 +2,15 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { FOLLOWUP_STATUSES } from "@/lib/constants";
-import { FollowUpStatus } from "@prisma/client";
+import { FollowUpStatus, CallResult } from "@prisma/client";
 import { formatDate, toLocalDateString, buildWhatsAppUrl } from "@/lib/utils";
 import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
 import { trackCommunicationClick } from "@/lib/tracking";
-import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
+import {
+  processFollowUpAction,
+  rescheduleFollowUpAction,
+  logFollowUpCallAction,
+} from "@/actions/followups";
 import { updateProspectField } from "@/actions/prospects";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +18,8 @@ import { Input } from "@/components/ui/Input";
 import {
   Building,
   Phone,
+  PhoneCall,
+  Plus,
   LayoutGrid,
   List,
   Search,
@@ -92,6 +98,14 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
   const [rescheduleBase, setRescheduleBase] = useState<"today" | "initial">("today");
   const [modalError, setModalError] = useState<string | null>(null);
   const [isRescheduling, setIsRescheduling] = useState(false);
+
+  // Call Modal State (+ APPEL)
+  const [callModalOpen, setCallModalOpen] = useState(false);
+  const [callTargetFollowUp, setCallTargetFollowUp] = useState<FollowUpItem | null>(null);
+  const [callResult, setCallResult] = useState<CallResult>(CallResult.INTERESTED);
+  const [callComment, setCallComment] = useState("");
+  const [callDuration, setCallDuration] = useState("60");
+  const [isLoggingCall, setIsLoggingCall] = useState(false);
 
   const now = new Date();
   const todayStr = toLocalDateString(now);
@@ -239,6 +253,74 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
     setRescheduleDate(targetStr);
     setRescheduleNotes(item.notes || `Relance reportée au ${formatDate(nextDay)} (+1j)`);
     setRescheduleModalOpen(true);
+  };
+
+  const openCallModal = (item: FollowUpItem) => {
+    setCallTargetFollowUp(item);
+    setCallResult(CallResult.INTERESTED);
+    setCallComment(item.notes || "");
+    setCallDuration("60");
+    setCallModalOpen(true);
+  };
+
+  const handleCallSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!callTargetFollowUp) return;
+
+    setIsLoggingCall(true);
+    try {
+      const res = await logFollowUpCallAction({
+        followUpId: callTargetFollowUp.id,
+        result: callResult,
+        comment: callComment,
+        durationSeconds: Number(callDuration) || 60,
+      });
+
+      if (res.success) {
+        setFollowUps((prev) =>
+          prev.map((f) =>
+            f.id === callTargetFollowUp.id
+              ? {
+                  ...f,
+                  status:
+                    callResult === CallResult.NOT_INTERESTED
+                      ? FollowUpStatus.LOST
+                      : FollowUpStatus.COMPLETED,
+                  completedAt: new Date(),
+                  notes: callComment || f.notes,
+                }
+              : f
+          )
+        );
+
+        if (res.nextFollowUp) {
+          const nextItem: FollowUpItem = {
+            id: res.nextFollowUp.id,
+            stepNumber: res.nextFollowUp.stepNumber,
+            scheduledAt: new Date(res.nextFollowUp.scheduledAt),
+            status: FollowUpStatus.SCHEDULED,
+            notes: res.nextFollowUp.notes,
+            completedAt: null,
+            prospect: callTargetFollowUp.prospect,
+            user: callTargetFollowUp.user,
+          };
+          setFollowUps((prev) => [...prev, nextItem]);
+        }
+
+        setCallModalOpen(false);
+        setFeedbackMessage({
+          type: "success",
+          text: `✓ Appel enregistré avec succès ! Le prospect "${callTargetFollowUp.prospect.companyName}" a été ajouté dans la section Appels.`,
+        });
+      }
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: "error",
+        text: err?.message || "Erreur lors de l'enregistrement de l'appel.",
+      });
+    } finally {
+      setIsLoggingCall(false);
+    }
   };
 
   const handleQuickAddDays = (days: number, forceBase?: "today" | "initial", executeNow = false) => {
@@ -670,67 +752,31 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                   </div>
 
                   {item.status === "SCHEDULED" ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-                      {/* 0. REPORTER */}
+                    <div className="flex items-center gap-2 pt-1">
+                      {/* REPORTER */}
                       <button
                         type="button"
                         disabled={isPending}
                         onClick={() => openRescheduleModal(item)}
-                        className="px-2 py-2 bg-amber-500/15 hover:bg-amber-600 hover:text-white text-amber-300 border border-amber-500/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm shadow-amber-500/10 disabled:opacity-50"
+                        className="px-3 py-2 bg-amber-500/15 hover:bg-amber-600 hover:text-white text-amber-300 border border-amber-500/30 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm shadow-amber-500/10 disabled:opacity-50"
                         title="Reporter la relance à une date personnalisée"
                       >
                         <Calendar className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                        <span className="truncate">Reporter</span>
+                        <span>Reporter</span>
                       </button>
 
-                      {/* 1. PAS INTÉRESSÉ */}
+                      {/* + APPEL (AJOUTER DANS LES APPELS) */}
                       <button
                         type="button"
                         disabled={isPending}
-                        onClick={() => handleProcess(item.id, "NOT_INTERESTED")}
-                        className="px-2 py-2 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-400 border border-rose-500/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
-                        title="Marquer comme pas intéressé (clôture la relance)"
+                        onClick={() => openCallModal(item)}
+                        className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50"
+                        title="Enregistrer un appel et ajouter dans les appels"
                       >
-                        <XCircle className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">Pas intéressé</span>
+                        <Plus className="w-3.5 h-3.5" />
+                        <PhoneCall className="w-3.5 h-3.5" />
+                        <span>+ APPEL</span>
                       </button>
-
-                      {/* 2. INTÉRESSÉ (+3j) */}
-                      <button
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => handleProcess(item.id, "INTERESTED")}
-                        className="px-2 py-2 bg-emerald-500/20 hover:bg-emerald-600 hover:text-white text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm shadow-emerald-500/10 disabled:opacity-50"
-                        title="Marquer intéressé et programmer la prochaine relance à J+3"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                        <span className="truncate">Intéressé (+3j)</span>
-                      </button>
-
-                      {/* 3. À RELANCER (+7j ou +15j selon étape) */}
-                      {isRelance7J ? (
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() => handleProcess(item.id, "RETRY_15")}
-                          className="px-2 py-2 bg-purple-500/15 hover:bg-purple-600 hover:text-white text-purple-300 border border-purple-500/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50 shadow-sm shadow-purple-500/10"
-                          title="Client en relance après 7 jours : reporter la relance à J+15"
-                        >
-                          <RotateCw className="w-3.5 h-3.5 shrink-0 text-purple-400" />
-                          <span className="truncate">À relancer (+15j)</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={isPending}
-                          onClick={() => handleProcess(item.id, "RETRY")}
-                          className="px-2 py-2 bg-blue-500/15 hover:bg-blue-600 hover:text-white text-blue-300 border border-blue-500/30 rounded-xl text-[11px] font-semibold transition-all cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
-                          title="Reporter la relance à J+7"
-                        >
-                          <RotateCw className="w-3.5 h-3.5 shrink-0 text-blue-400" />
-                          <span className="truncate">À relancer (+7j)</span>
-                        </button>
-                      )}
                     </div>
                   ) : (
                     <div className="text-center py-1.5 px-3 rounded-xl bg-neutral-950/70 border border-neutral-800 text-[11px] text-neutral-400 font-medium">
@@ -766,7 +812,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                   <th className="py-3 px-3 text-center">ÉTAPE</th>
                   <th className="py-3 px-3">STATUT</th>
                   <th className="py-3 px-3 text-blue-400">COMMERCIAL</th>
-                  <th className="py-3 px-3 text-center min-w-[390px]">ACTIONS (DÉCISION RELANCE)</th>
+                  <th className="py-3 px-3 text-center min-w-[190px]">ACTIONS (+ APPEL)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60 font-medium text-neutral-300">
@@ -1029,70 +1075,34 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         {item.user.name}
                       </td>
 
-                      {/* 8. ACTIONS: 3 BOUTONS */}
+                      {/* 8. ACTIONS: REPORTER & + APPEL */}
                       <td className="py-2.5 px-3">
                         {item.status === "SCHEDULED" ? (
-                          <div className="flex items-center justify-center gap-1.5">
+                          <div className="flex items-center justify-center gap-2">
                             {/* REPORTER */}
                             <button
                               type="button"
                               disabled={isPending}
                               onClick={() => openRescheduleModal(item)}
-                              className="px-2.5 py-1 bg-amber-500/15 hover:bg-amber-600 hover:text-white text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                              className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-600 hover:text-white text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                               title="Reporter la relance à une date personnalisée"
                             >
                               <Calendar className="w-3 h-3 text-amber-400" />
                               <span>Reporter</span>
                             </button>
 
-                            {/* PAS INTÉRESSÉ */}
+                            {/* + APPEL (AJOUTER DANS LES APPELS) */}
                             <button
                               type="button"
                               disabled={isPending}
-                              onClick={() => handleProcess(item.id, "NOT_INTERESTED")}
-                              className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-400 border border-rose-500/30 rounded-lg text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-50"
-                              title="Marquer comme pas intéressé (clôture)"
+                              onClick={() => openCallModal(item)}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50"
+                              title="Enregistrer un appel et ajouter dans les appels"
                             >
-                              <XCircle className="w-3 h-3" />
-                              <span>Pas intéressé</span>
+                              <Plus className="w-3.5 h-3.5" />
+                              <PhoneCall className="w-3.5 h-3.5" />
+                              <span>+ APPEL</span>
                             </button>
-
-                            {/* INTÉRESSÉ (+3j) */}
-                            <button
-                              type="button"
-                              disabled={isPending}
-                              onClick={() => handleProcess(item.id, "INTERESTED")}
-                              className="px-2.5 py-1 bg-emerald-500/20 hover:bg-emerald-600 hover:text-white text-emerald-300 border border-emerald-500/40 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-50 shadow-xs"
-                              title="Intéressé : Programmer automatiquement la prochaine relance à J+3"
-                            >
-                              <Sparkles className="w-3 h-3 text-emerald-400" />
-                              <span>Intéressé (+3j)</span>
-                            </button>
-
-                            {/* 3. À RELANCER (+7j ou +15j selon étape) */}
-                            {isRelance7J ? (
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => handleProcess(item.id, "RETRY_15")}
-                                className="px-2.5 py-1 bg-purple-500/15 hover:bg-purple-600 hover:text-white text-purple-300 border border-purple-500/30 rounded-lg text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-50 shadow-xs"
-                                title="Client en relance après 7 jours : reporter la relance à J+15"
-                              >
-                                <RotateCw className="w-3 h-3 text-purple-400" />
-                                <span>À relancer (+15j)</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={isPending}
-                                onClick={() => handleProcess(item.id, "RETRY")}
-                                className="px-2.5 py-1 bg-blue-500/15 hover:bg-blue-600 hover:text-white text-blue-300 border border-blue-500/30 rounded-lg text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-50"
-                                title="Reporter la relance à J+7"
-                              >
-                                <RotateCw className="w-3 h-3 text-blue-400" />
-                                <span>À relancer (+7j)</span>
-                              </button>
-                            )}
                           </div>
                         ) : (
                           <div className="text-center text-[10px] text-neutral-500 font-medium">
@@ -1450,6 +1460,233 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                 {rescheduleDate
                   ? `✓ Confirmer le report au ${formatDate(rescheduleDate)}`
                   : "Confirmer le report"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* MODAL: + APPEL (JOURNALISER L'APPEL ET AJOUTER DANS LES APPELS) */}
+      <Modal
+        isOpen={callModalOpen}
+        onClose={() => {
+          setCallModalOpen(false);
+          setCallTargetFollowUp(null);
+        }}
+        title={`+ APPEL : ${callTargetFollowUp?.prospect.companyName || "Prospect"}`}
+        description="Enregistrez l'appel et ajoutez automatiquement le prospect dans la section Appels"
+        maxWidth="lg"
+      >
+        {callTargetFollowUp && (
+          <form onSubmit={handleCallSubmit} className="space-y-4">
+            {/* Prospect summary banner */}
+            <div className="p-3.5 bg-neutral-950/80 border border-neutral-800 rounded-xl space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+                    <Building className="w-4 h-4 text-emerald-400" />
+                    {callTargetFollowUp.prospect.companyName}
+                  </h4>
+                  <p className="text-xs text-neutral-400">
+                    {callTargetFollowUp.prospect.contactName
+                      ? `${callTargetFollowUp.prospect.contactName} • `
+                      : ""}
+                    {callTargetFollowUp.prospect.sector} ({callTargetFollowUp.prospect.wilaya})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${callTargetFollowUp.prospect.phone}`}
+                    onClick={() => {
+                      trackCommunicationClick({
+                        type: "PHONE",
+                        targetName: callTargetFollowUp.prospect.companyName,
+                        phone: callTargetFollowUp.prospect.phone,
+                        entityType: "PROSPECT",
+                        entityId: callTargetFollowUp.prospect.id,
+                      });
+                    }}
+                    className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{callTargetFollowUp.prospect.phone}</span>
+                  </a>
+
+                  <a
+                    href={buildWhatsAppUrl(
+                      callTargetFollowUp.prospect.phone,
+                      callTargetFollowUp.prospect.companyName,
+                      callTargetFollowUp.prospect.contactName
+                    )}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      trackCommunicationClick({
+                        type: "WHATSAPP",
+                        targetName: callTargetFollowUp.prospect.companyName,
+                        phone: callTargetFollowUp.prospect.phone,
+                        entityType: "PROSPECT",
+                        entityId: callTargetFollowUp.prospect.id,
+                      });
+                    }}
+                    className="px-2.5 py-1.5 bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] rounded-lg text-xs font-medium transition-all flex items-center gap-1"
+                    title="Envoyer message WhatsApp"
+                  >
+                    <WhatsAppIcon className="w-3.5 h-3.5" />
+                    <span>WhatsApp</span>
+                  </a>
+                </div>
+              </div>
+
+              {callTargetFollowUp.notes && (
+                <div className="pt-2 border-t border-neutral-800/80 text-[11px] text-neutral-400 flex items-center gap-1.5">
+                  <span className="font-semibold text-neutral-300">Note précédente :</span>
+                  <span className="italic truncate">{callTargetFollowUp.notes}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Call Result Selection */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-200">
+                Résultat de l'appel *
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  {
+                    value: CallResult.INTERESTED,
+                    label: "Intéressé (+3j)",
+                    desc: "Programmer relance J+3",
+                    color: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+                    activeColor: "border-emerald-500 bg-emerald-500/25 ring-1 ring-emerald-500 text-white",
+                  },
+                  {
+                    value: CallResult.CALLBACK_REQUESTED,
+                    label: "À relancer (+7j)",
+                    desc: "Programmer relance J+7",
+                    color: "border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20",
+                    activeColor: "border-blue-500 bg-blue-500/25 ring-1 ring-blue-500 text-white",
+                  },
+                  {
+                    value: CallResult.APPOINTMENT_BOOKED,
+                    label: "RDV fixé",
+                    desc: "Rendez-vous convenu",
+                    color: "border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20",
+                    activeColor: "border-purple-500 bg-purple-500/25 ring-1 ring-purple-500 text-white",
+                  },
+                  {
+                    value: CallResult.NO_ANSWER,
+                    label: "Pas de réponse",
+                    desc: "Ne décroche pas",
+                    color: "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20",
+                    activeColor: "border-amber-500 bg-amber-500/25 ring-1 ring-amber-500 text-white",
+                  },
+                  {
+                    value: CallResult.NOT_INTERESTED,
+                    label: "Pas intéressé",
+                    desc: "Clôturer le prospect",
+                    color: "border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20",
+                    activeColor: "border-rose-500 bg-rose-500/25 ring-1 ring-rose-500 text-white",
+                  },
+                  {
+                    value: CallResult.UNREACHABLE,
+                    label: "Injoignable / Faux n°",
+                    desc: "Numéro erroné ou éteint",
+                    color: "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800",
+                    activeColor: "border-neutral-500 bg-neutral-800 ring-1 ring-neutral-400 text-white",
+                  },
+                ].map((item) => {
+                  const isSelected = callResult === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setCallResult(item.value)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected ? item.activeColor : item.color
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{item.label}</div>
+                      <div className="text-[10px] opacity-75 mt-0.5">{item.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Call Duration */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-200">
+                Durée de l'appel
+              </label>
+              <div className="flex items-center gap-2">
+                {[
+                  { label: "30s", val: "30" },
+                  { label: "1 min", val: "60" },
+                  { label: "2 min", val: "120" },
+                  { label: "3 min", val: "180" },
+                  { label: "5 min", val: "300" },
+                ].map((d) => (
+                  <button
+                    key={d.val}
+                    type="button"
+                    onClick={() => setCallDuration(d.val)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                      callDuration === d.val
+                        ? "bg-emerald-600 border-emerald-500 text-white"
+                        : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={callDuration}
+                    onChange={(e) => setCallDuration(e.target.value)}
+                    className="w-20 text-center text-xs h-8"
+                  />
+                  <span className="text-xs text-neutral-400">sec</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Call Comment / Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-200">
+                Remarques / Compte-rendu de l'appel :
+              </label>
+              <textarea
+                rows={3}
+                value={callComment}
+                onChange={(e) => setCallComment(e.target.value)}
+                placeholder="Ex: Le prospect souhaite une démo mardi prochain, très intéressé par le pack Gold..."
+                className="w-full p-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setCallModalOpen(false);
+                  setCallTargetFollowUp(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                isLoading={isLoggingCall}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1.5 shadow-lg shadow-emerald-600/20"
+              >
+                <PhoneCall className="w-4 h-4" />
+                <span>+ Enregistrer & Transférer dans les Appels</span>
               </Button>
             </div>
           </form>

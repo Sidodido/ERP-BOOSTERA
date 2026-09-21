@@ -13,19 +13,21 @@ import {
   AppointmentType,
   AppointmentStatus,
   OfferType,
+  CallResult,
 } from "@prisma/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { formatDateTime, formatDate, toLocalDateString, formatCurrency } from "@/lib/utils";
+import { formatDateTime, formatDate, toLocalDateString, formatCurrency, buildWhatsAppUrl } from "@/lib/utils";
 import { trackCommunicationClick } from "@/lib/tracking";
+import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
 import {
   createAppointmentAction,
   updateAppointmentStatus,
   rescheduleAppointmentAction,
   deleteAppointmentAction,
 } from "@/actions/appointments";
-import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
+import { processFollowUpAction, rescheduleFollowUpAction, logFollowUpCallAction } from "@/actions/followups";
 import { convertProspectToClient } from "@/actions/prospects";
 import {
   CustomOfferConfigurator,
@@ -41,6 +43,7 @@ import {
   Plus,
   Building,
   Phone,
+  PhoneCall,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -210,6 +213,14 @@ export function AppointmentsClient({
   const [followUpRescheduleBase, setFollowUpRescheduleBase] = useState<"today" | "initial">("today");
   const [followUpModalError, setFollowUpModalError] = useState<string | null>(null);
   const [isFollowUpRescheduling, setIsFollowUpRescheduling] = useState(false);
+
+  // Follow-up Call Modal State (+ APPEL)
+  const [followUpCallModalOpen, setFollowUpCallModalOpen] = useState(false);
+  const [targetFollowUpCall, setTargetFollowUpCall] = useState<any | null>(null);
+  const [followUpCallResult, setFollowUpCallResult] = useState<CallResult>(CallResult.INTERESTED);
+  const [followUpCallComment, setFollowUpCallComment] = useState("");
+  const [followUpCallDuration, setFollowUpCallDuration] = useState("60");
+  const [isLoggingFollowUpCall, setIsLoggingFollowUpCall] = useState(false);
 
   // New Appointment Form State
   const [form, setForm] = useState({
@@ -714,6 +725,46 @@ export function AppointmentsClient({
     if (e) e.preventDefault();
     if (!targetFollowUp || !followUpRescheduleDate) return;
     await handleExecuteFollowUpReschedule(followUpRescheduleDate, followUpRescheduleNotes);
+  };
+
+  const openFollowUpCallModal = (item: any) => {
+    setTargetFollowUpCall(item);
+    setFollowUpCallResult(CallResult.INTERESTED);
+    setFollowUpCallComment(item.notes || "");
+    setFollowUpCallDuration("60");
+    setFollowUpCallModalOpen(true);
+  };
+
+  const handleFollowUpCallSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetFollowUpCall) return;
+
+    setIsLoggingFollowUpCall(true);
+    try {
+      const res = await logFollowUpCallAction({
+        followUpId: targetFollowUpCall.id,
+        result: followUpCallResult,
+        comment: followUpCallComment,
+        durationSeconds: Number(followUpCallDuration) || 60,
+      });
+
+      if (res.success) {
+        setFeedbackMessage({
+          type: "success",
+          text: `✓ Appel enregistré avec succès ! Le prospect "${targetFollowUpCall.prospect?.companyName || "Prospect"}" a été ajouté dans la section Appels.`,
+        });
+        setFollowUpCallModalOpen(false);
+        setTargetFollowUpCall(null);
+        window.location.reload();
+      }
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: "error",
+        text: err?.message || "Erreur lors de l'enregistrement de l'appel",
+      });
+    } finally {
+      setIsLoggingFollowUpCall(false);
+    }
   };
 
   // Convert Prospect to Client (Directly from Rendez-vous!)
@@ -1794,49 +1845,16 @@ export function AppointmentsClient({
                               Reporter
                             </button>
 
+                            {/* + APPEL (AJOUTER DANS LES APPELS) */}
                             <button
                               type="button"
-                              onClick={() => handleFollowUpDecision(item.id, "NOT_INTERESTED")}
-                              className="px-2 py-1 bg-rose-500/10 hover:bg-rose-500 hover:text-white text-rose-400 border border-rose-500/20 rounded-md text-[10px] font-semibold transition-colors cursor-pointer"
-                              title="Marquer comme Pas intéressé"
+                              onClick={() => openFollowUpCallModal(item)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 shadow-sm active:scale-[0.98]"
+                              title="Enregistrer un appel et ajouter dans les appels"
                             >
-                              Pas intéressé
+                              <PhoneCall className="w-3 h-3" />
+                              <span>+ APPEL</span>
                             </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleFollowUpDecision(item.id, "INTERESTED")}
-                              className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/20 rounded-md text-[10px] font-semibold transition-colors cursor-pointer"
-                              title="Intéressé - Programmer nouvelle relance à J+3"
-                            >
-                              Intéressé (+3j)
-                            </button>
-
-                            {/* À RELANCER (+7j ou +15j si déjà à l'étape 7 jours) */}
-                            {item.stepNumber >= 2 ||
-                            (item.notes &&
-                              (item.notes.includes("+7j") ||
-                                item.notes.includes("J+7") ||
-                                item.notes.includes("7 jours") ||
-                                item.notes.includes("7j"))) ? (
-                              <button
-                                type="button"
-                                onClick={() => handleFollowUpDecision(item.id, "RETRY_15")}
-                                className="px-2 py-1 bg-purple-500/15 hover:bg-purple-600 hover:text-white text-purple-300 border border-purple-500/30 rounded-md text-[10px] font-semibold transition-colors cursor-pointer"
-                                title="Client en relance après 7 jours : reporter la relance à J+15"
-                              >
-                                À relancer (+15j)
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleFollowUpDecision(item.id, "RETRY")}
-                                className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-400 border border-blue-500/20 rounded-md text-[10px] font-semibold transition-colors cursor-pointer"
-                                title="À relancer - Programmer nouvelle relance à J+7"
-                              >
-                                À relancer (+7j)
-                              </button>
-                            )}
 
                             {prospect.status !== "CONVERTED" && (
                               <button
@@ -2991,6 +3009,235 @@ export function AppointmentsClient({
                 {followUpRescheduleDate
                   ? `✓ Confirmer le report au ${formatDate(followUpRescheduleDate)}`
                   : "Confirmer le report"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* MODAL: + APPEL (JOURNALISER L'APPEL ET AJOUTER DANS LES APPELS) */}
+      <Modal
+        isOpen={followUpCallModalOpen}
+        onClose={() => {
+          setFollowUpCallModalOpen(false);
+          setTargetFollowUpCall(null);
+        }}
+        title={`+ APPEL : ${targetFollowUpCall?.prospect?.companyName || "Prospect"}`}
+        description="Enregistrez l'appel et ajoutez automatiquement le prospect dans la section Appels"
+        maxWidth="lg"
+      >
+        {targetFollowUpCall && (
+          <form onSubmit={handleFollowUpCallSubmit} className="space-y-4">
+            {/* Prospect summary banner */}
+            <div className="p-3.5 bg-neutral-950/80 border border-neutral-800 rounded-xl space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+                    <Building className="w-4 h-4 text-emerald-400" />
+                    {targetFollowUpCall.prospect?.companyName}
+                  </h4>
+                  <p className="text-xs text-neutral-400">
+                    {targetFollowUpCall.prospect?.contactName
+                      ? `${targetFollowUpCall.prospect.contactName} • `
+                      : ""}
+                    {targetFollowUpCall.prospect?.sector} ({targetFollowUpCall.prospect?.wilaya || "Alger"})
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${targetFollowUpCall.prospect?.phone}`}
+                    onClick={() => {
+                      trackCommunicationClick({
+                        type: "PHONE",
+                        targetName: targetFollowUpCall.prospect?.companyName,
+                        phone: targetFollowUpCall.prospect?.phone,
+                        entityType: "PROSPECT",
+                        entityId: targetFollowUpCall.prospect?.id,
+                      });
+                    }}
+                    className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    <span>{targetFollowUpCall.prospect?.phone}</span>
+                  </a>
+
+                  {targetFollowUpCall.prospect?.phone && (
+                    <a
+                      href={buildWhatsAppUrl(
+                        targetFollowUpCall.prospect.phone,
+                        targetFollowUpCall.prospect.companyName,
+                        targetFollowUpCall.prospect.contactName
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        trackCommunicationClick({
+                          type: "WHATSAPP",
+                          targetName: targetFollowUpCall.prospect.companyName,
+                          phone: targetFollowUpCall.prospect.phone,
+                          entityType: "PROSPECT",
+                          entityId: targetFollowUpCall.prospect.id,
+                        });
+                      }}
+                      className="px-2.5 py-1.5 bg-emerald-500/15 hover:bg-[#25D366] text-[#25D366] hover:text-white border border-emerald-500/30 hover:border-[#25D366] rounded-lg text-xs font-medium transition-all flex items-center gap-1"
+                      title="Envoyer message WhatsApp"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {targetFollowUpCall.notes && (
+                <div className="pt-2 border-t border-neutral-800/80 text-[11px] text-neutral-400 flex items-center gap-1.5">
+                  <span className="font-semibold text-neutral-300">Note précédente :</span>
+                  <span className="italic truncate">{targetFollowUpCall.notes}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Call Result Selection */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-200">
+                Résultat de l'appel *
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  {
+                    value: CallResult.INTERESTED,
+                    label: "Intéressé (+3j)",
+                    desc: "Programmer relance J+3",
+                    color: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20",
+                    activeColor: "border-emerald-500 bg-emerald-500/25 ring-1 ring-emerald-500 text-white",
+                  },
+                  {
+                    value: CallResult.CALLBACK_REQUESTED,
+                    label: "À relancer (+7j)",
+                    desc: "Programmer relance J+7",
+                    color: "border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20",
+                    activeColor: "border-blue-500 bg-blue-500/25 ring-1 ring-blue-500 text-white",
+                  },
+                  {
+                    value: CallResult.APPOINTMENT_BOOKED,
+                    label: "RDV fixé",
+                    desc: "Rendez-vous convenu",
+                    color: "border-purple-500/40 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20",
+                    activeColor: "border-purple-500 bg-purple-500/25 ring-1 ring-purple-500 text-white",
+                  },
+                  {
+                    value: CallResult.NO_ANSWER,
+                    label: "Pas de réponse",
+                    desc: "Ne décroche pas",
+                    color: "border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20",
+                    activeColor: "border-amber-500 bg-amber-500/25 ring-1 ring-amber-500 text-white",
+                  },
+                  {
+                    value: CallResult.NOT_INTERESTED,
+                    label: "Pas intéressé",
+                    desc: "Clôturer le prospect",
+                    color: "border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20",
+                    activeColor: "border-rose-500 bg-rose-500/25 ring-1 ring-rose-500 text-white",
+                  },
+                  {
+                    value: CallResult.UNREACHABLE,
+                    label: "Injoignable / Faux n°",
+                    desc: "Numéro erroné ou éteint",
+                    color: "border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800",
+                    activeColor: "border-neutral-500 bg-neutral-800 ring-1 ring-neutral-400 text-white",
+                  },
+                ].map((item) => {
+                  const isSelected = followUpCallResult === item.value;
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setFollowUpCallResult(item.value)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected ? item.activeColor : item.color
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{item.label}</div>
+                      <div className="text-[10px] opacity-75 mt-0.5">{item.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Call Duration */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-200">
+                Durée de l'appel
+              </label>
+              <div className="flex items-center gap-2">
+                {[
+                  { label: "30s", val: "30" },
+                  { label: "1 min", val: "60" },
+                  { label: "2 min", val: "120" },
+                  { label: "3 min", val: "180" },
+                  { label: "5 min", val: "300" },
+                ].map((d) => (
+                  <button
+                    key={d.val}
+                    type="button"
+                    onClick={() => setFollowUpCallDuration(d.val)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                      followUpCallDuration === d.val
+                        ? "bg-emerald-600 border-emerald-500 text-white"
+                        : "bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={followUpCallDuration}
+                    onChange={(e) => setFollowUpCallDuration(e.target.value)}
+                    className="w-20 text-center text-xs h-8"
+                  />
+                  <span className="text-xs text-neutral-400">sec</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Call Comment / Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-200">
+                Remarques / Compte-rendu de l'appel :
+              </label>
+              <textarea
+                rows={3}
+                value={followUpCallComment}
+                onChange={(e) => setFollowUpCallComment(e.target.value)}
+                placeholder="Ex: Le prospect souhaite une démo mardi prochain, très intéressé par le pack Gold..."
+                className="w-full p-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex justify-end gap-2 pt-3 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setFollowUpCallModalOpen(false);
+                  setTargetFollowUpCall(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                isLoading={isLoggingFollowUpCall}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1.5 shadow-lg shadow-emerald-600/20"
+              >
+                <PhoneCall className="w-4 h-4" />
+                <span>+ Enregistrer & Transférer dans les Appels</span>
               </Button>
             </div>
           </form>

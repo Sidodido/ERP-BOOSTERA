@@ -503,3 +503,175 @@ export async function processFollowUpAction(data: {
         : "Relance programmée à J+7 dans le calendrier.",
   };
 }
+
+/**
+ * Enregistre un appel (+ APPEL) directement depuis une relance
+ * et l'ajoute automatiquement dans la section /appels (Call + Prospect appelé)
+ */
+export async function logFollowUpCallAction(data: {
+  followUpId: string;
+  result: CallResult;
+  comment?: string;
+  durationSeconds?: number;
+}) {
+  const user = await requireAuth();
+
+  const followUp = await prisma.followUp.findUnique({
+    where: { id: data.followUpId },
+    include: { prospect: true },
+  });
+
+  if (!followUp || !followUp.prospectId) {
+    throw new Error("Relance ou prospect introuvable.");
+  }
+
+  const now = new Date();
+  const prospectId = followUp.prospectId;
+
+  // 1. Enregistrer dans la table Call (historique des appels)
+  const call = await prisma.call.create({
+    data: {
+      prospectId,
+      userId: user.id,
+      result: data.result,
+      comment: data.comment?.trim() || `Appel de relance (Étape ${followUp.stepNumber})`,
+      durationSeconds: data.durationSeconds || 60,
+      calledAt: now,
+    },
+  });
+
+  // 2. Mettre à jour le prospect pour qu'il soit dans la liste des Appels
+  let newStatus: ProspectStatus | null = null;
+  let callStatus = "EFFECTUE";
+
+  if (data.result === CallResult.INTERESTED) {
+    newStatus = ProspectStatus.INTERESTED;
+    callStatus = "EFFECTUE";
+  } else if (data.result === CallResult.NOT_INTERESTED) {
+    newStatus = ProspectStatus.NOT_INTERESTED;
+    callStatus = "EFFECTUE";
+  } else if (data.result === CallResult.NO_ANSWER) {
+    newStatus = ProspectStatus.CONTACTED;
+    callStatus = "PAS DE REPONSE";
+  } else if (data.result === CallResult.UNREACHABLE) {
+    newStatus = ProspectStatus.CONTACTED;
+    callStatus = "INJOIGNABLE";
+  } else if (data.result === CallResult.CALLBACK_REQUESTED) {
+    newStatus = ProspectStatus.CONTACTED;
+    callStatus = "A RAPPELER";
+  } else if (data.result === CallResult.APPOINTMENT_BOOKED) {
+    newStatus = ProspectStatus.MEETING_SCHEDULED;
+    callStatus = "EFFECTUE";
+  }
+
+  const updateData: any = {
+    rawState: "TRANSFERE_APPELS",
+    callStatus,
+    source: "APPELS",
+    prospectionDate: now,
+    assignedToId: followUp.userId || user.id,
+  };
+  if (newStatus) updateData.status = newStatus;
+  if (data.comment?.trim()) {
+    updateData.response = data.comment.trim();
+  }
+
+  await prisma.prospect.update({
+    where: { id: prospectId },
+    data: updateData,
+  });
+
+  // 3. Mettre à jour la relance et programmer l'étape suivante si applicable
+  let nextFollowUp: any = null;
+  if (data.result === CallResult.NOT_INTERESTED) {
+    await prisma.followUp.update({
+      where: { id: followUp.id },
+      data: {
+        status: FollowUpStatus.LOST,
+        completedAt: now,
+        notes: data.comment?.trim() || "Prospect non intéressé lors de l'appel",
+      },
+    });
+  } else if (data.result === CallResult.INTERESTED) {
+    await prisma.followUp.update({
+      where: { id: followUp.id },
+      data: {
+        status: FollowUpStatus.COMPLETED,
+        completedAt: now,
+        notes: data.comment?.trim() || "Intéressé suite à appel (+3j)",
+      },
+    });
+    // Schedule +3j
+    const day3 = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 3);
+    nextFollowUp = await prisma.followUp.create({
+      data: {
+        prospectId,
+        userId: followUp.userId || user.id,
+        stepNumber: followUp.stepNumber + 1,
+        scheduledAt: day3,
+        status: FollowUpStatus.SCHEDULED,
+        notes: `[Relance suite appel] Intéressé : ${data.comment?.trim() || "À relancer à +3j"}`,
+      },
+    });
+  } else if (
+    data.result === CallResult.CALLBACK_REQUESTED ||
+    data.result === CallResult.NO_ANSWER ||
+    data.result === CallResult.UNREACHABLE
+  ) {
+    await prisma.followUp.update({
+      where: { id: followUp.id },
+      data: {
+        status: FollowUpStatus.COMPLETED,
+        completedAt: now,
+        notes: data.comment?.trim() || `Appel : ${data.result} (À relancer +7j)`,
+      },
+    });
+    // Schedule +7j
+    const day7 = new Date(now.getTime() + 1000 * 60 * 60 * 24 * 7);
+    nextFollowUp = await prisma.followUp.create({
+      data: {
+        prospectId,
+        userId: followUp.userId || user.id,
+        stepNumber: followUp.stepNumber + 1,
+        scheduledAt: day7,
+        status: FollowUpStatus.SCHEDULED,
+        notes: `[Relance suite appel] ${
+          data.result === CallResult.NO_ANSWER ? "Pas de réponse" : "À rappeler"
+        } : ${data.comment?.trim() || "À relancer à +7j"}`,
+      },
+    });
+  } else if (data.result === CallResult.APPOINTMENT_BOOKED) {
+    await prisma.followUp.update({
+      where: { id: followUp.id },
+      data: {
+        status: FollowUpStatus.COMPLETED,
+        completedAt: now,
+        notes: data.comment?.trim() || "RDV fixé lors de l'appel",
+      },
+    });
+  }
+
+  try {
+    await createAuditLog({
+      userId: user.id,
+      action: "LOG_FOLLOWUP_CALL",
+      module: "CALLS",
+      entityId: call.id,
+      details: {
+        prospectId,
+        followUpId: followUp.id,
+        result: data.result,
+        comment: data.comment,
+      },
+    });
+  } catch (auditErr) {
+    console.warn("Audit log error:", auditErr);
+  }
+
+  revalidatePath("/relances");
+  revalidatePath("/appels");
+  revalidatePath("/prospection");
+  revalidatePath("/dashboard");
+
+  return { success: true, call, nextFollowUp };
+}
