@@ -9,12 +9,19 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function ProspectionPage() {
+interface ProspectionPageProps {
+  searchParams?: Promise<{ search?: string }>;
+}
+
+export default async function ProspectionPage({ searchParams }: ProspectionPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  const resolvedParams = searchParams ? await searchParams : {};
+  const hasSearch = Boolean(resolvedParams.search);
+
   const [prospects, overviewStats, localFileInfo, salesUsers] = await Promise.all([
-    getProspects({ onlyVirgin: true }),
+    getProspects(hasSearch ? { search: resolvedParams.search, isGlobalView: true } : { onlyVirgin: true }),
     getProspectsOverviewStats(),
     getLocalProspectionFileInfo(),
     prisma.user.findMany({
@@ -35,6 +42,7 @@ export default async function ProspectionPage() {
         canDelete={canDelete}
         localFileInfo={localFileInfo}
         overviewStats={overviewStats}
+        initialSearch={resolvedParams.search || ""}
       />
     </AppShell>
   );

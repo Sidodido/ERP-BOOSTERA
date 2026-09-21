@@ -85,6 +85,7 @@ interface Props {
   salesUsers: { id: string; name: string }[];
   userRole?: string;
   currentUserId?: string;
+  initialSearch?: string;
 }
 
 function calculateEndDate(startStr: string, months: number): string {
@@ -162,7 +163,7 @@ export const CUSTOM_DELIVERABLES_SUGGESTIONS = [
   },
 ];
 
-export function ClientsClient({ initialClients, salesUsers, userRole, currentUserId }: Props) {
+export function ClientsClient({ initialClients, salesUsers, userRole, currentUserId, initialSearch = "" }: Props) {
   const isCommercial =
     userRole === "SALES_REP" ||
     userRole === "COMMERCIAL" ||
@@ -170,7 +171,13 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
 
   const [clients, setClients] = useState<ClientItem[]>(initialClients);
   const [selectedCommercialId, setSelectedCommercialId] = useState<string>("ALL");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+
+  React.useEffect(() => {
+    if (initialSearch) {
+      setSearch(initialSearch);
+    }
+  }, [initialSearch]);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedSector, setSelectedSector] = useState("");
   const [selectedOffer, setSelectedOffer] = useState("");

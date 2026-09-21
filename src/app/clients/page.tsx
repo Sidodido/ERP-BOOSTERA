@@ -6,10 +6,15 @@ import { ClientsClient } from "@/components/clients/ClientsClient";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export default async function ClientsPage() {
+interface ClientsPageProps {
+  searchParams?: Promise<{ search?: string }>;
+}
+
+export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  const resolvedParams = searchParams ? await searchParams : {};
   const clients = await getClients();
 
   const salesUsers = await prisma.user.findMany({
@@ -20,7 +25,13 @@ export default async function ClientsPage() {
 
   return (
     <AppShell>
-      <ClientsClient initialClients={clients as any} salesUsers={salesUsers} userRole={user.role} currentUserId={user.id} />
+      <ClientsClient
+        initialClients={clients as any}
+        salesUsers={salesUsers}
+        userRole={user.role}
+        currentUserId={user.id}
+        initialSearch={resolvedParams.search || ""}
+      />
     </AppShell>
   );
 }

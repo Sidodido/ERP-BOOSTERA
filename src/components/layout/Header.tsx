@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import { HeaderAttendancePill } from "@/components/attendance/HeaderAttendancePill";
 import { useSidebar } from "./SidebarContext";
+import { GlobalSearch } from "./GlobalSearch";
 
 
 interface HeaderProps {
@@ -130,15 +131,8 @@ export function Header({ userName, userRole }: HeaderProps) {
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Search Input */}
-        <div className="relative w-32 xs:w-40 sm:w-80 transition-all">
-          <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none" />
-          <input
-            type="text"
-            placeholder="Recherche..."
-            className="w-full h-8.5 sm:h-9 pl-8 sm:pl-9 pr-2.5 sm:pr-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
-          />
-        </div>
+        {/* Barre de Recherche Globale Active */}
+        <GlobalSearch />
       </div>
 
 

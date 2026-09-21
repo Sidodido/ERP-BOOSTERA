@@ -110,6 +110,7 @@ interface Props {
     filePath?: string;
     sheets: string[];
   };
+  initialSearch?: string;
 }
 
 export function ProspectsClient({
@@ -119,11 +120,20 @@ export function ProspectsClient({
   currentUserId,
   canDelete,
   localFileInfo,
+  initialSearch = "",
 }: Props) {
   const [prospects, setProspects] = useState<ProspectItem[]>(initialProspects);
-  const [filterScope, setFilterScope] = useState<"VIRGIN" | "ALL">("VIRGIN");
+  const [filterScope, setFilterScope] = useState<"VIRGIN" | "ALL">(initialSearch ? "ALL" : "VIRGIN");
   const virginCount = useMemo(() => prospects.filter(isVirginProspect).length, [prospects]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+
+  useEffect(() => {
+    if (initialSearch) {
+      setSearch(initialSearch);
+      setFilterScope("ALL");
+    }
+  }, [initialSearch]);
+
   const [selectedSector, setSelectedSector] = useState("");
   const [selectedWilaya, setSelectedWilaya] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
