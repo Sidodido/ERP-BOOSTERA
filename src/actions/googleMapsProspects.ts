@@ -5,7 +5,6 @@ import { requireAuth } from "@/lib/auth";
 import { bulkImportProspects } from "@/actions/prospects";
 import { revalidatePath } from "next/cache";
 import { cleanDzPhone, formatDzPhoneDisplay } from "@/lib/phoneUtils";
-import { getResolvedGeminiApiKey } from "@/lib/aiConfig";
 
 export interface GoogleMapsProspectItem {
   id: string; // temporary client key
@@ -138,7 +137,7 @@ function mapAmenityToSector(tags: Record<string, string>, keyword?: string): str
 const DZ_PHONE_REGEX = /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s.-]*\d){7,8}/g;
 
 export interface GoogleMapsSearchParams {
-  query?: string;
+  query: string;
   wilaya?: string;
   commune?: string;
   sector?: string;
@@ -150,34 +149,6 @@ export interface GoogleMapsSearchParams {
   minReviews?: number;
   limit?: number;
   googleApiKey?: string;
-  engine?: "GEMINI" | "MAPS" | "HYBRID";
-  geminiApiKey?: string;
-  targetCount?: number;
-}
-
-export interface GeminiProspectSearchParams {
-  sector: string;
-  subCategory?: string;
-  wilaya: string;
-  commune?: string;
-  specificQuery?: string;
-  targetCount?: number;
-  apiKey?: string;
-  onlyWithPhone?: boolean;
-  onlyWithoutWebsite?: boolean;
-  onlyWithWebsite?: boolean;
-  minRating?: number;
-  minReviews?: number;
-}
-
-export interface GeminiProspectSearchResult {
-  success: boolean;
-  prospects: GoogleMapsProspectItem[];
-  totalFound: number;
-  modelUsed?: string;
-  source: string;
-  notice?: string;
-  error?: string;
 }
 
 /**
@@ -312,194 +283,7 @@ const SECTOR_SEARCH_QUERIES: Record<string, string> = {
 };
 
 /**
- * Helper to query Google Gemini for a rich batch of Algerian establishments
- */
-async function fetchGeminiProspects(options: {
-  sector: string;
-  subCategory?: string;
-  wilaya: string;
-  commune?: string;
-  specificQuery?: string;
-  targetCount?: number;
-  apiKey?: string;
-}): Promise<{ prospects: GoogleMapsProspectItem[]; modelUsed?: string }> {
-  const apiKey = getResolvedGeminiApiKey(options.apiKey);
-  if (!apiKey) {
-    throw new Error(
-      "Clé API Gemini introuvable. Veuillez configurer GEMINI_API_KEY dans votre fichier .env ou vos paramètres."
-    );
-  }
-
-  const CANDIDATE_MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-  ];
-
-  const targetCount = Math.min(Math.max(options.targetCount || 45, 20), 80);
-  const rawCommune =
-    options.commune && options.commune !== "Toutes les communes" ? options.commune : "";
-  const subCategoryStr = options.subCategory
-    ? `(Spécialité / Sous-catégorie précise : "${options.subCategory}")`
-    : "";
-  const specificStr = options.specificQuery
-    ? `(Filtre/mot-clé additionnel : "${options.specificQuery}")`
-    : "";
-
-  const prompt = `Tu es un expert du marché B2B, des annuaires professionnels et de la prospection commerciale d'entreprises en Algérie.
-Donne-moi une liste exhaustive d'environ ${targetCount} entreprises et établissements réels (ou hautement représentatifs) en Algérie pour :
-- Secteur d'activité : "${options.sector}" ${subCategoryStr} ${specificStr}
-- Wilaya : "${options.wilaya}"
-- Commune / Zone géographique : "${
-    rawCommune ? rawCommune : `Toutes les communes et zones d'activités de ${options.wilaya}`
-  }"
-
-CONSIGNES STRICTES DE QUALITÉ ET DE QUANTITÉ (TRÈS IMPORTANT) :
-1. Fournis une GRANDE QUANTITÉ d'établissements pertinents (viser au moins ${targetCount} fiches complètes et distinctes).
-2. Pour chaque établissement, inclus OBLIGATOIREMENT un numéro de téléphone algérien réaliste ou vérifié :
-   - Numéro fixe avec indicatif régional (ex: 021/023 pour Alger, 031 pour Constantine, 041 pour Oran, 025 pour Blida, 034 pour Béjaïa, 036 pour Sétif, etc.)
-   - Ou Numéro mobile d'entreprise (05... Ooredoo, 06... Mobilis, 07... Djezzy).
-3. Inclus l'adresse précise avec le quartier, la commune et la wilaya.
-4. Inclus si possible leur page Facebook ou site internet officiel.
-5. Inclus une note Google Maps estimée (entre 3.6 et 4.9) et un nombre d'avis réaliste (entre 10 et 300 avis).
-
-RÉPONDS UNIQUEMENT avec un tableau JSON valide au format strict suivant, sans texte explicatif ni markdown autour :
-[
-  {
-    "name": "Nom de l'entreprise ou établissement",
-    "phone": "021xxxxxx ou 05xxxxxxxx",
-    "address": "Rue / Quartier, Commune",
-    "commune": "Nom de la Commune",
-    "wilaya": "${options.wilaya}",
-    "subCategory": "${options.subCategory || options.sector}",
-    "website": "https://facebook.com/... ou https://...",
-    "rating": 4.4,
-    "reviewsCount": 45
-  }
-]`;
-
-  for (const model of CANDIDATE_MODELS) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const results: GoogleMapsProspectItem[] = parsed.map((item: any, idx: number) => {
-              const name = String(item.name || "").trim();
-              const rawPhone = String(item.phone || "").trim();
-              const phone = cleanDzPhone(rawPhone);
-              const address =
-                item.address || `${item.commune || rawCommune || options.wilaya}, Algérie`;
-              const commune = item.commune || rawCommune || options.wilaya;
-              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                name + " " + commune + " " + options.wilaya + " Algerie"
-              )}`;
-
-              return {
-                id: `gemini_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 7)}`,
-                companyName: name,
-                phone: phone || "",
-                formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
-                address,
-                wilaya: item.wilaya || options.wilaya,
-                sector: options.sector,
-                website: item.website || undefined,
-                rating: typeof item.rating === "number" ? item.rating : undefined,
-                reviewsCount: typeof item.reviewsCount === "number" ? item.reviewsCount : undefined,
-                googleMapsUrl: mapsUrl,
-                source: "IA Gemini (Fiche Qualifiée DZ)",
-              };
-            });
-
-            return { prospects: results, modelUsed: model };
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(`Gemini model ${model} query attempt failed:`, err);
-    }
-  }
-
-  throw new Error(
-    "Impossible de générer les prospects avec l'IA Gemini pour le moment. Veuillez réessayer ou utiliser le mode Cartographique."
-  );
-}
-
-/**
- * Server Action : Recherche massive de prospects algériens propulsée par Google Gemini IA
- */
-export async function searchProspectsWithGeminiAction(
-  params: GeminiProspectSearchParams
-): Promise<GeminiProspectSearchResult> {
-  await requireAuth();
-
-  try {
-    const { prospects, modelUsed } = await fetchGeminiProspects(params);
-
-    // Apply qualification filters
-    let filtered = prospects;
-
-    if (params.onlyWithPhone) {
-      filtered = filtered.filter((p) => p.phone && p.phone.length >= 8);
-    }
-    if (params.onlyWithoutWebsite) {
-      filtered = filtered.filter((p) => !p.website);
-    }
-    if (params.onlyWithWebsite) {
-      filtered = filtered.filter((p) => Boolean(p.website));
-    }
-    if (params.minRating && params.minRating > 0) {
-      filtered = filtered.filter(
-        (p) => typeof p.rating === "number" && p.rating >= (params.minRating || 0)
-      );
-    }
-    if (params.minReviews && params.minReviews > 0) {
-      filtered = filtered.filter(
-        (p) => typeof p.reviewsCount === "number" && p.reviewsCount >= (params.minReviews || 0)
-      );
-    }
-
-    // Attach DB duplicates check (Prospect + Client)
-    const verified = await attachDuplicatesCheck(filtered);
-
-    return {
-      success: true,
-      prospects: verified,
-      totalFound: verified.length,
-      modelUsed,
-      source: "GEMINI_AI",
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      prospects: [],
-      totalFound: 0,
-      source: "GEMINI_AI",
-      error: error?.message || "Erreur lors de la génération avec Google Gemini IA.",
-    };
-  }
-}
-
-/**
- * Live Search Google Maps / Algerian Business Directory via Gemini IA + Google Places API + Overpass OSM
+ * Live Search Google Maps / Algerian Business Directory via Google Places API + Overpass OSM + Nominatim
  */
 export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchParams) {
   await requireAuth();
@@ -513,36 +297,6 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
   const wilaya = (params.wilaya || "Alger").trim();
   const sector = (params.sector || "Cabinet médical").trim();
   const limit = Math.min(params.limit || 80, 150);
-  const engine = params.engine || "GEMINI"; // Defaults to Gemini for massive quantity!
-
-  // 1. If engine is GEMINI, prioritize Gemini AI directly
-  if (engine === "GEMINI") {
-    const geminiRes = await searchProspectsWithGeminiAction({
-      sector,
-      subCategory: subCat,
-      wilaya,
-      commune: rawCommune,
-      specificQuery: rawQuery,
-      targetCount: limit,
-      apiKey: params.geminiApiKey,
-      onlyWithPhone: params.onlyWithPhone,
-      onlyWithoutWebsite: params.onlyWithoutWebsite,
-      onlyWithWebsite: params.onlyWithWebsite,
-      minRating: params.minRating,
-      minReviews: params.minReviews,
-    });
-
-    if (geminiRes.success && geminiRes.prospects.length > 0) {
-      return {
-        success: true,
-        prospects: geminiRes.prospects,
-        totalFound: geminiRes.totalFound,
-        source: "GEMINI_AI",
-        modelUsed: geminiRes.modelUsed,
-      };
-    }
-    // If Gemini failed or returned 0, gracefully fallback to Cartography below
-  }
 
   // In direct sector mode: subCat > rawQuery > sector keywords fallback
   const sectorFallback = sector ? (SECTOR_SEARCH_QUERIES[sector] || sector) : "commerce entreprise";
@@ -550,32 +304,6 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
   const query = [effectiveTerm, rawCommune].filter(Boolean).join(" ");
   const results: GoogleMapsProspectItem[] = [];
   const seenKeys = new Set<string>();
-
-  // If engine is HYBRID, run Gemini first and populate results
-  if (engine === "HYBRID") {
-    try {
-      const geminiRes = await searchProspectsWithGeminiAction({
-        sector,
-        subCategory: subCat,
-        wilaya,
-        commune: rawCommune,
-        specificQuery: rawQuery,
-        targetCount: Math.min(limit, 50),
-        apiKey: params.geminiApiKey,
-      });
-      if (geminiRes.success && geminiRes.prospects.length > 0) {
-        for (const p of geminiRes.prospects) {
-          const key = `${p.companyName.toLowerCase()}_${p.phone || p.address?.toLowerCase()}`;
-          if (!seenKeys.has(key)) {
-            seenKeys.add(key);
-            results.push(p);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Hybrid Gemini step notice:", e);
-    }
-  }
 
   // 1. Google Places API (if API Key provided or in .env)
   const apiKey =
@@ -884,12 +612,7 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
     );
   }
 
-  // Prioritize prospects with phones first
-  filteredResults.sort((a, b) => {
-    if (a.phone && !b.phone) return -1;
-    if (!a.phone && b.phone) return 1;
-    return 0;
-  });
+  // Ne pas modifier l'ordre de la liste automatiquement : conserver l'ordre naturel des résultats Google Maps
 
   // Attach duplicates check against Prisma DB
   const verifiedResults = await attachDuplicatesCheck(filteredResults);

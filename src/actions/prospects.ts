@@ -96,7 +96,7 @@ export async function getProspects(params: ProspectFilterParams = {}) {
         assignedToId: true,
         assignedTo: { select: { id: true, name: true, role: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
     }),
     prisma.appointment.findMany({
       where: {
