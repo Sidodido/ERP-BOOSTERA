@@ -85,7 +85,8 @@ export async function getChatMessagesAction(params: {
   }
 
   // Canal public (par défaut: "general")
-  const targetChannel = (params.channel || "general").toLowerCase();
+  let targetChannel = (params.channel || "general").toLowerCase().trim();
+  if (targetChannel === "général") targetChannel = "general";
 
   const messages = await prisma.chatMessage.findMany({
     where: {
@@ -157,7 +158,8 @@ export async function sendMessageAction(data: {
   }
 
   // Message dans un canal
-  const targetChannel = (data.channel || "general").toLowerCase();
+  let targetChannel = (data.channel || "general").toLowerCase().trim();
+  if (targetChannel === "général") targetChannel = "general";
 
   const msg = await prisma.chatMessage.create({
     data: {

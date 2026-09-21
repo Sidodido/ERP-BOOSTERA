@@ -123,6 +123,8 @@ const CHANNELS = [
     description: "Échanges libres et communication générale pour toute l'équipe",
     icon: Hash,
     badgeColor: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    activeColor: "bg-blue-600/15 border-blue-500/30 text-blue-300",
+    activeIconBox: "bg-blue-500/20 border-blue-500/40 text-blue-300",
   },
   {
     id: "commercial",
@@ -131,6 +133,8 @@ const CHANNELS = [
     description: "Points sur les leads, prospects chauds, closing et rendez-vous",
     icon: Target,
     badgeColor: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    activeColor: "bg-emerald-600/15 border-emerald-500/30 text-emerald-300",
+    activeIconBox: "bg-emerald-500/20 border-emerald-500/40 text-emerald-300",
   },
   {
     id: "technique-production",
@@ -139,6 +143,8 @@ const CHANNELS = [
     description: "Développement web & mobile, montages vidéos, tournages et design",
     icon: Code2,
     badgeColor: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    activeColor: "bg-purple-600/15 border-purple-500/30 text-purple-300",
+    activeIconBox: "bg-purple-500/20 border-purple-500/40 text-purple-300",
   },
   {
     id: "annonces",
@@ -147,6 +153,8 @@ const CHANNELS = [
     description: "Directives, plannings, informations RH et annonces de la Direction",
     icon: Megaphone,
     badgeColor: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    activeColor: "bg-amber-600/15 border-amber-500/30 text-amber-300",
+    activeIconBox: "bg-amber-500/20 border-amber-500/40 text-amber-300",
   },
 ];
 
@@ -268,9 +276,12 @@ export function ChatClient({
     new Set(initialMessages.map((m) => m.id))
   );
 
-  // Déterminer le contact actif en mode DM
+  // Déterminer le contact actif en mode DM ou le canal actif
   const activeDmUser = initialMembers.find((m) => m.id === activeDmUserId);
-  const activeChannel = CHANNELS.find((c) => c.id === activeChannelId) || CHANNELS[0];
+  const normalizedChannelId =
+    activeChannelId === "général" ? "general" : activeChannelId;
+  const activeChannel =
+    CHANNELS.find((c) => c.id === normalizedChannelId) || CHANNELS[0];
 
   // Auto-scroll vers le bas
   const scrollToBottom = (smooth = true) => {
@@ -297,7 +308,8 @@ export function ChatClient({
     try {
       let res: ChatMessageItem[] = [];
       if (activeType === "channel") {
-        res = await getChatMessagesAction({ channel: activeChannelId });
+        const chanId = activeChannelId === "général" ? "general" : activeChannelId;
+        res = await getChatMessagesAction({ channel: chanId });
       } else if (activeType === "dm" && activeDmUserId) {
         res = await getChatMessagesAction({ recipientId: activeDmUserId });
       }
@@ -333,6 +345,8 @@ export function ChatClient({
         }
 
         setMessages(res);
+      } else {
+        setMessages([]);
       }
     } catch {
       // Ignoré lors des pertes de connexion momentanées
@@ -372,13 +386,15 @@ export function ChatClient({
     setInputText("");
     setTagModalType(null);
 
+    const chanId = activeChannelId === "général" ? "general" : activeChannelId;
+
     // Ajout optimiste
     const optimisticMsg: ChatMessageItem = {
       id: "temp-" + Date.now(),
       content: text,
       senderId: currentUser.id,
       recipientId: activeType === "dm" ? activeDmUserId : null,
-      channel: activeType === "channel" ? activeChannelId : "",
+      channel: activeType === "channel" ? chanId : "",
       fileUrl: null,
       isPinned: false,
       createdAt: new Date(),
@@ -396,7 +412,7 @@ export function ChatClient({
     try {
       const res = await sendMessageAction({
         content: text,
-        channel: activeType === "channel" ? activeChannelId : undefined,
+        channel: activeType === "channel" ? chanId : undefined,
         recipientId: activeType === "dm" ? activeDmUserId || undefined : undefined,
       });
 
@@ -588,27 +604,30 @@ export function ChatClient({
             </div>
             {CHANNELS.map((ch) => {
               const Icon = ch.icon;
-              const isActive = activeType === "channel" && activeChannelId === ch.id;
+              const isActive =
+                activeType === "channel" &&
+                (activeChannelId === ch.id || (activeChannelId === "général" && ch.id === "general"));
               return (
                 <button
                   key={ch.id}
                   onClick={() => {
                     setActiveType("channel");
                     setActiveChannelId(ch.id);
+                    setMessages([]);
                     try {
                       window.history.replaceState(null, "", `/chat?channel=${ch.id}`);
                     } catch {}
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all cursor-pointer group ${
                     isActive
-                      ? "bg-blue-600/15 border border-blue-500/30 text-blue-300 font-semibold shadow-xs"
+                      ? `${ch.activeColor} font-semibold shadow-xs`
                       : "text-neutral-300 hover:bg-neutral-800/60 hover:text-neutral-100 border border-transparent"
                   }`}
                 >
                   <div
                     className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
                       isActive
-                        ? "bg-blue-500/20 border-blue-500/40 text-blue-300"
+                        ? ch.activeIconBox
                         : "bg-neutral-800/80 border-neutral-700/50 text-neutral-400 group-hover:text-neutral-200"
                     }`}
                   >
@@ -713,8 +732,8 @@ export function ChatClient({
           <div className="flex items-center gap-3 min-w-0">
             {activeType === "channel" ? (
               <>
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                  <Hash className="w-4 h-4" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${activeChannel.activeIconBox || "bg-blue-500/10 border-blue-500/20 text-blue-400"}`}>
+                  <activeChannel.icon className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
