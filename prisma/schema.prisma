@@ -238,6 +238,8 @@ model User {
   assignedAssets       Asset[]
   approvedLeaves       LeaveRequest[]    @relation("LeaveApprover")
   conductedReviews     PerformanceReview[] @relation("Reviewer")
+  sentChatMessages     ChatMessage[]     @relation("SentChatMessages")
+  receivedChatMessages ChatMessage[]     @relation("ReceivedChatMessages")
 
   @@index([role])
   @@index([email])
@@ -274,6 +276,24 @@ model Notification {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+}
+
+model ChatMessage {
+  id          String    @id @default(uuid())
+  content     String
+  senderId    String
+  recipientId String?
+  channel     String    @default("general") // "general", "commercial", "technique-production", "annonces"
+  fileUrl     String?
+  isPinned    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  sender      User      @relation("SentChatMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient   User?     @relation("ReceivedChatMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([channel, createdAt])
+  @@index([senderId, recipientId, createdAt])
+  @@index([recipientId, createdAt])
 }
 
 // ----------------------------------------------------

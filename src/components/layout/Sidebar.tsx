@@ -32,6 +32,7 @@ import {
   RefreshCw,
   ChevronDown,
   X,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
@@ -59,6 +60,7 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
     groupTitle: "PRINCIPAL",
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "Chat Équipe", href: "/chat", icon: MessagesSquare, badge: "Live" },
       { label: "Assistant IA", href: "/assistant-ia", icon: Bot, badge: "IA" },
     ],
   },
