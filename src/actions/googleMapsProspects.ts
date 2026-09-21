@@ -1,0 +1,687 @@
+"use server";
+
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { bulkImportProspects } from "@/actions/prospects";
+import { revalidatePath } from "next/cache";
+
+export interface GoogleMapsProspectItem {
+  id: string; // temporary client key
+  companyName: string;
+  phone: string;
+  formattedPhone?: string;
+  address?: string;
+  wilaya: string;
+  sector: string;
+  website?: string;
+  rating?: number;
+  reviewsCount?: number;
+  googleMapsUrl?: string;
+  source: string;
+  isDuplicate?: boolean;
+  duplicateType?: "PROSPECT" | "CLIENT" | null;
+  duplicateDetails?: string | null;
+}
+
+// Top Algerian Wilayas Bounding Boxes (minLat, minLon, maxLat, maxLon) for ultra-fast bbox queries
+const WILAYA_BBOX: Record<string, [number, number, number, number]> = {
+  Alger: [36.65, 2.90, 36.85, 3.30],
+  Oran: [35.60, -0.75, 35.78, -0.50],
+  Constantine: [36.30, 6.55, 36.45, 6.70],
+  Annaba: [36.85, 7.70, 36.95, 7.80],
+  Blida: [36.42, 2.78, 36.52, 2.88],
+  Sétif: [36.15, 5.35, 36.25, 5.48],
+  Batna: [35.50, 6.13, 35.60, 6.23],
+  Béjaïa: [36.70, 5.02, 36.80, 5.12],
+  Tlemcen: [34.85, -1.36, 34.92, -1.27],
+  Mostaganem: [35.90, 0.05, 36.00, 0.15],
+  TiziOuzou: [36.68, 4.02, 36.75, 4.10],
+  "Tizi Ouzou": [36.68, 4.02, 36.75, 4.10],
+  Boumerdès: [36.72, 3.44, 36.80, 3.52],
+  Tipaza: [36.56, 2.40, 36.63, 2.48],
+  Chlef: [36.13, 1.30, 36.20, 1.37],
+  Biskra: [34.82, 5.70, 34.88, 5.76],
+};
+
+// Map keywords/amenity to CRM Sectors
+function mapAmenityToSector(tags: Record<string, string>, keyword?: string): string {
+  const amenity = (tags.amenity || "").toLowerCase();
+  const shop = (tags.shop || "").toLowerCase();
+  const office = (tags.office || "").toLowerCase();
+  const healthcare = (tags.healthcare || "").toLowerCase();
+  const kw = (keyword || "").toLowerCase();
+
+  if (
+    amenity.includes("clinic") ||
+    amenity.includes("hospital") ||
+    amenity.includes("doctors") ||
+    amenity.includes("dentist") ||
+    amenity.includes("pharmacy") ||
+    healthcare ||
+    kw.includes("sant") ||
+    kw.includes("médic") ||
+    kw.includes("docteur") ||
+    kw.includes("clinique")
+  ) {
+    return "Cabinet médical";
+  }
+
+  if (amenity.includes("hotel") || amenity.includes("guest_house") || kw.includes("hôtel") || kw.includes("hotel")) {
+    return "Hôtel";
+  }
+
+  if (
+    amenity.includes("restaurant") ||
+    amenity.includes("fast_food") ||
+    amenity.includes("cafe") ||
+    kw.includes("restau") ||
+    kw.includes("café") ||
+    kw.includes("pizzeria")
+  ) {
+    return "Restaurant";
+  }
+
+  if (
+    shop.includes("beauty") ||
+    shop.includes("hairdresser") ||
+    shop.includes("cosmetics") ||
+    amenity.includes("spa") ||
+    kw.includes("beaut") ||
+    kw.includes("coiff") ||
+    kw.includes("cosmétique")
+  ) {
+    return "Beauté";
+  }
+
+  if (office.includes("estate_agent") || kw.includes("immo") || kw.includes("foncier")) {
+    return "Immobilier";
+  }
+
+  if (
+    amenity.includes("school") ||
+    amenity.includes("college") ||
+    amenity.includes("university") ||
+    amenity.includes("kindergarten") ||
+    kw.includes("école") ||
+    kw.includes("form") ||
+    kw.includes("cours")
+  ) {
+    return "Éducation / Formation";
+  }
+
+  if (
+    office.includes("company") ||
+    office.includes("industrial") ||
+    shop.includes("wholesale") ||
+    kw.includes("grossiste") ||
+    kw.includes("usine") ||
+    kw.includes("fabric") ||
+    kw.includes("industrie")
+  ) {
+    return "Industrie";
+  }
+
+  if (tags.tourism?.includes("agency") || kw.includes("voyage") || kw.includes("touris") || kw.includes("omra")) {
+    return "Voyage";
+  }
+
+  if (shop) {
+    return "E-commerce";
+  }
+
+  return "Autre prestation";
+}
+
+// Clean and normalize Algerian phone number
+export function cleanDzPhone(raw: string): string {
+  if (!raw) return "";
+  let digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("213") && digits.length >= 11) {
+    digits = "0" + digits.slice(3);
+  }
+  if (digits.startsWith("00213") && digits.length >= 13) {
+    digits = "0" + digits.slice(5);
+  }
+  // If 9 digits without leading 0, add 0 (e.g. 550123456 -> 0550123456)
+  if (digits.length === 9 && (digits.startsWith("5") || digits.startsWith("6") || digits.startsWith("7") || digits.startsWith("2") || digits.startsWith("3") || digits.startsWith("4"))) {
+    digits = "0" + digits;
+  }
+  return digits;
+}
+
+// Format phone nicely: 0550 12 34 56 or 021 66 12 34
+export function formatDzPhoneDisplay(phone: string): string {
+  const p = cleanDzPhone(phone);
+  if (!p) return phone;
+  if (p.length === 10 && (p.startsWith("05") || p.startsWith("06") || p.startsWith("07"))) {
+    return `${p.slice(0, 4)} ${p.slice(4, 6)} ${p.slice(6, 8)} ${p.slice(8, 10)}`;
+  }
+  if (p.length === 9) {
+    return `${p.slice(0, 3)} ${p.slice(3, 5)} ${p.slice(5, 7)} ${p.slice(7, 9)}`;
+  }
+  return p;
+}
+
+/**
+ * Check a list of items for duplicates in Prisma against both Prospect and Client tables
+ */
+async function attachDuplicatesCheck(items: GoogleMapsProspectItem[]): Promise<GoogleMapsProspectItem[]> {
+  if (items.length === 0) return items;
+
+  // Pre-load all prospect & client phones & company names
+  const [existingProspects, existingClients] = await Promise.all([
+    prisma.prospect.findMany({
+      select: {
+        id: true,
+        phone: true,
+        companyName: true,
+        assignedTo: { select: { name: true } },
+      },
+    }),
+    prisma.client.findMany({
+      select: {
+        id: true,
+        phone: true,
+        companyName: true,
+      },
+    }),
+  ]);
+
+  const phoneToProspect = new Map<string, { companyName: string; assignedTo?: string }>();
+  const compToProspect = new Map<string, { companyName: string; assignedTo?: string }>();
+
+  for (const p of existingProspects) {
+    const cleanP = cleanDzPhone(p.phone);
+    if (cleanP) {
+      phoneToProspect.set(cleanP, {
+        companyName: p.companyName,
+        assignedTo: p.assignedTo?.name || "Non assigné",
+      });
+    }
+    const cleanComp = p.companyName.trim().toLowerCase();
+    if (cleanComp) {
+      compToProspect.set(cleanComp, {
+        companyName: p.companyName,
+        assignedTo: p.assignedTo?.name || "Non assigné",
+      });
+    }
+  }
+
+  const phoneToClient = new Map<string, string>();
+  const compToClient = new Map<string, string>();
+
+  for (const c of existingClients) {
+    const cleanP = cleanDzPhone(c.phone);
+    if (cleanP) {
+      phoneToClient.set(cleanP, c.companyName);
+    }
+    const cleanComp = c.companyName.trim().toLowerCase();
+    if (cleanComp) {
+      compToClient.set(cleanComp, c.companyName);
+    }
+  }
+
+  return items.map((item) => {
+    const pClean = cleanDzPhone(item.phone);
+    const cClean = item.companyName.trim().toLowerCase();
+
+    // Check Client first
+    if (pClean && phoneToClient.has(pClean)) {
+      return {
+        ...item,
+        isDuplicate: true,
+        duplicateType: "CLIENT",
+        duplicateDetails: `Déjà client dans le CRM : "${phoneToClient.get(pClean)}"`,
+      };
+    }
+    if (cClean && compToClient.has(cClean)) {
+      return {
+        ...item,
+        isDuplicate: true,
+        duplicateType: "CLIENT",
+        duplicateDetails: `Déjà client dans le CRM : "${compToClient.get(cClean)}"`,
+      };
+    }
+
+    // Check Prospect
+    if (pClean && phoneToProspect.has(pClean)) {
+      const match = phoneToProspect.get(pClean)!;
+      return {
+        ...item,
+        isDuplicate: true,
+        duplicateType: "PROSPECT",
+        duplicateDetails: `Déjà prospect : "${match.companyName}" (${match.assignedTo})`,
+      };
+    }
+    if (cClean && compToProspect.has(cClean)) {
+      const match = compToProspect.get(cClean)!;
+      return {
+        ...item,
+        isDuplicate: true,
+        duplicateType: "PROSPECT",
+        duplicateDetails: `Déjà prospect : "${match.companyName}" (${match.assignedTo})`,
+      };
+    }
+
+    return {
+      ...item,
+      isDuplicate: false,
+      duplicateType: null,
+      duplicateDetails: null,
+    };
+  });
+}
+
+/**
+ * Live Search Google Maps / Algerian Business Directory via Overpass OSM + Nominatim + Google Places fallback
+ */
+export async function searchGoogleMapsProspectsAction(params: {
+  query: string;
+  wilaya?: string;
+  sector?: string;
+  limit?: number;
+}) {
+  await requireAuth();
+
+  const query = (params.query || "").trim();
+  const wilaya = (params.wilaya || "Alger").trim();
+  const sector = (params.sector || "").trim();
+  const limit = Math.min(params.limit || 50, 100);
+
+  const results: GoogleMapsProspectItem[] = [];
+  const seenKeys = new Set<string>();
+
+  // 1. If GOOGLE_PLACES_API_KEY or GOOGLE_MAPS_API_KEY exists in env, query Google Places API
+  const googleApiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+  if (googleApiKey) {
+    try {
+      const gQuery = `${query} ${wilaya} Algerie`;
+      const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(gQuery)}&key=${googleApiKey}&language=fr`;
+      const gRes = await fetch(gUrl, { cache: "no-store" });
+      if (gRes.ok) {
+        const gData = await gRes.json();
+        if (gData.results && Array.isArray(gData.results)) {
+          for (const place of gData.results.slice(0, limit)) {
+            const name = place.name || "";
+            const address = place.formatted_address || "";
+            const rating = place.rating || undefined;
+            const reviewsCount = place.user_ratings_total || undefined;
+            const mapsUrl = place.place_id
+              ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + " " + wilaya)}`;
+
+            const key = `${name.toLowerCase()}_${address.toLowerCase()}`;
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              results.push({
+                id: `g_${place.place_id || Math.random().toString(36).slice(2)}`,
+                companyName: name,
+                phone: "", // Place details may require another call or phone regex in formatted text
+                address,
+                wilaya,
+                sector: sector || "Autre prestation",
+                rating,
+                reviewsCount,
+                googleMapsUrl: mapsUrl,
+                source: "Google Maps API",
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Google Places API error:", e);
+    }
+  }
+
+  // 2. Overpass OSM Query (Ultra fast, live Algerian verified businesses with phone numbers)
+  try {
+    const bbox = WILAYA_BBOX[wilaya];
+    let overpassQuery = "";
+
+    if (bbox) {
+      const [minLat, minLon, maxLat, maxLon] = bbox;
+      // Search with bounding box
+      overpassQuery = `
+        [out:json][timeout:12];
+        (
+          node["amenity"](${minLat},${minLon},${maxLat},${maxLon});
+          node["shop"](${minLat},${minLon},${maxLat},${maxLon});
+          node["office"](${minLat},${minLon},${maxLat},${maxLon});
+          way["amenity"](${minLat},${minLon},${maxLat},${maxLon});
+          way["shop"](${minLat},${minLon},${maxLat},${maxLon});
+        );
+        out center ${limit * 2};
+      `;
+    } else {
+      // Search with city name query in Algeria
+      overpassQuery = `
+        [out:json][timeout:15];
+        area["ISO3166-1"="DZ"]->.dz;
+        area["name"~"${wilaya}",i](area.dz)->.searchArea;
+        (
+          node["amenity"](area.searchArea);
+          node["shop"](area.searchArea);
+          node["office"](area.searchArea);
+        );
+        out center ${limit * 2};
+      `;
+    }
+
+    const overpassRes = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: "data=" + encodeURIComponent(overpassQuery),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      cache: "no-store",
+    });
+
+    if (overpassRes.ok) {
+      const opData = await overpassRes.json();
+      if (opData.elements && Array.isArray(opData.elements)) {
+        for (const el of opData.elements) {
+          const tags = el.tags || {};
+          const name = tags["name:fr"] || tags.name || tags["name:en"] || tags["alt_name:fr"] || tags.alt_name;
+          if (!name) continue;
+
+          // Keyword filter if provided
+          if (query) {
+            const fullTagStr = `${name} ${tags.amenity || ""} ${tags.shop || ""} ${tags.office || ""} ${tags.craft || ""}`.toLowerCase();
+            const qLower = query.toLowerCase();
+            const matchesKw = qLower.split(" ").some((term) => term.length > 2 && fullTagStr.includes(term));
+            if (!matchesKw) continue;
+          }
+
+          const rawPhone = tags.phone || tags["contact:phone"] || tags["contact:mobile"] || tags["phone:mobile"] || tags["tel"] || "";
+          const phone = cleanDzPhone(rawPhone);
+          const street = tags["addr:street"] || tags["addr:full"] || "";
+          const city = tags["addr:city"] || tags["addr:city:fr"] || wilaya;
+          const address = [street, city].filter(Boolean).join(", ");
+          const website = tags.website || tags["contact:website"] || tags["brand:website"] || "";
+          const lat = el.lat || el.center?.lat;
+          const lon = el.lon || el.center?.lon;
+          const mapsUrl = lat && lon
+            ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + " " + wilaya)}`;
+
+          const determinedSector = sector || mapAmenityToSector(tags, query);
+
+          const dedupeKey = `${name.toLowerCase()}_${phone}`;
+          if (!seenKeys.has(dedupeKey)) {
+            seenKeys.add(dedupeKey);
+            results.push({
+              id: `osm_${el.id}`,
+              companyName: name,
+              phone: phone || "",
+              formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
+              address: address || `${city}, Algérie`,
+              wilaya: city || wilaya,
+              sector: determinedSector,
+              website: website || undefined,
+              googleMapsUrl: mapsUrl,
+              source: "Google Maps / Annuaire DZ",
+            });
+          }
+
+          if (results.length >= limit) break;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Overpass OSM search error:", e);
+  }
+
+  // 3. Fallback: Nominatim live lookup if OSM returned few results
+  if (results.length < 5) {
+    try {
+      const searchTerm = `${query || "commerce entreprise"} ${wilaya} algerie`;
+      const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&addressdetails=1&extratags=1&limit=${limit}`;
+      const nomRes = await fetch(nomUrl, {
+        headers: { "User-Agent": "BoosterA-CRM-DZ/1.0 (direction@boostera.dz)" },
+        cache: "no-store",
+      });
+      if (nomRes.ok) {
+        const nomData = await nomRes.json();
+        if (Array.isArray(nomData)) {
+          for (const item of nomData) {
+            const name = item.name || item.display_name?.split(",")[0];
+            if (!name) continue;
+
+            const extra = item.extratags || {};
+            const rawPhone = extra.phone || extra["contact:phone"] || extra["contact:mobile"] || "";
+            const phone = cleanDzPhone(rawPhone);
+            const website = extra.website || extra["contact:website"] || "";
+            const address = item.display_name || "";
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lon}`;
+
+            const dedupeKey = `${name.toLowerCase()}_${phone}`;
+            if (!seenKeys.has(dedupeKey)) {
+              seenKeys.add(dedupeKey);
+              results.push({
+                id: `nom_${item.place_id}`,
+                companyName: name,
+                phone: phone || "",
+                formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
+                address,
+                wilaya: item.address?.state || wilaya,
+                sector: sector || mapAmenityToSector(extra, query),
+                website: website || undefined,
+                googleMapsUrl: mapsUrl,
+                source: "Google Maps Direct",
+              });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Nominatim fallback error:", e);
+    }
+  }
+
+  // Prioritize prospects with phones first
+  results.sort((a, b) => {
+    if (a.phone && !b.phone) return -1;
+    if (!a.phone && b.phone) return 1;
+    return 0;
+  });
+
+  // Attach duplicates check against Prisma DB
+  const verifiedResults = await attachDuplicatesCheck(results);
+
+  return {
+    success: true,
+    prospects: verifiedResults,
+    totalFound: verifiedResults.length,
+  };
+}
+
+/**
+ * Parse raw text / snippets copied directly from Google Maps or local directories
+ */
+export async function parseGoogleMapsTextAction(params: {
+  rawText: string;
+  defaultWilaya?: string;
+  defaultSector?: string;
+}) {
+  await requireAuth();
+
+  const { rawText, defaultWilaya = "Alger", defaultSector = "Autre prestation" } = params;
+  if (!rawText || !rawText.trim()) {
+    return { success: true, prospects: [] };
+  }
+
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const prospects: GoogleMapsProspectItem[] = [];
+  const seenPhones = new Set<string>();
+
+  // Algerian phone regex: (05, 06, 07, 021, 023, 024, 025, 031, 041, etc.)
+  const phoneRegex = /(?:(?:\+|00)213|0)[2-9](?:[\s.-]?\d{2}){4}/g;
+  const ratingRegex = /(\d[.,]\d)\s*(?:\((\d+[\s\d]*)\))?/;
+
+  // Break text into blocks by detecting phone numbers or rating lines
+  let currentBlock: string[] = [];
+  const blocks: string[][] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Check if line looks like a new business header or contains separator
+    if (line === "---" || line === "***" || (currentBlock.length >= 3 && phoneRegex.test(line))) {
+      currentBlock.push(line);
+      blocks.push(currentBlock);
+      currentBlock = [];
+    } else {
+      currentBlock.push(line);
+      if (currentBlock.length > 8) {
+        blocks.push(currentBlock);
+        currentBlock = [];
+      }
+    }
+  }
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock);
+  }
+
+  // Process each block
+  for (let b = 0; b < blocks.length; b++) {
+    const block = blocks[b];
+    const fullBlockText = block.join(" ");
+
+    // Extract all phone numbers in block
+    const matchedPhones = fullBlockText.match(phoneRegex);
+    const rawPhone = matchedPhones ? matchedPhones[0] : "";
+    const cleanPhone = cleanDzPhone(rawPhone);
+
+    // If cleanPhone seen, skip to avoid dupes inside batch
+    if (cleanPhone && seenPhones.has(cleanPhone)) continue;
+    if (cleanPhone) seenPhones.add(cleanPhone);
+
+    // Company name: usually first line of the block (unless it's a rating or empty)
+    let companyName = block[0] || "";
+    if (ratingRegex.test(companyName) || phoneRegex.test(companyName)) {
+      companyName = block[1] || `Entreprise ${b + 1}`;
+    }
+
+    // Rating and reviews
+    let rating: number | undefined;
+    let reviewsCount: number | undefined;
+    const ratingMatch = fullBlockText.match(ratingRegex);
+    if (ratingMatch) {
+      rating = parseFloat(ratingMatch[1].replace(",", "."));
+      if (ratingMatch[2]) {
+        reviewsCount = parseInt(ratingMatch[2].replace(/\s/g, ""), 10);
+      }
+    }
+
+    // Address & Wilaya
+    let address = "";
+    let detectedWilaya = defaultWilaya;
+    const addressCandidate = block.find((line) =>
+      line !== companyName &&
+      !ratingRegex.test(line) &&
+      !phoneRegex.test(line) &&
+      line.length > 5
+    );
+    if (addressCandidate) {
+      address = addressCandidate;
+      // Try detecting wilaya name in address
+      const knownWilayas = [
+        "Alger", "Oran", "Constantine", "Annaba", "Blida", "Batna", "Sétif", "Béjaïa",
+        "Tlemcen", "Biskra", "Boumerdès", "Tipaza", "Tizi Ouzou", "Chlef", "Mostaganem"
+      ];
+      for (const w of knownWilayas) {
+        if (address.toLowerCase().includes(w.toLowerCase())) {
+          detectedWilaya = w;
+          break;
+        }
+      }
+    }
+
+    // Website or Google Maps link
+    let website: string | undefined;
+    const urlMatch = fullBlockText.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+      website = urlMatch[0];
+    }
+
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(companyName + " " + detectedWilaya)}`;
+
+    prospects.push({
+      id: `pasted_${b}_${Math.random().toString(36).slice(2, 7)}`,
+      companyName: companyName.replace(/^[•\-\d\.]+\s*/, "").trim(),
+      phone: cleanPhone,
+      formattedPhone: cleanPhone ? formatDzPhoneDisplay(cleanPhone) : "",
+      address: address || `${detectedWilaya}, Algérie`,
+      wilaya: detectedWilaya,
+      sector: defaultSector,
+      rating,
+      reviewsCount,
+      website,
+      googleMapsUrl: mapsUrl,
+      source: "Google Maps Copier-Coller",
+    });
+  }
+
+  // Deduplicate against Prisma
+  const verified = await attachDuplicatesCheck(prospects);
+
+  return {
+    success: true,
+    prospects: verified,
+  };
+}
+
+/**
+ * 1-Click Batch Import selected Google Maps prospects into the CRM pipeline
+ */
+export async function importGoogleMapsProspectsAction(params: {
+  prospects: GoogleMapsProspectItem[];
+  assignedToId?: string;
+  defaultSector?: string;
+  defaultWilaya?: string;
+}) {
+  const user = await requireAuth();
+  const { prospects, assignedToId } = params;
+
+  if (!prospects || prospects.length === 0) {
+    return { success: false, error: "Aucun prospect à importer." };
+  }
+
+  // Format rows for bulkImportProspects
+  const rows = prospects.map((p) => {
+    let notes = `Source: ${p.source || "Google Maps"}`;
+    if (p.rating) {
+      notes += ` | Note: ${p.rating}/5 (${p.reviewsCount || 0} avis)`;
+    }
+    if (p.website) {
+      notes += ` | Site: ${p.website}`;
+    }
+    if (p.googleMapsUrl) {
+      notes += ` | Maps: ${p.googleMapsUrl}`;
+    }
+
+    return {
+      companyName: p.companyName.trim(),
+      phone: p.phone ? cleanDzPhone(p.phone) : "0000000000",
+      sector: p.sector || params.defaultSector || "Autre prestation",
+      wilaya: p.wilaya || params.defaultWilaya || "Alger",
+      address: p.address || undefined,
+      notes,
+      assignedToId: assignedToId || user.id,
+    };
+  });
+
+  const res = await bulkImportProspects(rows, assignedToId || user.id, {
+    importAsVirgin: true,
+  });
+
+  revalidatePath("/direction/google-maps");
+  revalidatePath("/base-prospects");
+  revalidatePath("/prospection");
+  revalidatePath("/dashboard");
+
+  return {
+    success: true,
+    imported: res.imported || 0,
+    duplicatesCount: res.skippedDuplicates || 0,
+    invalidCount: res.skippedInvalid || 0,
+  };
+}

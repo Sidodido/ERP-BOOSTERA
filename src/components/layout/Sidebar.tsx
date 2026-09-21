@@ -33,6 +33,7 @@ import {
   ChevronDown,
   X,
   MessagesSquare,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
@@ -73,6 +74,12 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
       { label: "Rendez-vous", href: "/rendez-vous", icon: Calendar },
       { label: "Relances", href: "/relances", icon: Clock },
       { label: "Clients", href: "/clients", icon: Users },
+    ],
+  },
+  {
+    groupTitle: "DIRECTION & STRATÉGIE",
+    items: [
+      { label: "Import Google Maps", href: "/direction/google-maps", icon: MapPin, badge: "DZ" },
     ],
   },
   {

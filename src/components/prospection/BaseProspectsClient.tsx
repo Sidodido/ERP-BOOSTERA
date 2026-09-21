@@ -43,6 +43,7 @@ import {
   ShieldCheck,
   Database,
   Download,
+  MapPin,
   Flame,
   ArrowUpRight,
   Filter,
@@ -905,6 +906,18 @@ export function BaseProspectsClient({
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
             <span>Importer Excel</span>
           </Button>
+
+          <Link href="/direction/google-maps">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 cursor-pointer"
+              title="Module Direction : Importer directement depuis Google Maps"
+            >
+              <MapPin className="w-3.5 h-3.5 text-blue-400" />
+              <span>Import Google Maps</span>
+            </Button>
+          </Link>
 
           <Button
             variant="outline"

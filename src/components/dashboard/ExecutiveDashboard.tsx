@@ -15,6 +15,8 @@ import {
   CreditCard,
   Building2,
   ShieldCheck,
+  MapPin,
+  Sparkles,
 } from "lucide-react";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Button } from "@/components/ui/Button";
@@ -58,8 +60,14 @@ export function ExecutiveDashboard({ metrics, userName }: ExecutiveDashboardProp
 
         {/* Quick Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <Link href="/direction/google-maps">
+            <Button size="sm" className="gap-1.5 shadow-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold cursor-pointer border-0">
+              <MapPin className="w-3.5 h-3.5 text-white" />
+              <span>Import Google Maps</span>
+            </Button>
+          </Link>
           <Link href="/prospection?modal=new">
-            <Button size="sm" className="gap-1.5 shadow-sm bg-blue-600 hover:bg-blue-500 text-white font-semibold cursor-pointer">
+            <Button variant="secondary" size="sm" className="gap-1.5 shadow-sm bg-white dark:bg-neutral-800 text-slate-700 dark:text-neutral-200 border border-slate-200 dark:border-neutral-700 hover:bg-slate-50 dark:hover:bg-neutral-750 font-semibold cursor-pointer">
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Nouveau Prospect</span>
             </Button>
@@ -77,6 +85,32 @@ export function ExecutiveDashboard({ metrics, userName }: ExecutiveDashboardProp
             </Button>
           </Link>
         </div>
+      </div>
+
+      {/* Direction Growth & Acquisition Banner */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/20 via-neutral-900 to-indigo-950/20 border border-blue-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
+            <MapPin className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+              <span>Acquisition Google Maps & Prospection Ciblée</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                Direction
+              </span>
+            </h3>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              Trouvez et importez directement des cliniques, grossistes, commerces et entreprises en Algérie par wilaya avec détection anti-doublon.
+            </p>
+          </div>
+        </div>
+        <Link href="/direction/google-maps" className="shrink-0 w-full sm:w-auto">
+          <Button size="sm" className="w-full sm:w-auto gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-600/20 cursor-pointer">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Ouvrir l'Importateur Maps</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Pointage Quotidien */}
