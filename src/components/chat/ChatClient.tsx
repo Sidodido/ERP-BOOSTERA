@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useTransition, useCallback } from "react";
+import Link from "next/link";
 import {
   Hash,
   Send,
@@ -17,15 +18,18 @@ import {
   Megaphone,
   Target,
   Code2,
-  Shield,
-  Briefcase,
-  Layers,
+  Building,
+  AtSign,
+  Tag,
+  X,
+  Phone,
+  ExternalLink,
   ChevronRight,
-  Info,
 } from "lucide-react";
 import {
   ChatMessageItem,
   ChatUserItem,
+  ChatTagEntities,
   getChatMessagesAction,
   sendMessageAction,
   deleteChatMessageAction,
@@ -41,6 +45,7 @@ interface ChatClientProps {
   };
   initialMembers: ChatUserItem[];
   initialMessages: ChatMessageItem[];
+  tagEntities?: ChatTagEntities;
   defaultChannel?: string;
   defaultDmUserId?: string | null;
 }
@@ -86,6 +91,7 @@ export function ChatClient({
   currentUser,
   initialMembers,
   initialMessages,
+  tagEntities,
   defaultChannel = "general",
   defaultDmUserId = null,
 }: ChatClientProps) {
@@ -101,8 +107,15 @@ export function ChatClient({
   const [searchMember, setSearchMember] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // State pour le popover de Tag
+  const [tagModalType, setTagModalType] = useState<"collaborator" | "client" | "prospect" | null>(
+    null
+  );
+  const [tagSearch, setTagSearch] = useState("");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const tagSearchInputRef = useRef<HTMLInputElement>(null);
 
   // Déterminer le contact actif en mode DM
   const activeDmUser = initialMembers.find((m) => m.id === activeDmUserId);
@@ -118,6 +131,15 @@ export function ChatClient({
   useEffect(() => {
     scrollToBottom(false);
   }, [activeChannelId, activeDmUserId, activeType]);
+
+  // Focus sur la recherche de tag à l'ouverture du popover
+  useEffect(() => {
+    if (tagModalType) {
+      setTimeout(() => {
+        tagSearchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [tagModalType]);
 
   // Fonction pour rafraîchir les messages
   const fetchMessages = useCallback(async () => {
@@ -149,6 +171,14 @@ export function ChatClient({
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
+  // Insérer un tag dans le champ de saisie
+  const handleInsertTag = (tagStr: string) => {
+    setInputText((prev) => (prev ? `${prev.trim()} ${tagStr} ` : `${tagStr} `));
+    setTagModalType(null);
+    setTagSearch("");
+    inputRef.current?.focus();
+  };
+
   // Envoyer un message
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -157,6 +187,7 @@ export function ChatClient({
 
     setIsSending(true);
     setInputText("");
+    setTagModalType(null);
 
     // Ajout optimiste
     const optimisticMsg: ChatMessageItem = {
@@ -187,11 +218,9 @@ export function ChatClient({
       });
 
       if (res.error) {
-        // En cas d'erreur, retirer le message optimiste
         setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
         alert(res.error);
       } else if (res.message) {
-        // Remplacer avec le message validé par la base
         setMessages((prev) =>
           prev.map((m) => (m.id === optimisticMsg.id ? (res.message as ChatMessageItem) : m))
         );
@@ -215,14 +244,7 @@ export function ChatClient({
     await deleteChatMessageAction(id);
   };
 
-  const handleTogglePin = async (id: string) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, isPinned: !m.isPinned } : m))
-    );
-    await togglePinChatMessageAction(id);
-  };
-
-  // Filtrage des membres pour la recherche
+  // Filtrage des membres pour la colonne latérale
   const filteredMembers = initialMembers.filter(
     (m) =>
       m.id !== currentUser.id &&
@@ -256,13 +278,76 @@ export function ChatClient({
     }
   };
 
-  // Rendu de texte avec liens cliquables
+  // Rendu de texte enrichi avec tags interactifs (@Collaborateur, [Client:...], [Prospect:...], liens)
   const renderMessageContent = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+|\/(?:prospection|clients|rendez-vous|projets|appels|dashboard)[^\s]*)/g;
-    const parts = text.split(urlRegex);
+    const tokenRegex =
+      /(\[Client:\s*[^\]]+\]|\[Prospect:\s*[^\]]+\]|@[A-Za-zÀ-ÿ0-9_.-]+|https?:\/\/[^\s]+|\/(?:prospection|clients|rendez-vous|projets|appels|dashboard)[^\s]*)/g;
+    const parts = text.split(tokenRegex);
 
     return parts.map((part, index) => {
-      if (part.match(urlRegex)) {
+      if (!part) return null;
+
+      // Tag Client
+      if (part.startsWith("[Client:")) {
+        const clientName = part.replace(/^\[Client:\s*/, "").replace(/\]$/, "").trim();
+        return (
+          <Link
+            key={index}
+            href={`/clients?search=${encodeURIComponent(clientName)}`}
+            target="_blank"
+            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/35 hover:text-white transition-all font-semibold text-[11px] align-middle shadow-2xs"
+            title={`Ouvrir la fiche de ${clientName} dans Clients`}
+          >
+            <Building className="w-3 h-3 text-emerald-400 shrink-0" />
+            <span>Client : {clientName}</span>
+          </Link>
+        );
+      }
+
+      // Tag Prospect
+      if (part.startsWith("[Prospect:")) {
+        const prospectName = part.replace(/^\[Prospect:\s*/, "").replace(/\]$/, "").trim();
+        return (
+          <Link
+            key={index}
+            href={`/prospection?search=${encodeURIComponent(prospectName)}`}
+            target="_blank"
+            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/35 hover:text-white transition-all font-semibold text-[11px] align-middle shadow-2xs"
+            title={`Ouvrir la prospection de ${prospectName}`}
+          >
+            <Target className="w-3 h-3 text-amber-400 shrink-0" />
+            <span>Prospect : {prospectName}</span>
+          </Link>
+        );
+      }
+
+      // Tag Collaborateur (@Nom)
+      if (part.startsWith("@")) {
+        const memberName = part.slice(1);
+        const isMe =
+          currentUser.name.toLowerCase().includes(memberName.toLowerCase()) ||
+          memberName.toLowerCase().includes(currentUser.name.split(" ")[0].toLowerCase());
+        return (
+          <span
+            key={index}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-full border text-[11px] font-bold align-middle ${
+              isMe
+                ? "bg-blue-500/30 text-blue-200 border-blue-400/50 ring-1 ring-blue-400/40"
+                : "bg-blue-500/15 text-blue-300 border-blue-500/30"
+            }`}
+          >
+            <AtSign className="w-2.5 h-2.5 text-blue-400 shrink-0" />
+            <span>{memberName}</span>
+          </span>
+        );
+      }
+
+      // URLs / Liens internes
+      if (
+        part.match(
+          /^(https?:\/\/[^\s]+|\/(?:prospection|clients|rendez-vous|projets|appels|dashboard)[^\s]*)/
+        )
+      ) {
         return (
           <a
             key={index}
@@ -275,12 +360,26 @@ export function ChatClient({
           </a>
         );
       }
+
       return <span key={index}>{part}</span>;
     });
   };
 
+  // Listes pour le sélecteur de tags rapides
+  const collaboratorTags = (tagEntities?.collaborators || initialMembers).filter((c) =>
+    c.name.toLowerCase().includes(tagSearch.toLowerCase())
+  );
+
+  const clientTags = (tagEntities?.clients || []).filter((cl) =>
+    cl.companyName.toLowerCase().includes(tagSearch.toLowerCase())
+  );
+
+  const prospectTags = (tagEntities?.prospects || []).filter((p) =>
+    p.companyName.toLowerCase().includes(tagSearch.toLowerCase())
+  );
+
   return (
-    <div className="h-[calc(100vh-5.5rem)] flex flex-col md:flex-row bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl">
+    <div className="h-[calc(100vh-5.5rem)] flex flex-col md:flex-row bg-neutral-950 border border-neutral-800 rounded-3xl overflow-hidden shadow-2xl relative">
       {/* 1. PANNEAU LATÉRAL GAUCHE : CANAUX & COLLABORATEURS */}
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-neutral-800 bg-neutral-900/60 flex flex-col shrink-0">
         {/* Header panneau */}
@@ -419,7 +518,7 @@ export function ChatClient({
       </div>
 
       {/* 2. ZONE CENTRALE : FLUX DE DISCUSSION & COMPOSITION */}
-      <div className="flex-1 flex flex-col min-w-0 bg-neutral-950/40">
+      <div className="flex-1 flex flex-col min-w-0 bg-neutral-950/40 relative">
         {/* Header de la discussion active */}
         <div className="p-4 border-b border-neutral-800/80 bg-neutral-900/40 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -515,7 +614,11 @@ export function ChatClient({
                     </div>
                   )}
 
-                  <div className={`max-w-[85%] sm:max-w-xl flex flex-col ${isMine ? "items-end" : "items-start"}`}>
+                  <div
+                    className={`max-w-[85%] sm:max-w-xl flex flex-col ${
+                      isMine ? "items-end" : "items-start"
+                    }`}
+                  >
                     {/* Nom et heure */}
                     <div className="flex items-center gap-2 mb-1 px-1">
                       <span className="text-[11px] font-bold text-neutral-300">
@@ -558,24 +661,221 @@ export function ChatClient({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Barre de composition et envoi */}
-        <div className="p-3 sm:p-4 border-t border-neutral-800/80 bg-neutral-900/50 space-y-2 shrink-0">
-          {/* Raccourcis émojis rapides */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-sm scrollbar-none">
-            <span className="text-[11px] font-semibold text-neutral-400 mr-1 flex items-center gap-1 shrink-0">
-              <Smile className="w-3.5 h-3.5" />
-              <span>Réactions :</span>
-            </span>
-            {QUICK_EMOJIS.map((emoji) => (
+        {/* POPOVER DE SÉLECTION DE TAG (@COLLABORATEUR, CLIENT, PROSPECT) */}
+        {tagModalType && (
+          <div className="absolute bottom-24 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 bg-neutral-900/95 border border-neutral-700/80 rounded-2xl p-3 shadow-2xl backdrop-blur-md z-30 animate-in fade-in zoom-in-95 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+              <div className="flex items-center gap-2">
+                {tagModalType === "collaborator" && (
+                  <>
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center">
+                      <AtSign className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-bold text-neutral-100">Mentionner un Collaborateur</span>
+                  </>
+                )}
+                {tagModalType === "client" && (
+                  <>
+                    <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center">
+                      <Building className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-bold text-neutral-100">Taguer un Client</span>
+                  </>
+                )}
+                {tagModalType === "prospect" && (
+                  <>
+                    <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-300 flex items-center justify-center">
+                      <Target className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-bold text-neutral-100">Taguer un Prospect</span>
+                  </>
+                )}
+              </div>
+
               <button
-                key={emoji}
                 type="button"
-                onClick={() => handleAddEmoji(emoji)}
-                className="px-2 py-0.5 rounded-lg bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/40 text-xs transition-transform active:scale-95 cursor-pointer shrink-0"
+                onClick={() => setTagModalType(null)}
+                className="text-neutral-400 hover:text-neutral-200 p-1 rounded-lg hover:bg-neutral-800 transition-colors"
               >
-                {emoji}
+                <X className="w-3.5 h-3.5" />
               </button>
-            ))}
+            </div>
+
+            {/* Barre de recherche dans le tag picker */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+              <input
+                ref={tagSearchInputRef}
+                type="text"
+                placeholder={
+                  tagModalType === "collaborator"
+                    ? "Nom du collaborateur..."
+                    : tagModalType === "client"
+                    ? "Nom du client..."
+                    : "Nom du prospect..."
+                }
+                value={tagSearch}
+                onChange={(e) => setTagSearch(e.target.value)}
+                className="w-full h-8 pl-8 pr-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            {/* Liste des résultats filtrés */}
+            <div className="max-h-48 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+              {tagModalType === "collaborator" && (
+                <>
+                  {collaboratorTags.length === 0 ? (
+                    <p className="text-xs text-neutral-500 py-3 text-center">Aucun collaborateur trouvé</p>
+                  ) : (
+                    collaboratorTags.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleInsertTag(`@${c.name}`)}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs hover:bg-blue-600/20 text-neutral-200 hover:text-blue-200 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <AtSign className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                          <span className="font-semibold truncate">{c.name}</span>
+                        </div>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 shrink-0">
+                          {formatRoleLabel(c.role)}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </>
+              )}
+
+              {tagModalType === "client" && (
+                <>
+                  {clientTags.length === 0 ? (
+                    <p className="text-xs text-neutral-500 py-3 text-center">Aucun client trouvé</p>
+                  ) : (
+                    clientTags.map((cl) => (
+                      <button
+                        key={cl.id}
+                        type="button"
+                        onClick={() => handleInsertTag(`[Client: ${cl.companyName}]`)}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs hover:bg-emerald-600/20 text-neutral-200 hover:text-emerald-200 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Building className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span className="font-semibold truncate">{cl.companyName}</span>
+                        </div>
+                        <span className="text-[10px] text-emerald-400/80 shrink-0">Client</span>
+                      </button>
+                    ))
+                  )}
+                </>
+              )}
+
+              {tagModalType === "prospect" && (
+                <>
+                  {prospectTags.length === 0 ? (
+                    <p className="text-xs text-neutral-500 py-3 text-center">Aucun prospect trouvé</p>
+                  ) : (
+                    prospectTags.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleInsertTag(`[Prospect: ${p.companyName}]`)}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-xs hover:bg-amber-600/20 text-neutral-200 hover:text-amber-200 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="font-semibold truncate">{p.companyName}</span>
+                        </div>
+                        <span className="text-[10px] text-amber-400/80 shrink-0">Prospect</span>
+                      </button>
+                    ))
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Barre de composition et envoi */}
+        <div className="p-3 sm:p-4 border-t border-neutral-800/80 bg-neutral-900/50 space-y-2.5 shrink-0">
+          {/* BARRE D'OUTILS : TAGS RAPIDES & ÉMOJIS */}
+          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 text-xs scrollbar-none">
+            {/* Boutons de Tag (@Collaborateur, Client, Prospect) */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[11px] font-bold text-neutral-400 flex items-center gap-1 mr-1">
+                <Tag className="w-3 h-3 text-neutral-400" />
+                <span>Taguer :</span>
+              </span>
+
+              {/* Tag Collaborateur */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTagModalType(tagModalType === "collaborator" ? null : "collaborator");
+                  setTagSearch("");
+                }}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  tagModalType === "collaborator"
+                    ? "bg-blue-600 text-white border-blue-500 shadow-xs"
+                    : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30"
+                }`}
+                title="Mentionner un collaborateur de l'équipe"
+              >
+                <AtSign className="w-3 h-3" />
+                <span>Collaborateur</span>
+              </button>
+
+              {/* Tag Client */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTagModalType(tagModalType === "client" ? null : "client");
+                  setTagSearch("");
+                }}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  tagModalType === "client"
+                    ? "bg-emerald-600 text-white border-emerald-500 shadow-xs"
+                    : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                }`}
+                title="Taguer un client et lier sa fiche"
+              >
+                <Building className="w-3 h-3" />
+                <span>Client</span>
+              </button>
+
+              {/* Tag Prospect */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTagModalType(tagModalType === "prospect" ? null : "prospect");
+                  setTagSearch("");
+                }}
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  tagModalType === "prospect"
+                    ? "bg-amber-600 text-white border-amber-500 shadow-xs"
+                    : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30"
+                }`}
+                title="Taguer un prospect et lier sa fiche"
+              >
+                <Target className="w-3 h-3" />
+                <span>Prospect</span>
+              </button>
+            </div>
+
+            {/* Raccourcis émojis rapides */}
+            <div className="flex items-center gap-1 shrink-0">
+              <Smile className="w-3.5 h-3.5 text-neutral-500 mr-0.5" />
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleAddEmoji(emoji)}
+                  className="px-1.5 py-0.5 rounded-lg bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/40 text-xs transition-transform active:scale-95 cursor-pointer"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Formulaire d'envoi */}
@@ -585,12 +885,12 @@ export function ChatClient({
               type="text"
               placeholder={
                 activeType === "channel"
-                  ? `Écrire un message dans #${activeChannel.label}...`
+                  ? `Écrire dans #${activeChannel.label} (utilisez @ pour mentionner, ou les boutons ci-dessus)...`
                   : `Message privé pour ${activeDmUser?.name || "ce collaborateur"}...`
               }
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="flex-1 h-11 px-4 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
+              className="flex-1 h-11 px-4 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
             />
 
             <button

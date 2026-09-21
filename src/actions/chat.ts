@@ -173,8 +173,70 @@ export async function sendMessageAction(data: {
     },
   });
 
+  // Détecter les mentions @Nom et notifier les collaborateurs concernés
+  try {
+    const activeUsers = await prisma.user.findMany({
+      where: { isActive: true, id: { not: user.id } },
+      select: { id: true, name: true },
+    });
+
+    const mentionedUsers = activeUsers.filter((u) => {
+      const atTag = `@${u.name.toLowerCase()}`;
+      const atFirstName = `@${u.name.split(" ")[0].toLowerCase()}`;
+      const lowerContent = cleanContent.toLowerCase();
+      return lowerContent.includes(atTag) || lowerContent.includes(atFirstName);
+    });
+
+    if (mentionedUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: mentionedUsers.map((u) => ({
+          userId: u.id,
+          title: `📌 Mentionné(e) par ${user.name} dans #${targetChannel}`,
+          message: cleanContent.length > 85 ? cleanContent.slice(0, 82) + "..." : cleanContent,
+          type: "CHAT",
+          link: `/chat?channel=${targetChannel}`,
+        })),
+      });
+    }
+  } catch (err) {
+    console.warn("Erreur notifications mentions:", err);
+  }
+
   revalidatePath("/chat");
   return { success: true, message: msg };
+}
+
+export interface ChatTagEntities {
+  collaborators: { id: string; name: string; role: string }[];
+  clients: { id: string; companyName: string }[];
+  prospects: { id: string; companyName: string }[];
+}
+
+/**
+ * Récupère les entités pour les tags rapides (collaborateurs, clients, prospects)
+ */
+export async function getChatTagEntitiesAction(): Promise<ChatTagEntities> {
+  await requireAuth();
+
+  const [collaborators, clients, prospects] = await Promise.all([
+    prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, role: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.client.findMany({
+      select: { id: true, companyName: true },
+      orderBy: { companyName: "asc" },
+      take: 200,
+    }),
+    prisma.prospect.findMany({
+      select: { id: true, companyName: true },
+      orderBy: { companyName: "asc" },
+      take: 300,
+    }),
+  ]);
+
+  return { collaborators, clients, prospects };
 }
 
 /**
