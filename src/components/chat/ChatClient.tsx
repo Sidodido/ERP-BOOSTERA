@@ -30,7 +30,50 @@ import {
   VolumeX,
   Bell,
   BellRing,
+  Image as ImageIcon,
+  Maximize2,
+  Download,
+  Loader2,
 } from "lucide-react";
+
+/**
+ * Compresse une image côté client pour un envoi ultra-rapide et léger
+ */
+function compressImage(file: File, maxDimension = 1280, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(event.target?.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressedBase64);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+}
 
 /**
  * Extrait les initiales propres d'un nom d'utilisateur en ignorant les parenthèses de rôle
@@ -317,12 +360,79 @@ export function ChatClient({
   );
   const [tagSearch, setTagSearch] = useState("");
 
+  // Photo upload state & Lightbox modal
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImage, setSelectedImage] = useState<{
+    name: string;
+    previewUrl: string;
+    base64: string;
+    sizeStr: string;
+  } | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
   const knownMessageIdsRef = useRef<Set<string>>(
     new Set(initialMessages.map((m) => m.id))
   );
+
+  // Gestion de la sélection d'un fichier photo
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Veuillez sélectionner un fichier image valide (JPG, PNG, WebP...).");
+      return;
+    }
+    try {
+      setIsUploadingImage(true);
+      const base64 = await compressImage(file);
+      setSelectedImage({
+        name: file.name,
+        previewUrl: base64,
+        base64,
+        sizeStr: `${Math.round(file.size / 1024)} Ko`,
+      });
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } catch (err) {
+      console.error("Erreur compression image:", err);
+      alert("Impossible de charger l'image.");
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Collage direct d'image (Ctrl+V / Capture d'écran)
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          try {
+            setIsUploadingImage(true);
+            const base64 = await compressImage(file);
+            setSelectedImage({
+              name: file.name || "capture-d-ecran.jpg",
+              previewUrl: base64,
+              base64,
+              sizeStr: `${Math.round(file.size / 1024)} Ko`,
+            });
+          } catch (err) {
+            console.error("Erreur collage image:", err);
+          } finally {
+            setIsUploadingImage(false);
+          }
+          break;
+        }
+      }
+    }
+  };
 
   // Déterminer le contact actif en mode DM ou le canal actif
   const activeDmUser =
@@ -436,22 +546,22 @@ export function ChatClient({
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = inputText.trim();
-    if (!text || isSending) return;
+    if ((!text && !selectedImage) || isSending || isUploadingImage) return;
 
     setIsSending(true);
-    setInputText("");
-    setTagModalType(null);
+    const imageToSend = selectedImage?.base64;
+    const finalContent = text || (imageToSend ? "📷 Photo" : "");
 
     const chanId = activeChannelId === "général" ? "general" : activeChannelId;
 
     // Ajout optimiste
     const optimisticMsg: ChatMessageItem = {
       id: "temp-" + Date.now(),
-      content: text,
+      content: finalContent,
       senderId: currentUser.id,
       recipientId: activeType === "dm" ? activeDmUserId : null,
       channel: activeType === "channel" ? chanId : "",
-      fileUrl: null,
+      fileUrl: selectedImage ? selectedImage.previewUrl : null,
       isPinned: false,
       createdAt: new Date(),
       sender: {
@@ -462,14 +572,19 @@ export function ChatClient({
       },
     };
 
+    setSelectedImage(null);
+    setInputText("");
+    setTagModalType(null);
+
     setMessages((prev) => [...prev, optimisticMsg]);
     setTimeout(() => scrollToBottom(true), 50);
 
     try {
       const res = await sendMessageAction({
-        content: text,
+        content: finalContent,
         channel: activeType === "channel" ? chanId : undefined,
         recipientId: activeType === "dm" ? activeDmUserId || undefined : undefined,
+        fileUrl: imageToSend || undefined,
       });
 
       if (res.error) {
@@ -999,7 +1114,30 @@ export function ChatClient({
                           : "bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-xs"
                       }`}
                     >
-                      {renderMessageContent(msg.content)}
+                      {/* Photo jointe */}
+                      {msg.fileUrl && (
+                        <div className="mb-2 rounded-xl overflow-hidden border border-white/10 max-w-sm cursor-pointer group/img relative shadow-md bg-neutral-950">
+                          <img
+                            src={msg.fileUrl}
+                            alt="Photo"
+                            className="w-full max-h-72 object-cover transition-transform duration-200 group-hover/img:scale-102"
+                            onClick={() => setViewingImageUrl(msg.fileUrl)}
+                          />
+                          <div
+                            onClick={() => setViewingImageUrl(msg.fileUrl)}
+                            className="absolute inset-0 bg-black/0 group-hover/img:bg-black/30 transition-colors flex items-center justify-center opacity-0 group-hover/img:opacity-100"
+                          >
+                            <span className="p-1.5 px-2.5 rounded-lg bg-black/70 text-white backdrop-blur-xs flex items-center gap-1.5 text-[11px] font-semibold">
+                              <Maximize2 className="w-3.5 h-3.5" />
+                              <span>Agrandir</span>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {(!msg.fileUrl || (msg.content && msg.content !== "📷 Photo")) && (
+                        <div>{renderMessageContent(msg.content)}</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1208,6 +1346,30 @@ export function ChatClient({
                 <Target className="w-3 h-3" />
                 <span>Prospect</span>
               </button>
+
+              {/* Bouton Partager une Photo */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploadingImage}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/30"
+                title="Intégrer une photo dans la discussion"
+              >
+                {isUploadingImage ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <ImageIcon className="w-3 h-3" />
+                )}
+                <span>Photo</span>
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </div>
 
             {/* Raccourcis émojis rapides */}
@@ -1226,6 +1388,36 @@ export function ChatClient({
             </div>
           </div>
 
+          {/* Aperçu de la photo sélectionnée avant l'envoi */}
+          {selectedImage && (
+            <div className="flex items-center gap-3 p-2 px-3 rounded-xl bg-purple-950/40 border border-purple-500/30 text-xs animate-in fade-in slide-in-from-bottom-2">
+              <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-purple-500/40 shrink-0 bg-neutral-900">
+                <img
+                  src={selectedImage.previewUrl}
+                  alt="Aperçu"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-purple-300 truncate text-xs flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                  <span className="truncate">{selectedImage.name}</span>
+                </p>
+                <p className="text-[10px] text-neutral-400 mt-0.5">
+                  Photo prête • {selectedImage.sizeStr} • Vous pouvez ajouter un message ou l'envoyer directement
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-rose-400 hover:bg-neutral-800/80 transition-colors cursor-pointer"
+                title="Retirer la photo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Formulaire d'envoi */}
           <form onSubmit={handleSendMessage} className="flex items-center gap-2">
             <input
@@ -1238,12 +1430,13 @@ export function ChatClient({
               }
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
+              onPaste={handlePaste}
               className="flex-1 h-11 px-4 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
             />
 
             <button
               type="submit"
-              disabled={!inputText.trim() || isSending}
+              disabled={(!inputText.trim() && !selectedImage) || isSending || isUploadingImage}
               className="h-11 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer shrink-0"
             >
               <span>Envoyer</span>
@@ -1252,6 +1445,44 @@ export function ChatClient({
           </form>
         </div>
       </div>
+
+      {/* MODAL LIGHTBOX POUR AGRANDIR LA PHOTO */}
+      {viewingImageUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setViewingImageUrl(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-end gap-2 mb-3">
+              <a
+                href={viewingImageUrl}
+                download="photo-chat.jpg"
+                className="p-2 px-3 rounded-xl bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 transition-colors flex items-center gap-1.5 text-xs font-semibold border border-neutral-700"
+                title="Télécharger l'image"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Télécharger</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setViewingImageUrl(null)}
+                className="p-2 rounded-xl bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 transition-colors border border-neutral-700 cursor-pointer"
+                title="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={viewingImageUrl}
+              alt="Photo en grand"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl border border-neutral-800 bg-neutral-950"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

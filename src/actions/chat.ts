@@ -112,22 +112,27 @@ export async function sendMessageAction(data: {
   content: string;
   channel?: string;
   recipientId?: string;
+  fileUrl?: string;
 }) {
   const user = await requireAuth();
   const cleanContent = (data.content || "").trim();
+  const fileUrl = data.fileUrl ? data.fileUrl.trim() : null;
 
-  if (!cleanContent) {
+  if (!cleanContent && !fileUrl) {
     return { error: "Le contenu du message ne peut pas être vide." };
   }
+
+  const finalContent = cleanContent || (fileUrl ? "📷 Photo" : "");
 
   if (data.recipientId) {
     // Message direct privé
     const msg = await prisma.chatMessage.create({
       data: {
-        content: cleanContent,
+        content: finalContent,
         senderId: user.id,
         recipientId: data.recipientId,
         channel: "",
+        fileUrl: fileUrl,
       },
       include: {
         sender: {
@@ -139,11 +144,12 @@ export async function sendMessageAction(data: {
     // Envoyer une notification directe au destinataire
     try {
       if (data.recipientId !== user.id) {
+        const notifMsg = fileUrl && !cleanContent ? "📷 Photo partagée" : finalContent;
         await prisma.notification.create({
           data: {
             userId: data.recipientId,
             title: `💬 Message privé de ${user.name}`,
-            message: cleanContent.length > 80 ? cleanContent.slice(0, 77) + "..." : cleanContent,
+            message: notifMsg.length > 80 ? notifMsg.slice(0, 77) + "..." : notifMsg,
             type: "CHAT",
             link: `/chat?dm=${user.id}`,
           },
@@ -163,10 +169,11 @@ export async function sendMessageAction(data: {
 
   const msg = await prisma.chatMessage.create({
     data: {
-      content: cleanContent,
+      content: finalContent,
       senderId: user.id,
       recipientId: null,
       channel: targetChannel,
+      fileUrl: fileUrl,
     },
     include: {
       sender: {
