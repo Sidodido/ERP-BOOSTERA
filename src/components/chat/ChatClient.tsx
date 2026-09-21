@@ -34,6 +34,8 @@ import {
   Maximize2,
   Download,
   Loader2,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 
 /**
@@ -268,6 +270,16 @@ export function ChatClient({
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
+
+  // Permissions de publication dans #annonces réservée à la Direction
+  const isDirectionUser =
+    currentUser?.role === "ADMIN" ||
+    currentUser?.role === "SALES_DIRECTOR" ||
+    currentUser?.role?.toLowerCase().includes("admin") ||
+    currentUser?.role?.toLowerCase().includes("direct");
+
+  const isAnnoncesChannel = activeType === "channel" && activeChannelId === "annonces";
+  const canPostInCurrentChannel = !isAnnoncesChannel || isDirectionUser;
 
   // Synchronisation avec les paramètres d'URL (quand un lien ou notification externe change l'URL)
   useEffect(() => {
@@ -800,7 +812,15 @@ export function ChatClient({
                     <Icon className="w-3.5 h-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs truncate font-medium">{ch.title}</p>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-xs truncate font-medium">{ch.title}</p>
+                      {ch.id === "annonces" && (
+                        <span className="shrink-0 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>Direction</span>
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-neutral-400 truncate">#{ch.label}</p>
                   </div>
                 </button>
@@ -896,6 +916,12 @@ export function ChatClient({
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
                       #{activeChannel.label}
                     </span>
+                    {activeChannel.id === "annonces" && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        <Lock className="w-3 h-3 text-amber-400" />
+                        Direction uniquement
+                      </span>
+                    )}
                   </h3>
                   <p className="text-[11px] text-neutral-400 truncate mt-0.5">
                     {activeChannel.description}
@@ -1283,8 +1309,34 @@ export function ChatClient({
         )}
 
         {/* Barre de composition et envoi */}
-        <div className="p-3 sm:p-4 border-t border-neutral-800/80 bg-neutral-900/50 space-y-2.5 shrink-0">
-          {/* BARRE D'OUTILS : TAGS RAPIDES & ÉMOJIS */}
+        {!canPostInCurrentChannel ? (
+          <div className="p-4 border-t border-neutral-800/80 bg-neutral-900/50 shrink-0">
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3.5 text-amber-200 shadow-sm">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0 text-amber-300">
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-xs font-bold text-amber-300 flex items-center gap-2">
+                  <span>Canal Réservé aux Annonces Officielles</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Direction Seule
+                  </span>
+                </h4>
+                <p className="text-[11px] text-amber-400/80 mt-0.5 leading-relaxed">
+                  Ce canal est en lecture seule pour l'équipe. Seuls les membres de la Direction sont habilités à diffuser des notes de service, plannings et directives officielles.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 sm:p-4 border-t border-neutral-800/80 bg-neutral-900/50 space-y-2.5 shrink-0">
+            {isAnnoncesChannel && isDirectionUser && (
+              <div className="px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Mode Direction : Vous publiez une annonce officielle visible par tous les collaborateurs.</span>
+              </div>
+            )}
+            {/* BARRE D'OUTILS : TAGS RAPIDES & ÉMOJIS */}
           <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 text-xs scrollbar-none">
             {/* Boutons de Tag (@Collaborateur, Client, Prospect) */}
             <div className="flex items-center gap-1.5 shrink-0">
@@ -1444,6 +1496,7 @@ export function ChatClient({
             </button>
           </form>
         </div>
+      )}
       </div>
 
       {/* MODAL LIGHTBOX POUR AGRANDIR LA PHOTO */}

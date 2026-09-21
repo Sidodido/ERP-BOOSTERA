@@ -167,6 +167,21 @@ export async function sendMessageAction(data: {
   let targetChannel = (data.channel || "general").toLowerCase().trim();
   if (targetChannel === "général") targetChannel = "general";
 
+  // Seuls les membres de la Direction peuvent publier dans #annonces
+  if (targetChannel === "annonces") {
+    const isDirection =
+      user.role === "ADMIN" ||
+      user.role === "SALES_DIRECTOR" ||
+      user.role?.toLowerCase().includes("admin") ||
+      user.role?.toLowerCase().includes("direct");
+
+    if (!isDirection) {
+      return {
+        error: "Seuls les membres de la Direction sont autorisés à publier dans le canal #annonces.",
+      };
+    }
+  }
+
   const msg = await prisma.chatMessage.create({
     data: {
       content: finalContent,
