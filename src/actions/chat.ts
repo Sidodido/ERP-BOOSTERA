@@ -65,7 +65,7 @@ export async function getChatMessagesAction(params: {
 
   if (params.recipientId) {
     // Conversation directe (1-à-1) entre l'utilisateur connecté et le destinataire
-    const messages = await prisma.chatMessage.findMany({
+    const rawMessages = await prisma.chatMessage.findMany({
       where: {
         OR: [
           { senderId: user.id, recipientId: params.recipientId },
@@ -77,18 +77,18 @@ export async function getChatMessagesAction(params: {
           select: { id: true, name: true, role: true, avatarUrl: true },
         },
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       take: limit,
     });
 
-    return messages;
+    return rawMessages.reverse();
   }
 
   // Canal public (par défaut: "general")
   let targetChannel = (params.channel || "general").toLowerCase().trim();
   if (targetChannel === "général") targetChannel = "general";
 
-  const messages = await prisma.chatMessage.findMany({
+  const rawMessages = await prisma.chatMessage.findMany({
     where: {
       channel: targetChannel,
       recipientId: null,
@@ -98,11 +98,11 @@ export async function getChatMessagesAction(params: {
         select: { id: true, name: true, role: true, avatarUrl: true },
       },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     take: limit,
   });
 
-  return messages;
+  return rawMessages.reverse();
 }
 
 /**
@@ -153,7 +153,7 @@ export async function sendMessageAction(data: {
       console.warn("Erreur notification chat privé:", err);
     }
 
-    revalidatePath("/chat");
+    revalidatePath("/", "layout");
     return { success: true, message: msg };
   }
 
@@ -224,7 +224,6 @@ export async function sendMessageAction(data: {
     console.warn("Erreur notifications chat:", err);
   }
 
-  revalidatePath("/chat");
   revalidatePath("/", "layout");
   return { success: true, message: msg };
 }
@@ -285,7 +284,6 @@ export async function deleteChatMessageAction(messageId: string) {
     where: { id: messageId },
   });
 
-  revalidatePath("/chat");
   return { success: true };
 }
 
@@ -306,6 +304,5 @@ export async function togglePinChatMessageAction(messageId: string) {
     data: { isPinned: !msg.isPinned },
   });
 
-  revalidatePath("/chat");
   return { success: true };
 }

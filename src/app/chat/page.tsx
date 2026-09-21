@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -32,19 +32,21 @@ export default async function ChatPage({ searchParams }: ChatPageProps) {
 
   return (
     <AppShell>
-      <ChatClient
-        currentUser={{
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          email: user.email,
-        }}
-        initialMembers={members}
-        initialMessages={messages}
-        tagEntities={tagEntities}
-        defaultChannel={channel}
-        defaultDmUserId={dmUserId}
-      />
+      <Suspense fallback={<div className="h-[calc(100vh-5.5rem)] bg-neutral-950 border border-neutral-800 rounded-3xl animate-pulse" />}>
+        <ChatClient
+          currentUser={{
+            id: user.id,
+            name: user.name,
+            role: user.role,
+            email: user.email,
+          }}
+          initialMembers={members}
+          initialMessages={messages}
+          tagEntities={tagEntities}
+          defaultChannel={channel}
+          defaultDmUserId={dmUserId}
+        />
+      </Suspense>
     </AppShell>
   );
 }

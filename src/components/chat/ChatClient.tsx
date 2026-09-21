@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useTransition, useCallback } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Hash,
   Send,
@@ -30,6 +31,22 @@ import {
   Bell,
   BellRing,
 } from "lucide-react";
+
+/**
+ * Extrait les initiales propres d'un nom d'utilisateur en ignorant les parenthèses de rôle
+ */
+function getUserInitials(rawName: string): string {
+  if (!rawName) return "??";
+  const clean = rawName.replace(/\([^)]*\)/g, "").trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  if (parts.length === 1 && parts[0].length >= 2) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return clean.slice(0, 2).toUpperCase() || rawName.slice(0, 2).toUpperCase();
+}
 
 /**
  * Carillon sonore synthétisé via Web Audio API (aucun fichier externe requis, compatible tous navigateurs)
@@ -168,11 +185,23 @@ export function ChatClient({
   defaultChannel = "general",
   defaultDmUserId = null,
 }: ChatClientProps) {
-  const [activeType, setActiveType] = useState<"channel" | "dm">(
-    defaultDmUserId ? "dm" : "channel"
-  );
-  const [activeChannelId, setActiveChannelId] = useState<string>(defaultChannel);
-  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(defaultDmUserId);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlDm = searchParams?.get("dm");
+  const urlChannel = searchParams?.get("channel");
+
+  const [activeType, setActiveType] = useState<"channel" | "dm">(() => {
+    if (urlDm || defaultDmUserId) return "dm";
+    return "channel";
+  });
+  const [activeChannelId, setActiveChannelId] = useState<string>(() => {
+    const raw = urlChannel || defaultChannel || "general";
+    return raw === "général" ? "general" : raw;
+  });
+  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(() => {
+    return urlDm || defaultDmUserId || null;
+  });
+  const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
 
   const [messages, setMessages] = useState<ChatMessageItem[]>(initialMessages);
   const [inputText, setInputText] = useState("");
@@ -197,16 +226,35 @@ export function ChatClient({
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
-  // Synchronisation des paramètres d'URL (changement de canal ou de DM via notifications du Header)
+  // Synchronisation avec les paramètres d'URL (quand un lien ou notification externe change l'URL)
   useEffect(() => {
-    if (defaultDmUserId) {
+    if (urlDm) {
       setActiveType("dm");
-      setActiveDmUserId(defaultDmUserId);
-    } else if (defaultChannel) {
+      setActiveDmUserId(urlDm);
+    } else if (urlChannel) {
       setActiveType("channel");
-      setActiveChannelId(defaultChannel);
+      setActiveChannelId(urlChannel === "général" ? "general" : urlChannel);
     }
-  }, [defaultChannel, defaultDmUserId]);
+  }, [urlDm, urlChannel]);
+
+  // Gestionnaire de sélection directe d'un salon public
+  const handleSelectChannel = (channelId: string) => {
+    const norm = channelId === "général" ? "general" : channelId;
+    setActiveType("channel");
+    setActiveChannelId(norm);
+    setMessages([]);
+    setIsLoadingMessages(true);
+    router.replace(`/chat?channel=${norm}`, { scroll: false });
+  };
+
+  // Gestionnaire de sélection directe d'un collègue (Message Privé)
+  const handleSelectDm = (userId: string) => {
+    setActiveType("dm");
+    setActiveDmUserId(userId);
+    setMessages([]);
+    setIsLoadingMessages(true);
+    router.replace(`/chat?dm=${userId}`, { scroll: false });
+  };
 
   // Charger la préférence de son depuis le stockage local et vérifier les permissions de notifications
   useEffect(() => {
@@ -277,7 +325,9 @@ export function ChatClient({
   );
 
   // Déterminer le contact actif en mode DM ou le canal actif
-  const activeDmUser = initialMembers.find((m) => m.id === activeDmUserId);
+  const activeDmUser =
+    initialMembers.find((m) => m.id === activeDmUserId) ||
+    tagEntities?.collaborators?.find((c) => c.id === activeDmUserId);
   const normalizedChannelId =
     activeChannelId === "général" ? "general" : activeChannelId;
   const activeChannel =
@@ -314,10 +364,16 @@ export function ChatClient({
         res = await getChatMessagesAction({ recipientId: activeDmUserId });
       }
 
+      setIsLoadingMessages(false);
+
       if (res && res.length > 0) {
-        // Détecter les nouveaux messages arrivés d'autres utilisateurs
+        // Détecter les nouveaux messages arrivés d'autres utilisateurs (moins de 15s)
+        const now = Date.now();
         const newFromOthers = res.filter(
-          (m) => !knownMessageIdsRef.current.has(m.id) && m.senderId !== currentUser.id
+          (m) =>
+            !knownMessageIdsRef.current.has(m.id) &&
+            m.senderId !== currentUser.id &&
+            now - new Date(m.createdAt).getTime() < 15000
         );
 
         if (newFromOthers.length > 0) {
@@ -349,7 +405,7 @@ export function ChatClient({
         setMessages([]);
       }
     } catch {
-      // Ignoré lors des pertes de connexion momentanées
+      setIsLoadingMessages(false);
     }
   }, [activeType, activeChannelId, activeDmUserId, currentUser.id, activeDmUser?.name]);
 
@@ -420,8 +476,10 @@ export function ChatClient({
         setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
         alert(res.error);
       } else if (res.message) {
+        const savedMsg = res.message as ChatMessageItem;
+        knownMessageIdsRef.current.add(savedMsg.id);
         setMessages((prev) =>
-          prev.map((m) => (m.id === optimisticMsg.id ? (res.message as ChatMessageItem) : m))
+          prev.map((m) => (m.id === optimisticMsg.id ? savedMsg : m))
         );
       }
     } catch {
@@ -610,14 +668,7 @@ export function ChatClient({
               return (
                 <button
                   key={ch.id}
-                  onClick={() => {
-                    setActiveType("channel");
-                    setActiveChannelId(ch.id);
-                    setMessages([]);
-                    try {
-                      window.history.replaceState(null, "", `/chat?channel=${ch.id}`);
-                    } catch {}
-                  }}
+                  onClick={() => handleSelectChannel(ch.id)}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all cursor-pointer group ${
                     isActive
                       ? `${ch.activeColor} font-semibold shadow-xs`
@@ -667,23 +718,12 @@ export function ChatClient({
             <div className="space-y-0.5 max-h-56 overflow-y-auto pr-1">
               {filteredMembers.map((member) => {
                 const isActive = activeType === "dm" && activeDmUserId === member.id;
-                const initials = member.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")
-                  .toUpperCase();
+                const initials = getUserInitials(member.name);
 
                 return (
                   <button
                     key={member.id}
-                    onClick={() => {
-                      setActiveType("dm");
-                      setActiveDmUserId(member.id);
-                      try {
-                        window.history.replaceState(null, "", `/chat?dm=${member.id}`);
-                      } catch {}
-                    }}
+                    onClick={() => handleSelectDm(member.id)}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all cursor-pointer group ${
                       isActive
                         ? "bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 font-semibold shadow-xs"
@@ -713,7 +753,7 @@ export function ChatClient({
         {/* Profil de l'utilisateur connecté en bas */}
         <div className="p-3 border-t border-neutral-800 bg-neutral-950/50 flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-center shrink-0">
-            {currentUser.name[0]?.toUpperCase() || "M"}
+            {getUserInitials(currentUser.name)}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-neutral-100 truncate">{currentUser.name}</p>
@@ -750,7 +790,7 @@ export function ChatClient({
             ) : (
               <>
                 <div className="w-9 h-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 font-bold text-xs">
-                  {activeDmUser?.name[0]?.toUpperCase() || "C"}
+                  {getUserInitials(activeDmUser?.name || "Collaborateur")}
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
@@ -760,7 +800,10 @@ export function ChatClient({
                     </span>
                   </h3>
                   <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                    Discussion privée et directe • {activeDmUser?.email}
+                    Discussion privée et directe{" "}
+                    {"email" in (activeDmUser || {}) && (activeDmUser as ChatUserItem)?.email
+                      ? `• ${(activeDmUser as ChatUserItem).email}`
+                      : ""}
                   </p>
                 </div>
               </>
@@ -848,17 +891,9 @@ export function ChatClient({
                 type="button"
                 onClick={() => {
                   if (incomingToast.dmId) {
-                    setActiveType("dm");
-                    setActiveDmUserId(incomingToast.dmId);
-                    try {
-                      window.history.replaceState(null, "", `/chat?dm=${incomingToast.dmId}`);
-                    } catch {}
+                    handleSelectDm(incomingToast.dmId);
                   } else if (incomingToast.channelId) {
-                    setActiveType("channel");
-                    setActiveChannelId(incomingToast.channelId);
-                    try {
-                      window.history.replaceState(null, "", `/chat?channel=${incomingToast.channelId}`);
-                    } catch {}
+                    handleSelectChannel(incomingToast.channelId);
                   }
                   setIncomingToast(null);
                 }}
@@ -879,7 +914,14 @@ export function ChatClient({
 
         {/* Flux des Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
-          {messages.length === 0 ? (
+          {isLoadingMessages && messages.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-center p-6 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-neutral-400">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                <span>Chargement de la conversation...</span>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-400">
                 <MessageSquare className="w-6 h-6" />
@@ -899,12 +941,7 @@ export function ChatClient({
           ) : (
             messages.map((msg) => {
               const isMine = msg.senderId === currentUser.id;
-              const initials = (msg.sender?.name || "Anonyme")
-                .split(" ")
-                .map((n) => n[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase();
+              const initials = getUserInitials(msg.sender?.name || "Anonyme");
 
               const formattedTime = new Date(msg.createdAt).toLocaleTimeString("fr-FR", {
                 hour: "2-digit",
