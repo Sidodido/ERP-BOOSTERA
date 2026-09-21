@@ -23,6 +23,7 @@ import {
   createAppointmentAction,
   updateAppointmentStatus,
   rescheduleAppointmentAction,
+  deleteAppointmentAction,
 } from "@/actions/appointments";
 import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
 import { convertProspectToClient } from "@/actions/prospects";
@@ -54,6 +55,7 @@ import {
   CreditCard,
   AlertTriangle,
   Users,
+  Trash2,
 } from "lucide-react";
 
 const getCommercialBadgeStyle = (name?: string, id?: string) => {
@@ -542,6 +544,43 @@ export function AppointmentsClient({
       setFeedbackMessage({
         type: "error",
         text: err?.message || "Erreur lors de la mise à jour du statut",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteAppointment = async (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const confirmed = window.confirm("Voulez-vous vraiment supprimer définitivement ce rendez-vous ?");
+    if (!confirmed) return;
+
+    setIsLoading(true);
+    try {
+      const res = await deleteAppointmentAction(id);
+      if (res && "error" in res && res.error) {
+        setFeedbackMessage({
+          type: "error",
+          text: res.error,
+        });
+        return;
+      }
+      setAppointments((prev) => prev.filter((a) => a.id !== id));
+      if (selectedAppointment && selectedAppointment.id === id) {
+        setDetailModalOpen(false);
+        setSelectedAppointment(null);
+      }
+      setFeedbackMessage({
+        type: "success",
+        text: "Rendez-vous supprimé avec succès.",
+      });
+      router.refresh();
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: "error",
+        text: err?.message || "Erreur lors de la suppression du rendez-vous",
       });
     } finally {
       setIsLoading(false);
@@ -1142,6 +1181,14 @@ export function AppointmentsClient({
                       >
                         Gérer →
                       </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteAppointment(appt.id, e)}
+                        className="p-1.5 rounded-lg bg-neutral-850 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 transition cursor-pointer"
+                        title="Supprimer ce rendez-vous"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1266,7 +1313,7 @@ export function AppointmentsClient({
                         <div
                           key={appt.id}
                           onClick={() => openAppointmentDetail(appt)}
-                          className={`px-1.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-all hover:scale-[1.02] flex flex-col gap-0.5 ${
+                          className={`group/item relative px-1.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-all hover:scale-[1.02] flex flex-col gap-0.5 ${
                             isCompleted
                               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                               : isCancelled
@@ -1283,13 +1330,23 @@ export function AppointmentsClient({
                               {startTimeStr}
                             </span>
                             <span className="truncate font-semibold text-neutral-100">{targetName}</span>
-                            {isRelance ? (
-                              <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
-                                Relance
-                              </span>
-                            ) : appt.prospect ? (
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                            ) : null}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteAppointment(appt.id, e)}
+                                className="opacity-0 group-hover/item:opacity-100 p-0.5 rounded hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 transition"
+                                title="Supprimer ce rendez-vous"
+                              >
+                                <Trash2 className="w-2.5 h-2.5" />
+                              </button>
+                              {isRelance ? (
+                                <span className="text-[8px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
+                                  Relance
+                                </span>
+                              ) : appt.prospect ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                              ) : null}
+                            </div>
                           </div>
                           <div className="flex items-center gap-1 text-[9px] truncate">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${commBadge.dot}`} />
@@ -1418,6 +1475,14 @@ export function AppointmentsClient({
                         className="px-2 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer"
                       >
                         Fiche RDV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteAppointment(appt.id, e)}
+                        className="p-1.5 bg-neutral-800 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 border border-neutral-700 rounded-lg text-[10px] font-semibold transition-colors cursor-pointer"
+                        title="Supprimer définitivement ce rendez-vous"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                       {appt.status === "SCHEDULED" && (
                         <>
@@ -2005,7 +2070,15 @@ export function AppointmentsClient({
               </div>
             )}
 
-            <div className="flex justify-end pt-2 border-t border-neutral-800">
+            <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => handleDeleteAppointment(selectedAppointment.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-all cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Supprimer ce rendez-vous</span>
+              </button>
               <Button variant="outline" onClick={() => setDetailModalOpen(false)}>
                 Fermer
               </Button>

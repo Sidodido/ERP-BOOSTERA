@@ -405,3 +405,64 @@ export async function getPostAppointmentFollowUps(params: {
 
   return followUps;
 }
+
+export async function deleteAppointmentAction(id: string) {
+  const user = await requireAuth();
+
+  const existing = await prisma.appointment.findUnique({
+    where: { id },
+    include: { prospect: true },
+  });
+
+  if (!existing) {
+    return { error: "Rendez-vous introuvable." };
+  }
+
+  // Delete the appointment
+  await prisma.appointment.delete({
+    where: { id },
+  });
+
+  // If associated with a prospect, check if other appointments remain
+  if (existing.prospectId) {
+    const remainingAppts = await prisma.appointment.count({
+      where: { prospectId: existing.prospectId },
+    });
+
+    if (remainingAppts === 0) {
+      if (
+        existing.prospect?.status === ProspectStatus.MEETING_SCHEDULED ||
+        existing.prospect?.rawState?.includes("RDV")
+      ) {
+        await prisma.prospect.update({
+          where: { id: existing.prospectId },
+          data: {
+            status: ProspectStatus.NEW,
+            rawState: null,
+          },
+        });
+      }
+    }
+  }
+
+  try {
+    await createAuditLog({
+      userId: user.id,
+      action: "DELETE_APPOINTMENT",
+      module: "APPOINTMENTS",
+      entityId: id,
+      details: { title: existing.title, date: existing.startTime },
+    });
+  } catch (auditErr) {
+    console.warn("Audit log error on appointment deletion:", auditErr);
+  }
+
+  revalidatePath("/rendez-vous");
+  revalidatePath("/prospection");
+  revalidatePath("/appels");
+  revalidatePath("/dashboard");
+  revalidatePath("/relances");
+
+  return { success: true };
+}
+
