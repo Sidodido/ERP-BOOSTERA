@@ -151,6 +151,7 @@ export function CallsClient({
   const [selectedWilaya, setSelectedWilaya] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedCommercial, setSelectedCommercial] = useState("");
+  const [selectedCallStatus, setSelectedCallStatus] = useState("");
 
   // Modals state
   const [callModalOpen, setCallModalOpen] = useState(false);
@@ -616,8 +617,13 @@ export function CallsClient({
     const matchesCommercial =
       !selectedCommercial ||
       (selectedCommercial === "unassigned" ? !p.assignedTo : p.assignedTo?.id === selectedCommercial);
+    const matchesCallStatus =
+      !selectedCallStatus ||
+      (selectedCallStatus === "NON EFFECTUE"
+        ? !p.callStatus || p.callStatus === "NON EFFECTUE" || p.callStatus.trim() === ""
+        : p.callStatus === selectedCallStatus);
 
-    return matchesSearch && matchesSector && matchesWilaya && matchesStatus && matchesCommercial;
+    return matchesSearch && matchesSector && matchesWilaya && matchesStatus && matchesCommercial && matchesCallStatus;
   });
 
   // Client Pagination (50 par page par défaut pour des performances instantanées)
@@ -627,7 +633,7 @@ export function CallsClient({
   // Revenir à la première page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedSector, selectedWilaya, selectedStatus, selectedCommercial]);
+  }, [search, selectedSector, selectedWilaya, selectedStatus, selectedCommercial, selectedCallStatus]);
 
   const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginatedProspects = useMemo(() => {
@@ -757,7 +763,7 @@ export function CallsClient({
       {activeTab === "prospects10" && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-neutral-900/60 border border-neutral-800 p-3 rounded-2xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 bg-neutral-900/60 border border-neutral-800 p-3 rounded-2xl">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
               <input
@@ -806,6 +812,27 @@ export function CallsClient({
                   {val.label}
                 </option>
               ))}
+            </select>
+
+            {/* FILTRE APPEL (POUR TOUS LES UTILISATEURS) */}
+            <select
+              value={selectedCallStatus}
+              onChange={(e) => setSelectedCallStatus(e.target.value)}
+              className={`h-9 px-3 text-xs bg-neutral-900 border rounded-xl focus:outline-none transition-colors cursor-pointer font-medium ${
+                selectedCallStatus
+                  ? "text-emerald-400 border-emerald-500/50 bg-emerald-950/30"
+                  : "text-neutral-200 border-neutral-800 focus:border-blue-500"
+              }`}
+              title="Filtrer par statut d'appel"
+            >
+              <option value="" className="bg-neutral-950 text-neutral-100">Tous les appels</option>
+              <option value="EFFECTUE" className="bg-neutral-950 text-emerald-400 font-bold">✓ EFFECTUE</option>
+              <option value="NON EFFECTUE" className="bg-neutral-950 text-neutral-300">NON EFFECTUE</option>
+              <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
+              <option value="PAS DE REPONSE" className="bg-neutral-950 text-amber-400">PAS DE REPONSE</option>
+              <option value="OCCUPE" className="bg-neutral-950 text-amber-400">OCCUPE</option>
+              <option value="INJOIGNABLE" className="bg-neutral-950 text-rose-400">INJOIGNABLE</option>
+              <option value="PAS DE CONTACT" className="bg-neutral-950 text-neutral-400">PAS DE CONTACT</option>
             </select>
 
             <select
