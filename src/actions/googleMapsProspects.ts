@@ -243,22 +243,37 @@ async function attachDuplicatesCheck(items: GoogleMapsProspectItem[]): Promise<G
   });
 }
 
+export interface GoogleMapsSearchParams {
+  query: string;
+  wilaya?: string;
+  commune?: string;
+  sector?: string;
+  subCategory?: string;
+  onlyWithPhone?: boolean;
+  onlyWithoutWebsite?: boolean;
+  onlyWithWebsite?: boolean;
+  minRating?: number;
+  minReviews?: number;
+  limit?: number;
+}
+
 /**
  * Live Search Google Maps / Algerian Business Directory via Overpass OSM + Nominatim + Google Places fallback
  */
-export async function searchGoogleMapsProspectsAction(params: {
-  query: string;
-  wilaya?: string;
-  sector?: string;
-  limit?: number;
-}) {
+export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchParams) {
   await requireAuth();
 
-  const query = (params.query || "").trim();
+  const rawQuery = (params.query || "").trim();
+  const subCat = (params.subCategory || "").trim();
+  const rawCommune = params.commune && params.commune !== "Toutes les communes"
+    ? params.commune.replace(/\s*\(.*\)/, "").trim()
+    : "";
   const wilaya = (params.wilaya || "Alger").trim();
   const sector = (params.sector || "").trim();
-  const limit = Math.min(params.limit || 50, 100);
+  const limit = Math.min(params.limit || 80, 150);
 
+  // Combined terms for targeted query
+  const query = [subCat || rawQuery, rawCommune].filter(Boolean).join(" ");
   const results: GoogleMapsProspectItem[] = [];
   const seenKeys = new Set<string>();
 
@@ -266,7 +281,7 @@ export async function searchGoogleMapsProspectsAction(params: {
   const googleApiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
   if (googleApiKey) {
     try {
-      const gQuery = `${query} ${wilaya} Algerie`;
+      const gQuery = `${query || "commerce entreprise"} ${rawCommune} ${wilaya} Algerie`.trim();
       const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(gQuery)}&key=${googleApiKey}&language=fr`;
       const gRes = await fetch(gUrl, { cache: "no-store" });
       if (gRes.ok) {
@@ -287,7 +302,7 @@ export async function searchGoogleMapsProspectsAction(params: {
               results.push({
                 id: `g_${place.place_id || Math.random().toString(36).slice(2)}`,
                 companyName: name,
-                phone: "", // Place details may require another call or phone regex in formatted text
+                phone: "",
                 address,
                 wilaya,
                 sector: sector || "Autre prestation",
@@ -314,11 +329,12 @@ export async function searchGoogleMapsProspectsAction(params: {
       const [minLat, minLon, maxLat, maxLon] = bbox;
       // Search with bounding box
       overpassQuery = `
-        [out:json][timeout:12];
+        [out:json][timeout:14];
         (
           node["amenity"](${minLat},${minLon},${maxLat},${maxLon});
           node["shop"](${minLat},${minLon},${maxLat},${maxLon});
           node["office"](${minLat},${minLon},${maxLat},${maxLon});
+          node["craft"](${minLat},${minLon},${maxLat},${maxLon});
           way["amenity"](${minLat},${minLon},${maxLat},${maxLon});
           way["shop"](${minLat},${minLon},${maxLat},${maxLon});
         );
@@ -327,7 +343,7 @@ export async function searchGoogleMapsProspectsAction(params: {
     } else {
       // Search with city name query in Algeria
       overpassQuery = `
-        [out:json][timeout:15];
+        [out:json][timeout:16];
         area["ISO3166-1"="DZ"]->.dz;
         area["name"~"${wilaya}",i](area.dz)->.searchArea;
         (
@@ -354,18 +370,24 @@ export async function searchGoogleMapsProspectsAction(params: {
           const name = tags["name:fr"] || tags.name || tags["name:en"] || tags["alt_name:fr"] || tags.alt_name;
           if (!name) continue;
 
-          // Keyword filter if provided
-          if (query) {
-            const fullTagStr = `${name} ${tags.amenity || ""} ${tags.shop || ""} ${tags.office || ""} ${tags.craft || ""}`.toLowerCase();
-            const qLower = query.toLowerCase();
-            const matchesKw = qLower.split(" ").some((term) => term.length > 2 && fullTagStr.includes(term));
-            if (!matchesKw) continue;
+          // Search term matching (including commune if specified)
+          const fullTagStr = `${name} ${tags.amenity || ""} ${tags.shop || ""} ${tags.office || ""} ${tags.craft || ""} ${tags["addr:street"] || ""} ${tags["addr:city"] || ""}`.toLowerCase();
+          
+          if (rawQuery || subCat) {
+            const termsToMatch = (subCat || rawQuery).toLowerCase().split(" ");
+            const matchesQuery = termsToMatch.some((term) => term.length > 2 && fullTagStr.includes(term));
+            if (!matchesQuery) continue;
+          }
+
+          if (rawCommune) {
+            const matchesCommune = fullTagStr.includes(rawCommune.toLowerCase());
+            if (!matchesCommune) continue;
           }
 
           const rawPhone = tags.phone || tags["contact:phone"] || tags["contact:mobile"] || tags["phone:mobile"] || tags["tel"] || "";
           const phone = cleanDzPhone(rawPhone);
           const street = tags["addr:street"] || tags["addr:full"] || "";
-          const city = tags["addr:city"] || tags["addr:city:fr"] || wilaya;
+          const city = rawCommune || tags["addr:city"] || tags["addr:city:fr"] || wilaya;
           const address = [street, city].filter(Boolean).join(", ");
           const website = tags.website || tags["contact:website"] || tags["brand:website"] || "";
           const lat = el.lat || el.center?.lat;
@@ -402,9 +424,9 @@ export async function searchGoogleMapsProspectsAction(params: {
   }
 
   // 3. Fallback: Nominatim live lookup if OSM returned few results
-  if (results.length < 5) {
+  if (results.length < 8) {
     try {
-      const searchTerm = `${query || "commerce entreprise"} ${wilaya} algerie`;
+      const searchTerm = `${subCat || rawQuery || "commerce entreprise"} ${rawCommune} ${wilaya} algerie`.trim();
       const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchTerm)}&format=json&addressdetails=1&extratags=1&limit=${limit}`;
       const nomRes = await fetch(nomUrl, {
         headers: { "User-Agent": "BoosterA-CRM-DZ/1.0 (direction@boostera.dz)" },
@@ -433,7 +455,7 @@ export async function searchGoogleMapsProspectsAction(params: {
                 phone: phone || "",
                 formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
                 address,
-                wilaya: item.address?.state || wilaya,
+                wilaya: rawCommune || item.address?.state || wilaya,
                 sector: sector || mapAmenityToSector(extra, query),
                 website: website || undefined,
                 googleMapsUrl: mapsUrl,
@@ -448,15 +470,38 @@ export async function searchGoogleMapsProspectsAction(params: {
     }
   }
 
+  // 4. Apply Advanced Criteria Filters
+  let filteredResults = results;
+
+  if (params.onlyWithPhone) {
+    filteredResults = filteredResults.filter((p) => p.phone && p.phone.length >= 8);
+  }
+
+  if (params.onlyWithoutWebsite) {
+    filteredResults = filteredResults.filter((p) => !p.website);
+  }
+
+  if (params.onlyWithWebsite) {
+    filteredResults = filteredResults.filter((p) => Boolean(p.website));
+  }
+
+  if (params.minRating && params.minRating > 0) {
+    filteredResults = filteredResults.filter((p) => typeof p.rating === "number" && p.rating >= (params.minRating || 0));
+  }
+
+  if (params.minReviews && params.minReviews > 0) {
+    filteredResults = filteredResults.filter((p) => typeof p.reviewsCount === "number" && p.reviewsCount >= (params.minReviews || 0));
+  }
+
   // Prioritize prospects with phones first
-  results.sort((a, b) => {
+  filteredResults.sort((a, b) => {
     if (a.phone && !b.phone) return -1;
     if (!a.phone && b.phone) return 1;
     return 0;
   });
 
   // Attach duplicates check against Prisma DB
-  const verifiedResults = await attachDuplicatesCheck(results);
+  const verifiedResults = await attachDuplicatesCheck(filteredResults);
 
   return {
     success: true,
@@ -606,19 +651,31 @@ export async function parseGoogleMapsTextAction(params: {
 export async function importGoogleMapsProspectsAction(params: {
   prospects: GoogleMapsProspectItem[];
   assignedToId?: string;
+  assignedUserIds?: string[];
+  campaignTag?: string;
   defaultSector?: string;
   defaultWilaya?: string;
 }) {
   const user = await requireAuth();
-  const { prospects, assignedToId } = params;
+  const { prospects, assignedToId, assignedUserIds, campaignTag } = params;
 
   if (!prospects || prospects.length === 0) {
     return { success: false, error: "Aucun prospect à importer." };
   }
 
+  const useRoundRobin = Boolean(assignedUserIds && assignedUserIds.length > 0);
+
   // Format rows for bulkImportProspects
-  const rows = prospects.map((p) => {
+  const rows = prospects.map((p, index) => {
+    let resolvedAssignee = assignedToId || user.id;
+    if (useRoundRobin && assignedUserIds && assignedUserIds.length > 0) {
+      resolvedAssignee = assignedUserIds[index % assignedUserIds.length];
+    }
+
     let notes = `Source: ${p.source || "Google Maps"}`;
+    if (campaignTag && campaignTag.trim()) {
+      notes += ` | Campagne: ${campaignTag.trim()}`;
+    }
     if (p.rating) {
       notes += ` | Note: ${p.rating}/5 (${p.reviewsCount || 0} avis)`;
     }
@@ -636,7 +693,7 @@ export async function importGoogleMapsProspectsAction(params: {
       wilaya: p.wilaya || params.defaultWilaya || "Alger",
       address: p.address || undefined,
       notes,
-      assignedToId: assignedToId || user.id,
+      assignedToId: resolvedAssignee,
     };
   });
 
