@@ -15,9 +15,9 @@ export async function getUserNotificationsAction() {
       ...(isCommercial
         ? {
             OR: [
-              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] } },
+              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM", "CHAT"] } },
               {
-                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] },
+                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM", "CHAT"] },
                 NOT: [
                   { title: { contains: "Planning Semaine", mode: "insensitive" } },
                   { title: { contains: "publication", mode: "insensitive" } },
@@ -39,9 +39,9 @@ export async function getUserNotificationsAction() {
       ...(isCommercial
         ? {
             OR: [
-              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] } },
+              { type: { in: ["APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM", "CHAT"] } },
               {
-                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM"] },
+                type: { notIn: ["CONTENT_AI", "APPOINTMENT", "CLIENT", "CALL", "FOLLOWUP", "PAYMENT", "SYSTEM", "CHAT"] },
                 NOT: [
                   { title: { contains: "Planning Semaine", mode: "insensitive" } },
                   { title: { contains: "publication", mode: "insensitive" } },

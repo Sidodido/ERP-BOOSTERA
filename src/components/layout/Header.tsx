@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useTransition } from "react";
-import { Search, Bell, LogOut, ShieldCheck, CheckCheck, ExternalLink, Sparkles, X, Trash2, Menu } from "lucide-react";
+import { Search, Bell, LogOut, ShieldCheck, CheckCheck, ExternalLink, Sparkles, X, Trash2, Menu, MessageSquare } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import {
   getUserNotificationsAction,
@@ -251,6 +251,8 @@ export function Header({ userName, userRole }: HeaderProps) {
                               ? "Voir le client"
                               : n.link.startsWith("/projets")
                               ? "Voir le projet"
+                              : n.link.startsWith("/chat")
+                              ? "Ouvrir la discussion"
                               : "Voir les détails"}
                           </span>
                           <ExternalLink className="w-2.5 h-2.5" />

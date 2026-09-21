@@ -173,7 +173,7 @@ export async function sendMessageAction(data: {
     },
   });
 
-  // Détecter les mentions @Nom et notifier les collaborateurs concernés
+  // Détecter les mentions @Nom et notifier tous les collaborateurs concernés
   try {
     const activeUsers = await prisma.user.findMany({
       where: { isActive: true, id: { not: user.id } },
@@ -187,22 +187,43 @@ export async function sendMessageAction(data: {
       return lowerContent.includes(atTag) || lowerContent.includes(atFirstName);
     });
 
-    if (mentionedUsers.length > 0) {
+    const mentionedUserIds = new Set(mentionedUsers.map((u) => u.id));
+    const notificationsToCreate = [];
+
+    // 1. Notifications prioritaires pour les collaborateurs directement mentionnés (@Nom)
+    for (const u of mentionedUsers) {
+      notificationsToCreate.push({
+        userId: u.id,
+        title: `📌 Mentionné(e) par ${user.name} dans #${targetChannel}`,
+        message: cleanContent.length > 85 ? cleanContent.slice(0, 82) + "..." : cleanContent,
+        type: "CHAT",
+        link: `/chat?channel=${targetChannel}`,
+      });
+    }
+
+    // 2. Notifications de salon pour les autres collaborateurs actifs
+    const otherUsers = activeUsers.filter((u) => !mentionedUserIds.has(u.id));
+    for (const u of otherUsers) {
+      notificationsToCreate.push({
+        userId: u.id,
+        title: `💬 ${user.name} dans #${targetChannel}`,
+        message: cleanContent.length > 85 ? cleanContent.slice(0, 82) + "..." : cleanContent,
+        type: "CHAT",
+        link: `/chat?channel=${targetChannel}`,
+      });
+    }
+
+    if (notificationsToCreate.length > 0) {
       await prisma.notification.createMany({
-        data: mentionedUsers.map((u) => ({
-          userId: u.id,
-          title: `📌 Mentionné(e) par ${user.name} dans #${targetChannel}`,
-          message: cleanContent.length > 85 ? cleanContent.slice(0, 82) + "..." : cleanContent,
-          type: "CHAT",
-          link: `/chat?channel=${targetChannel}`,
-        })),
+        data: notificationsToCreate,
       });
     }
   } catch (err) {
-    console.warn("Erreur notifications mentions:", err);
+    console.warn("Erreur notifications chat:", err);
   }
 
   revalidatePath("/chat");
+  revalidatePath("/", "layout");
   return { success: true, message: msg };
 }
 

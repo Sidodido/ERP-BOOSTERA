@@ -25,7 +25,72 @@ import {
   Phone,
   ExternalLink,
   ChevronRight,
+  Volume2,
+  VolumeX,
+  Bell,
+  BellRing,
 } from "lucide-react";
+
+/**
+ * Carillon sonore synthétisé via Web Audio API (aucun fichier externe requis, compatible tous navigateurs)
+ */
+function playChatNotificationSound() {
+  try {
+    if (typeof window === "undefined") return;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
+
+    // Premier carillon (880 Hz - note cristalline)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now);
+    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.12);
+
+    // Second carillon (1318.5 Hz - harmonie douce)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1318.5, now + 0.09);
+    gain2.gain.setValueAtTime(0.15, now + 0.09);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.09);
+    osc2.stop(now + 0.32);
+  } catch {
+    // Silently ignore if audio context is blocked by autoplay policy
+  }
+}
+
+/**
+ * Déclenche une notification native sur le bureau
+ */
+function showDesktopNotification(senderName: string, content: string, contextLabel?: string) {
+  try {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      const title = contextLabel ? `💬 ${senderName} (${contextLabel})` : `💬 Message de ${senderName}`;
+      new Notification(title, {
+        body: content.length > 90 ? content.slice(0, 87) + "..." : content,
+        icon: "/favicon.ico",
+      });
+    }
+  } catch {
+    // Ignore notification error
+  }
+}
 import {
   ChatMessageItem,
   ChatUserItem,
@@ -107,6 +172,89 @@ export function ChatClient({
   const [searchMember, setSearchMember] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Audio & Notification state
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [desktopPermission, setDesktopPermission] = useState<NotificationPermission>("default");
+  const [incomingToast, setIncomingToast] = useState<{
+    id: string;
+    senderName: string;
+    content: string;
+    channelOrDm: string;
+    channelId?: string;
+    dmId?: string;
+  } | null>(null);
+
+  const soundEnabledRef = useRef<boolean>(true);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  // Synchronisation des paramètres d'URL (changement de canal ou de DM via notifications du Header)
+  useEffect(() => {
+    if (defaultDmUserId) {
+      setActiveType("dm");
+      setActiveDmUserId(defaultDmUserId);
+    } else if (defaultChannel) {
+      setActiveType("channel");
+      setActiveChannelId(defaultChannel);
+    }
+  }, [defaultChannel, defaultDmUserId]);
+
+  // Charger la préférence de son depuis le stockage local et vérifier les permissions de notifications
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_chat_sound_enabled");
+      if (saved !== null) {
+        const val = saved === "true";
+        setSoundEnabled(val);
+        soundEnabledRef.current = val;
+      }
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setDesktopPermission(Notification.permission);
+      }
+    } catch {
+      // Ignoré
+    }
+  }, []);
+
+  const toggleSound = () => {
+    setSoundEnabled((prev) => {
+      const next = !prev;
+      soundEnabledRef.current = next;
+      try {
+        localStorage.setItem("crm_chat_sound_enabled", String(next));
+      } catch {}
+      if (next) {
+        playChatNotificationSound();
+      }
+      return next;
+    });
+  };
+
+  const handleRequestDesktopPermission = async () => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    try {
+      const perm = await Notification.requestPermission();
+      setDesktopPermission(perm);
+      if (perm === "granted") {
+        new Notification("Notifications du chat activées", {
+          body: "Vous recevrez des alertes en temps réel pour tous les messages du chat d'équipe.",
+          icon: "/favicon.ico",
+        });
+      }
+    } catch (err) {
+      console.warn("Erreur permission notification:", err);
+    }
+  };
+
+  // Fermer le toast après 5 secondes
+  useEffect(() => {
+    if (incomingToast) {
+      const timer = setTimeout(() => setIncomingToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [incomingToast]);
+
   // State pour le popover de Tag
   const [tagModalType, setTagModalType] = useState<"collaborator" | "client" | "prospect" | null>(
     null
@@ -116,6 +264,9 @@ export function ChatClient({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const tagSearchInputRef = useRef<HTMLInputElement>(null);
+  const knownMessageIdsRef = useRef<Set<string>>(
+    new Set(initialMessages.map((m) => m.id))
+  );
 
   // Déterminer le contact actif en mode DM
   const activeDmUser = initialMembers.find((m) => m.id === activeDmUserId);
@@ -144,17 +295,49 @@ export function ChatClient({
   // Fonction pour rafraîchir les messages
   const fetchMessages = useCallback(async () => {
     try {
+      let res: ChatMessageItem[] = [];
       if (activeType === "channel") {
-        const res = await getChatMessagesAction({ channel: activeChannelId });
-        setMessages(res);
+        res = await getChatMessagesAction({ channel: activeChannelId });
       } else if (activeType === "dm" && activeDmUserId) {
-        const res = await getChatMessagesAction({ recipientId: activeDmUserId });
+        res = await getChatMessagesAction({ recipientId: activeDmUserId });
+      }
+
+      if (res && res.length > 0) {
+        // Détecter les nouveaux messages arrivés d'autres utilisateurs
+        const newFromOthers = res.filter(
+          (m) => !knownMessageIdsRef.current.has(m.id) && m.senderId !== currentUser.id
+        );
+
+        if (newFromOthers.length > 0) {
+          if (soundEnabledRef.current) {
+            playChatNotificationSound();
+          }
+          const latest = newFromOthers[newFromOthers.length - 1];
+          const channelOrDmLabel =
+            activeType === "channel" ? `#${activeChannelId}` : activeDmUser?.name || "Message Privé";
+
+          showDesktopNotification(latest.sender.name, latest.content, channelOrDmLabel);
+
+          setIncomingToast({
+            id: latest.id,
+            senderName: latest.sender.name,
+            content: latest.content,
+            channelOrDm: channelOrDmLabel,
+            channelId: activeType === "channel" ? activeChannelId : undefined,
+            dmId: activeType === "dm" ? activeDmUserId || undefined : undefined,
+          });
+        }
+
+        for (const m of res) {
+          knownMessageIdsRef.current.add(m.id);
+        }
+
         setMessages(res);
       }
     } catch {
       // Ignoré lors des pertes de connexion momentanées
     }
-  }, [activeType, activeChannelId, activeDmUserId]);
+  }, [activeType, activeChannelId, activeDmUserId, currentUser.id, activeDmUser?.name]);
 
   // Recharger lors d'un changement de salon ou de DM
   useEffect(() => {
@@ -412,6 +595,9 @@ export function ChatClient({
                   onClick={() => {
                     setActiveType("channel");
                     setActiveChannelId(ch.id);
+                    try {
+                      window.history.replaceState(null, "", `/chat?channel=${ch.id}`);
+                    } catch {}
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all cursor-pointer group ${
                     isActive
@@ -475,6 +661,9 @@ export function ChatClient({
                     onClick={() => {
                       setActiveType("dm");
                       setActiveDmUserId(member.id);
+                      try {
+                        window.history.replaceState(null, "", `/chat?dm=${member.id}`);
+                      } catch {}
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all cursor-pointer group ${
                       isActive
@@ -559,12 +748,115 @@ export function ChatClient({
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-[11px] text-neutral-400 hidden sm:inline-block">
-              {messages.length} message{messages.length > 1 ? "s" : ""}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Bouton de son des notifications */}
+            <button
+              type="button"
+              onClick={toggleSound}
+              title={
+                soundEnabled
+                  ? "Sons activés : un carillon retentit à chaque nouveau message (cliquer pour couper)"
+                  : "Sons coupés : cliquer pour réactiver les notifications sonores"
+              }
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                soundEnabled
+                  ? "bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20 shadow-2xs"
+                  : "bg-neutral-800/60 border-neutral-700 text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              {soundEnabled ? (
+                <Volume2 className="w-3.5 h-3.5 text-blue-400" />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5 text-neutral-400" />
+              )}
+              <span className="hidden md:inline text-[11px]">
+                {soundEnabled ? "Son activé" : "Son coupé"}
+              </span>
+            </button>
+
+            {/* Bouton de notifications bureau */}
+            <button
+              type="button"
+              onClick={handleRequestDesktopPermission}
+              title={
+                desktopPermission === "granted"
+                  ? "Notifications du bureau autorisées et actives"
+                  : "Activer les notifications du bureau pour recevoir des alertes en arrière-plan"
+              }
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                desktopPermission === "granted"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 shadow-2xs"
+                  : "bg-neutral-800/60 border-neutral-700 text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              {desktopPermission === "granted" ? (
+                <BellRing className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Bell className="w-3.5 h-3.5 text-neutral-400" />
+              )}
+              <span className="hidden md:inline text-[11px]">
+                {desktopPermission === "granted" ? "Alertes bureau" : "Activer bureau"}
+              </span>
+            </button>
+
+            <span className="text-[11px] text-neutral-400 hidden sm:inline-block pl-1">
+              {messages.length} msg{messages.length > 1 ? "s" : ""}
             </span>
           </div>
         </div>
+
+        {/* Bannière d'alerte flottante pour nouveau message entrant */}
+        {incomingToast && (
+          <div className="absolute top-16 left-4 right-4 z-40 p-3 rounded-2xl bg-neutral-900/95 border border-blue-500/40 shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
+                  <span>Nouveau message de {incomingToast.senderName}</span>
+                  <span className="text-[10px] text-blue-300 bg-blue-950/60 px-1.5 py-0.5 rounded-full border border-blue-800">
+                    {incomingToast.channelOrDm}
+                  </span>
+                </p>
+                <p className="text-[11px] text-neutral-300 truncate mt-0.5">
+                  {incomingToast.content}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (incomingToast.dmId) {
+                    setActiveType("dm");
+                    setActiveDmUserId(incomingToast.dmId);
+                    try {
+                      window.history.replaceState(null, "", `/chat?dm=${incomingToast.dmId}`);
+                    } catch {}
+                  } else if (incomingToast.channelId) {
+                    setActiveType("channel");
+                    setActiveChannelId(incomingToast.channelId);
+                    try {
+                      window.history.replaceState(null, "", `/chat?channel=${incomingToast.channelId}`);
+                    } catch {}
+                  }
+                  setIncomingToast(null);
+                }}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors cursor-pointer"
+              >
+                Voir
+              </button>
+              <button
+                type="button"
+                onClick={() => setIncomingToast(null)}
+                className="p-1 text-neutral-400 hover:text-neutral-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Flux des Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar">
