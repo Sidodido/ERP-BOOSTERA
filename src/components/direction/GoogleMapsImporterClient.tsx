@@ -29,9 +29,9 @@ import {
   searchGoogleMapsProspectsAction,
   parseGoogleMapsTextAction,
   importGoogleMapsProspectsAction,
-  formatDzPhoneDisplay,
   type GoogleMapsProspectItem,
 } from "@/actions/googleMapsProspects";
+import { formatDzPhoneDisplay } from "@/lib/phoneUtils";
 import { SECTORS, WILAYAS } from "@/lib/constants";
 
 interface UserOption {
