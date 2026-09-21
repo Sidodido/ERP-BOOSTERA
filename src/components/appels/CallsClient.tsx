@@ -619,8 +619,19 @@ export function CallsClient({
       (selectedCommercial === "unassigned" ? !p.assignedTo : p.assignedTo?.id === selectedCommercial);
     const matchesCallStatus =
       !selectedCallStatus ||
-      (selectedCallStatus === "NON EFFECTUE"
-        ? !p.callStatus || p.callStatus === "NON EFFECTUE" || p.callStatus.trim() === ""
+      (selectedCallStatus === "— Appel —"
+        ? !p.callStatus ||
+          p.callStatus === "" ||
+          p.callStatus === "—" ||
+          p.callStatus === "-" ||
+          p.callStatus === "— Appel —" ||
+          p.callStatus === "NON EFFECTUE" ||
+          p.callStatus.trim() === ""
+        : selectedCallStatus === "NON EFFECTUE"
+        ? !p.callStatus ||
+          p.callStatus === "" ||
+          p.callStatus === "NON EFFECTUE" ||
+          p.callStatus.trim() === ""
         : p.callStatus === selectedCallStatus);
 
     return matchesSearch && matchesSector && matchesWilaya && matchesStatus && matchesCommercial && matchesCallStatus;
@@ -826,13 +837,14 @@ export function CallsClient({
               title="Filtrer par statut d'appel"
             >
               <option value="" className="bg-neutral-950 text-neutral-100">Tous les appels</option>
+              <option value="— Appel —" className="bg-neutral-950 text-neutral-300 font-bold">— Appel —</option>
               <option value="EFFECTUE" className="bg-neutral-950 text-emerald-400 font-bold">✓ EFFECTUE</option>
-              <option value="NON EFFECTUE" className="bg-neutral-950 text-neutral-300">NON EFFECTUE</option>
-              <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
               <option value="PAS DE REPONSE" className="bg-neutral-950 text-amber-400">PAS DE REPONSE</option>
               <option value="OCCUPE" className="bg-neutral-950 text-amber-400">OCCUPE</option>
               <option value="INJOIGNABLE" className="bg-neutral-950 text-rose-400">INJOIGNABLE</option>
+              <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
               <option value="PAS DE CONTACT" className="bg-neutral-950 text-neutral-400">PAS DE CONTACT</option>
+              <option value="NON EFFECTUE" className="bg-neutral-950 text-neutral-400">NON EFFECTUE</option>
             </select>
 
             <select
