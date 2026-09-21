@@ -59,29 +59,32 @@ interface GoogleMapsImporterClientProps {
   currentUserId: string;
 }
 
-const POPULAR_QUERIES = [
-  { label: "Cliniques & Santé", query: "clinique médicale", sector: "Cabinet médical" },
-  { label: "Grossistes & Import", query: "grossiste import", sector: "Industrie" },
-  { label: "Agences Immo", query: "agence immobiliere", sector: "Immobilier" },
-  { label: "Hôtels & Complexes", query: "hotel", sector: "Hôtel" },
-  { label: "Restaurants & Cafés", query: "restaurant", sector: "Restaurant" },
-  { label: "Écoles & Formations", query: "ecole formation", sector: "Éducation / Formation" },
-  { label: "Cosmétique & Beauté", query: "cosmetique beaute", sector: "Beauté" },
-  { label: "Voyages & Omra", query: "agence voyage omra", sector: "Voyage" },
+const SECTOR_CARDS = [
+  { sector: "Cabinet médical", label: "Santé & Cliniques", icon: "🩺", desc: "Cliniques, Dentistes, Hôpitaux, Labos" },
+  { sector: "Industrie", label: "Industrie & Grossistes", icon: "🏭", desc: "Grossistes, Usines, Import-Export, BTP" },
+  { sector: "Immobilier", label: "Immobilier & BTP", icon: "🏢", desc: "Agences immo, Promoteurs, Bureaux études" },
+  { sector: "Hôtel", label: "Hôtels & Hébergement", icon: "🏨", desc: "Hôtels 3/4*, Résidences, Complexes" },
+  { sector: "Restaurant", label: "Restaurants & Cafés", icon: "🍽️", desc: "Restaurants, Pizzerias, Salons de thé" },
+  { sector: "Voyage", label: "Voyages & Omra", icon: "✈️", desc: "Agences voyages, Omra, Visas" },
+  { sector: "Éducation / Formation", label: "Écoles & Formations", icon: "🎓", desc: "Écoles privées, Centres formation, Langues" },
+  { sector: "Beauté", label: "Beauté & Cosmétique", icon: "💄", desc: "Salons coiffure, Spas, Parfumeries" },
+  { sector: "E-commerce", label: "Commerce & Showrooms", icon: "🛍️", desc: "Showrooms, Meubles, Électroménager" },
+  { sector: "Autre prestation", label: "Services & Entreprises", icon: "💼", desc: "Salles des fêtes, Cabinets juridiques, Audit" },
 ];
 
 export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMapsImporterClientProps) {
   const [activeTab, setActiveTab] = useState<"SEARCH" | "PASTE" | "FILE">("SEARCH");
 
-  // Search Basic State
-  const [searchQuery, setSearchQuery] = useState("clinique");
-  const [selectedWilaya, setSelectedWilaya] = useState("Alger");
+  // Search State: Sector-First
   const [selectedSector, setSelectedSector] = useState("Cabinet médical");
+  const [selectedSubCategory, setSelectedSubCategory] = useState("");
+  const [selectedWilaya, setSelectedWilaya] = useState("Alger");
+  const [selectedCommune, setSelectedCommune] = useState("Toutes les communes");
+  const [searchQuery, setSearchQuery] = useState(""); // optional refine keyword
 
   // Advanced Search Filters State
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [selectedCommune, setSelectedCommune] = useState("Toutes les communes");
-  const [selectedSubCategory, setSelectedSubCategory] = useState("");
+  const [showRefineKeyword, setShowRefineKeyword] = useState(false);
   const [onlyWithPhone, setOnlyWithPhone] = useState(false);
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState(false);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
@@ -158,6 +161,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
     if (onlyWithWebsite) count++;
     if (minRating > 0) count++;
     if (minReviews > 0) count++;
+    if (searchQuery.trim()) count++;
     return count;
   }, [
     selectedCommune,
@@ -167,20 +171,21 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
     onlyWithWebsite,
     minRating,
     minReviews,
+    searchQuery,
   ]);
 
-  // Search Action
+  // Search Action: Direct by Sector
   const handleSearch = () => {
-    if (!searchQuery.trim() && !selectedSubCategory) return;
+    if (!selectedSector) return;
     setFeedback(null);
     startSearching(async () => {
       try {
         const res = await searchGoogleMapsProspectsAction({
-          query: searchQuery,
-          wilaya: selectedWilaya,
-          commune: selectedCommune,
           sector: selectedSector,
           subCategory: selectedSubCategory,
+          query: searchQuery.trim(),
+          wilaya: selectedWilaya,
+          commune: selectedCommune,
           onlyWithPhone,
           onlyWithoutWebsite,
           onlyWithWebsite,
@@ -204,22 +209,24 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
           if (res.prospects.length === 0) {
             setFeedback({
               type: "info",
-              message: `Aucun établissement ne correspond aux critères pour "${searchQuery}" à ${selectedWilaya}${
+              message: `Aucun établissement trouvé pour le secteur "${selectedSector}"${
+                selectedSubCategory ? ` (${selectedSubCategory})` : ""
+              } à ${selectedWilaya}${
                 selectedCommune !== "Toutes les communes" ? ` (${selectedCommune})` : ""
-              }. Essayez d'élargir vos filtres avancés.`,
+              }. Essayez d'élargir la commune ou d'utiliser le bouton "Ouvrir sur Google Maps".`,
             });
           } else {
             const newCount = res.prospects.filter((p) => !p.isDuplicate).length;
             setFeedback({
               type: "success",
-              message: `${res.prospects.length} établissements trouvés (${newCount} nouveaux prospects qualifiés prêts à importer).`,
+              message: `${res.prospects.length} établissements trouvés dans le secteur "${selectedSector}" (${newCount} nouveaux prospects qualifiés prêts à importer).`,
             });
           }
         }
       } catch (err: any) {
         setFeedback({
           type: "error",
-          message: err?.message || "Erreur lors de la recherche avancée Google Maps.",
+          message: err?.message || "Erreur lors de la recherche du secteur Google Maps.",
         });
       }
     });
@@ -733,116 +740,145 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
 
       {/* Mode 1: Search Form with Advanced Search */}
       {activeTab === "SEARCH" && (
-        <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4 shadow-sm">
-          {/* Preset Chips & Direct Google Maps Search Link */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider block mb-2">
-                Recherches fréquentes en Algérie :
+        <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-5 shadow-sm">
+          {/* Section 1: Visual Sector Selector */}
+          <div>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                1. Choisissez un secteur d'activité (Recherche Directe) :
               </span>
-              <div className="flex flex-wrap gap-2">
-                {POPULAR_QUERIES.map((item) => (
+              <span className="text-[11px] text-neutral-500 hidden sm:inline">
+                Recherche automatique optimisée pour l'Algérie
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              {SECTOR_CARDS.map((card) => {
+                const isSelected = selectedSector === card.sector;
+                return (
                   <button
-                    key={item.label}
+                    key={card.sector}
+                    type="button"
                     onClick={() => {
-                      setSearchQuery(item.query);
-                      setSelectedSector(item.sector);
+                      setSelectedSector(card.sector);
                       setSelectedSubCategory("");
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer border ${
-                      searchQuery === item.query
-                        ? "bg-blue-600/30 text-blue-300 border-blue-500/50"
-                        : "bg-neutral-800/60 text-neutral-300 border-neutral-700/60 hover:bg-neutral-750 hover:text-white"
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between relative group ${
+                      isSelected
+                        ? "bg-blue-600/20 border-blue-500 shadow-md shadow-blue-500/10 text-white ring-1 ring-blue-500/50"
+                        : "bg-neutral-950/60 border-neutral-800 text-neutral-300 hover:border-neutral-700 hover:bg-neutral-800/50 hover:text-white"
                     }`}
                   >
-                    {item.label}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-2xl">{card.icon}</span>
+                      {isSelected && (
+                        <span className="w-2 h-2 rounded-full bg-blue-400 shadow-sm shadow-blue-400 animate-pulse" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold leading-tight">{card.label}</div>
+                      <div className="text-[10px] text-neutral-400 group-hover:text-neutral-300 line-clamp-1 mt-0.5">
+                        {card.desc}
+                      </div>
+                    </div>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-
-            {/* Direct Link to Google Maps in new tab */}
-            <a
-              href={`https://www.google.com/maps/search/${encodeURIComponent(
-                [
-                  searchQuery,
-                  selectedCommune !== "Toutes les communes" ? selectedCommune : "",
-                  selectedWilaya,
-                  "Algerie",
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="py-2 px-3 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer self-stretch sm:self-auto justify-center"
-              title="Ouvrir cette requête en direct dans Google Maps pour copier les fiches"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-              <span>Ouvrir sur Google Maps</span>
-            </a>
           </div>
 
-          {/* Primary Filters Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-            <div>
-              <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                Mot-clé / Activité
-              </label>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="ex: clinique, grossiste, hôtel, meuble..."
-                  className="w-full pl-9 pr-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                />
+          {/* Section 2: Specialty & Geographical Targeting */}
+          <div className="pt-2 border-t border-neutral-800/80">
+            <span className="text-xs font-bold text-neutral-300 uppercase tracking-wider block mb-2.5">
+              2. Affinez la zone et la spécialité :
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Sub-category / Specialty for selected sector */}
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Spécialité ({selectedSector})
+                </label>
+                <select
+                  value={selectedSubCategory}
+                  onChange={(e) => setSelectedSubCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
+                >
+                  <option value="">Toutes les spécialités ({selectedSector})</option>
+                  {availableSubCategories.map((sub) => (
+                    <option key={sub.label} value={sub.query}>
+                      {sub.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Wilaya */}
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Wilaya d'Algérie
+                </label>
+                <select
+                  value={selectedWilaya}
+                  onChange={(e) => {
+                    setSelectedWilaya(e.target.value);
+                    setSelectedCommune("Toutes les communes");
+                  }}
+                  className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
+                >
+                  {WILAYAS.map((w) => (
+                    <option key={w} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Commune / Quartier */}
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Commune / Quartier ({selectedWilaya})
+                </label>
+                <select
+                  value={selectedCommune}
+                  onChange={(e) => setSelectedCommune(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
+                >
+                  {availableCommunes.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                Wilaya d'Algérie
-              </label>
-              <select
-                value={selectedWilaya}
-                onChange={(e) => {
-                  setSelectedWilaya(e.target.value);
-                  setSelectedCommune("Toutes les communes");
-                }}
-                className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
-              >
-                {WILAYAS.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Optional Keyword Refinement (Collapsed by default) */}
+            {showRefineKeyword && (
+              <div className="mt-3 p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 animate-in fade-in">
+                <label className="text-xs font-semibold text-neutral-300 block mb-1">
+                  Mot-clé précis ou nom d'enseigne (Optionnel)
+                </label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ex: une rue particulière, une marque ou un nom spécifique..."
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
+                    onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
-            <div>
-              <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                Secteur dans le CRM
-              </label>
-              <select
-                value={selectedSector}
-                onChange={(e) => {
-                  setSelectedSector(e.target.value);
-                  setSelectedSubCategory("");
-                }}
-                className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
-              >
-                {SECTORS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-end gap-2">
+          {/* Section 3: Action Buttons Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-2">
+              {/* Toggle advanced qualification filters */}
               <button
                 type="button"
                 onClick={() => setShowAdvanced(!showAdvanced)}
@@ -851,10 +887,10 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                     ? "bg-blue-600/20 text-blue-300 border-blue-500/40"
                     : "bg-neutral-800/80 hover:bg-neutral-750 text-neutral-300 border-neutral-700"
                 }`}
-                title="Afficher/masquer les options de recherche avancée"
+                title="Filtres de qualification (téléphone, note, avis, site web)"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
-                <span>Filtres</span>
+                <span>Critères avancés</span>
                 {activeFiltersCount > 0 && (
                   <span className="w-4 h-4 rounded-full bg-blue-500 text-[10px] text-white flex items-center justify-center font-bold">
                     {activeFiltersCount}
@@ -863,20 +899,60 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                 {showAdvanced ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
 
+              {/* Optional keyword toggle button */}
               <button
+                type="button"
+                onClick={() => setShowRefineKeyword(!showRefineKeyword)}
+                className={`py-2 px-3 rounded-xl border text-xs font-medium transition flex items-center justify-center gap-1.5 cursor-pointer h-[38px] ${
+                  showRefineKeyword || searchQuery.trim()
+                    ? "bg-neutral-800 text-blue-300 border-blue-500/40"
+                    : "bg-neutral-900/60 hover:bg-neutral-800 text-neutral-400 border-neutral-800"
+                }`}
+                title="Ajouter un mot-clé ou nom d'enseigne précis si besoin"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span>{showRefineKeyword ? "Masquer mot-clé" : "+ Mot-clé spécifique"}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+              {/* Direct Link to Google Maps */}
+              <a
+                href={`https://www.google.com/maps/search/${encodeURIComponent(
+                  [
+                    selectedSubCategory || selectedSector,
+                    selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                    selectedWilaya,
+                    "Algérie",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2 px-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer h-[38px]"
+                title="Ouvrir directement cette recherche sectorielle sur Google Maps"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>Ouvrir sur Maps</span>
+              </a>
+
+              {/* Main Search Button: 100% Direct by Sector */}
+              <button
+                type="button"
                 onClick={handleSearch}
-                disabled={isSearching || (!searchQuery.trim() && !selectedSubCategory)}
-                className="flex-1 py-2 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer h-[38px]"
+                disabled={isSearching || !selectedSector}
+                className="py-2 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer h-[38px] min-w-[170px]"
               >
                 {isSearching ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Recherche...</span>
+                    <span>Recherche en cours...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Rechercher</span>
+                    <span>Rechercher "{selectedSector}"</span>
                   </>
                 )}
               </button>
@@ -909,45 +985,8 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                 )}
               </div>
 
-              {/* Row 1: Commune & Speciality */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* Specific Commune / District */}
-                <div>
-                  <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                    Commune / Quartier d'Affaires ({selectedWilaya})
-                  </label>
-                  <select
-                    value={selectedCommune}
-                    onChange={(e) => setSelectedCommune(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
-                  >
-                    {availableCommunes.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Subcategory / Speciality */}
-                <div>
-                  <label className="text-xs font-semibold text-neutral-300 block mb-1">
-                    Spécialité précise ({selectedSector})
-                  </label>
-                  <select
-                    value={selectedSubCategory}
-                    onChange={(e) => setSelectedSubCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 transition"
-                  >
-                    <option value="">Toutes les spécialités</option>
-                    {availableSubCategories.map((sub) => (
-                      <option key={sub.label} value={sub.query}>
-                        {sub.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
+              {/* Row 1: Google Rating & Reviews Qualification */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Min Google Rating */}
                 <div>
                   <label className="text-xs font-semibold text-neutral-300 block mb-1">

@@ -269,6 +269,19 @@ export async function checkProspectsDuplicatesAction(items: GoogleMapsProspectIt
   return attachDuplicatesCheck(items);
 }
 
+const SECTOR_SEARCH_QUERIES: Record<string, string> = {
+  "Cabinet médical": "clinique médicale santé docteur hôpital laboratoire pharmacie",
+  "Industrie": "grossiste usine industrie distribution importateur négoce",
+  "Immobilier": "agence immobiliere promoteur immobilier batiment",
+  "Hôtel": "hotel résidence touristique hébergement",
+  "Restaurant": "restaurant café pizzeria salon de thé traiteur",
+  "Beauté": "salon de coiffure institut beauté cosmétique spa",
+  "Éducation / Formation": "école privée centre formation cours crèche",
+  "Voyage": "agence voyage omra tourisme billets",
+  "E-commerce": "boutique showroom magasin électroménager meuble",
+  "Autre prestation": "entreprise prestation société service",
+};
+
 /**
  * Live Search Google Maps / Algerian Business Directory via Google Places API + Overpass OSM + Nominatim
  */
@@ -282,11 +295,13 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
       ? params.commune.replace(/\s*\(.*\)/, "").trim()
       : "";
   const wilaya = (params.wilaya || "Alger").trim();
-  const sector = (params.sector || "").trim();
+  const sector = (params.sector || "Cabinet médical").trim();
   const limit = Math.min(params.limit || 80, 150);
 
-  // Combined terms for targeted query
-  const query = [subCat || rawQuery, rawCommune].filter(Boolean).join(" ");
+  // In direct sector mode: subCat > rawQuery > sector keywords fallback
+  const sectorFallback = sector ? (SECTOR_SEARCH_QUERIES[sector] || sector) : "commerce entreprise";
+  const effectiveTerm = subCat || rawQuery || sectorFallback;
+  const query = [effectiveTerm, rawCommune].filter(Boolean).join(" ");
   const results: GoogleMapsProspectItem[] = [];
   const seenKeys = new Set<string>();
 
@@ -298,7 +313,8 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
 
   if (apiKey) {
     try {
-      const gQuery = `${query || "commerce entreprise"} ${rawCommune} ${wilaya} Algerie`.trim();
+      const gTerm = subCat || (sector ? `${sector}` : "commerce");
+      const gQuery = [rawQuery, gTerm, rawCommune, wilaya, "Algerie"].filter(Boolean).join(" ");
       const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
         gQuery
       )}&key=${apiKey}&language=fr`;
@@ -442,6 +458,13 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
                 (term) => term.length > 2 && fullTagStr.includes(term)
               );
               if (!matchesQuery) continue;
+            } else if (sector && sector !== "Autre prestation") {
+              const mappedSec = mapAmenityToSector(tags, "");
+              if (mappedSec !== sector) {
+                const sectorKeywords = (SECTOR_SEARCH_QUERIES[sector] || "").toLowerCase().split(" ").filter((w) => w.length > 3);
+                const hasMatch = sectorKeywords.some((kw) => fullTagStr.includes(kw));
+                if (!hasMatch) continue;
+              }
             }
 
             if (rawCommune) {
@@ -503,8 +526,8 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
   if (results.length < 15) {
     try {
       const searchTerms = [
-        `${subCat || rawQuery || "commerce entreprise"} ${rawCommune} ${wilaya} algerie`.trim(),
-        `${subCat || rawQuery || "service"} ${wilaya} algerie`.trim(),
+        `${subCat || sector || "commerce entreprise"} ${rawCommune} ${wilaya} algerie`.trim(),
+        `${subCat || rawQuery || sectorFallback.split(" ").slice(0, 3).join(" ")} ${rawCommune} ${wilaya} algerie`.trim(),
       ];
 
       for (const st of searchTerms) {
