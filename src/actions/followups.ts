@@ -40,6 +40,7 @@ export async function getFollowUps(params: { status?: FollowUpStatus; userId?: s
           phone: true,
           sector: true,
           wilaya: true,
+          address: true,
           notes: true,
           response: true,
           rawState: true,

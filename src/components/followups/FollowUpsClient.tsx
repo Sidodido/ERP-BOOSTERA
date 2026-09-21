@@ -7,6 +7,7 @@ import { formatDate, toLocalDateString, buildWhatsAppUrl } from "@/lib/utils";
 import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
 import { trackCommunicationClick } from "@/lib/tracking";
 import { processFollowUpAction, rescheduleFollowUpAction } from "@/actions/followups";
+import { updateProspectField } from "@/actions/prospects";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -40,6 +41,7 @@ interface FollowUpItem {
     phone: string;
     sector: string;
     wilaya: string;
+    address?: string | null;
     notes?: string | null;
     response?: string | null;
     rawState?: string | null;
@@ -755,7 +757,10 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                 <tr>
                   <th className="py-3 px-3">PROSPECT / CLIENT</th>
                   <th className="py-3 px-3">TÉLÉPHONE</th>
-                  <th className="py-3 px-3">SECTEUR</th>
+                  <th className="py-3 px-3">TYPE</th>
+                  <th className="py-3 px-3">ADRESS</th>
+                  <th className="py-3 px-3">APPEL</th>
+                  <th className="py-3 px-3 text-emerald-400">RÉSULTAT D'APPEL</th>
                   <th className="py-3 px-3 min-w-[220px] max-w-[320px] text-amber-400">REMARQUES DU PROSPECT</th>
                   <th className="py-3 px-3">DATE PRÉVUE</th>
                   <th className="py-3 px-3 text-center">ÉTAPE</th>
@@ -767,7 +772,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               <tbody className="divide-y divide-neutral-800/60 font-medium text-neutral-300">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-neutral-500 font-normal">
+                    <td colSpan={12} className="py-12 text-center text-neutral-500 font-normal">
                       Aucune relance correspondant au filtre sélectionné.
                     </td>
                   </tr>
@@ -858,9 +863,93 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         </div>
                       </td>
 
-                      {/* 3. Secteur */}
-                      <td className="py-3 px-3 text-neutral-300 max-w-[140px] truncate">
-                        {item.prospect.sector}
+                      {/* 3. TYPE */}
+                      <td className="py-3 px-3 text-blue-400 font-medium max-w-[140px] truncate">
+                        {item.prospect.sector || "—"}
+                      </td>
+
+                      {/* 4. ADRESS */}
+                      <td className="py-3 px-3 text-neutral-300 max-w-[150px] truncate">
+                        {item.prospect.address || item.prospect.wilaya || "—"}
+                      </td>
+
+                      {/* 5. APPEL */}
+                      <td className="py-2 px-2">
+                        <select
+                          value={item.prospect.callStatus || ""}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setFollowUps((prev) =>
+                              prev.map((f) =>
+                                f.prospect.id === item.prospect.id
+                                  ? { ...f, prospect: { ...f.prospect, callStatus: val } }
+                                  : f
+                              )
+                            );
+                            await updateProspectField(item.prospect.id, "callStatus", val);
+                          }}
+                          className={`h-7 px-2 text-[11px] font-semibold rounded-lg border focus:outline-none cursor-pointer transition-all ${
+                            item.prospect.callStatus === "EFFECTUE"
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                              : item.prospect.callStatus?.includes("PAS") || item.prospect.callStatus?.includes("OCCUPE")
+                              ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                              : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
+                          }`}
+                          title="Changer le statut d'appel"
+                        >
+                          <option value="" className="bg-neutral-950 text-neutral-400">— Appel —</option>
+                          <option value="EFFECTUE" className="bg-neutral-950 text-emerald-400 font-bold">✓ EFFECTUE</option>
+                          <option value="PAS DE REPONSE" className="bg-neutral-950 text-amber-400">PAS DE REPONSE</option>
+                          <option value="OCCUPE" className="bg-neutral-950 text-amber-400">OCCUPE</option>
+                          <option value="INJOIGNABLE" className="bg-neutral-950 text-rose-400">INJOIGNABLE</option>
+                          <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
+                          <option value="PAS DE CONTACT" className="bg-neutral-950 text-neutral-400">PAS DE CONTACT</option>
+                          <option value="NON EFFECTUE" className="bg-neutral-950 text-neutral-400">NON EFFECTUE</option>
+                        </select>
+                      </td>
+
+                      {/* 6. RÉSULTAT D'APPEL */}
+                      <td className="py-2 px-2">
+                        <select
+                          value={item.prospect.rawState || ""}
+                          onChange={async (e) => {
+                            const val = e.target.value;
+                            setFollowUps((prev) =>
+                              prev.map((f) =>
+                                f.prospect.id === item.prospect.id
+                                  ? { ...f, prospect: { ...f.prospect, rawState: val } }
+                                  : f
+                              )
+                            );
+                            await updateProspectField(item.prospect.id, "rawState", val);
+                          }}
+                          className={`h-7 px-2 text-[10px] font-semibold rounded-lg border focus:outline-none cursor-pointer transition-all max-w-[140px] ${
+                            item.prospect.rawState === "INTERESSE"
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-bold"
+                              : item.prospect.rawState === "RDV PRIS"
+                              ? "bg-purple-500/20 text-purple-400 border-purple-500/40 font-bold"
+                              : item.prospect.rawState === "A RAPPELER"
+                              ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
+                              : item.prospect.rawState === "PAS INTERESSE"
+                              ? "bg-rose-500/20 text-rose-400 border-rose-500/40"
+                              : item.prospect.rawState === "PAS DE REPONSE" || item.prospect.rawState === "PAS DE CONTACT"
+                              ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                              : item.prospect.rawState === "INJOIGNABLE" || item.prospect.rawState === "OCCUPE"
+                              ? "bg-red-500/20 text-red-400 border-red-500/40"
+                              : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-700"
+                          }`}
+                          title="Changer le résultat d'appel"
+                        >
+                          <option value="" className="bg-neutral-950 text-neutral-400">— Résultat —</option>
+                          <option value="INTERESSE" className="bg-neutral-950 text-emerald-400 font-bold">INTERESSE</option>
+                          <option value="RDV PRIS" className="bg-neutral-950 text-purple-400 font-bold">RDV PRIS</option>
+                          <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
+                          <option value="PAS INTERESSE" className="bg-neutral-950 text-rose-400">PAS INTERESSE</option>
+                          <option value="PAS DE REPONSE" className="bg-neutral-950 text-amber-400">PAS DE REPONSE</option>
+                          <option value="OCCUPE" className="bg-neutral-950 text-amber-400">OCCUPE</option>
+                          <option value="INJOIGNABLE" className="bg-neutral-950 text-red-400">INJOIGNABLE</option>
+                          <option value="PAS DE CONTACT" className="bg-neutral-950 text-neutral-400">PAS DE CONTACT</option>
+                        </select>
                       </td>
 
                       {/* 4. Remarques du prospect */}
