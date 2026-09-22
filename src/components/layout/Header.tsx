@@ -1,7 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useTransition } from "react";
-import { Search, Bell, LogOut, ShieldCheck, CheckCheck, ExternalLink, Sparkles, X, Trash2, Menu, MessageSquare } from "lucide-react";
+import React, { useState, useEffect, useCallback, useTransition, useRef } from "react";
+import Link from "next/link";
+import {
+  Bell,
+  LogOut,
+  ShieldCheck,
+  CheckCheck,
+  ExternalLink,
+  X,
+  Trash2,
+  Menu,
+  ChevronDown,
+  Settings,
+  History,
+  Database,
+  Palette,
+  Sparkles,
+} from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import {
   getUserNotificationsAction,
@@ -14,7 +30,9 @@ import { useRouter } from "next/navigation";
 import { HeaderAttendancePill } from "@/components/attendance/HeaderAttendancePill";
 import { useSidebar } from "./SidebarContext";
 import { GlobalSearch } from "./GlobalSearch";
-
+import { Breadcrumb } from "./Breadcrumb";
+import { QuickActionsMenu } from "./QuickActionsMenu";
+import { useTheme } from "@/components/common/ThemeProvider";
 
 interface HeaderProps {
   userName?: string;
@@ -34,10 +52,22 @@ interface NotificationItem {
 export function Header({ userName, userRole }: HeaderProps) {
   const router = useRouter();
   const { toggleMobile } = useSidebar();
+  const { setIsModalOpen } = useTheme();
   const [isPending, startTransition] = useTransition();
+
+  // Notifications State
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  // User Dropdown State
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin =
+    userRole?.toLowerCase().includes("admin") ||
+    userRole?.toLowerCase().includes("directeur");
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -55,13 +85,28 @@ export function Header({ userName, userRole }: HeaderProps) {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  const handleToggle = () => {
+  // Click outside listeners
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleToggleNotifications = () => {
     setShowNotifications((prev) => {
       if (!prev) {
         fetchNotifications();
       }
       return !prev;
     });
+    setShowUserMenu(false);
   };
 
   const handleMarkAllRead = () => {
@@ -119,9 +164,9 @@ export function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 sticky top-0 z-20 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3 w-full">
-      {/* Left side: Hamburger on mobile + Search Input */}
-      <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+    <header className="h-16 sticky top-0 z-20 bg-neutral-950/85 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full select-none">
+      {/* Left side: Hamburger on mobile + Breadcrumb + GlobalSearch */}
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <button
           type="button"
           onClick={toggleMobile}
@@ -131,28 +176,27 @@ export function Header({ userName, userRole }: HeaderProps) {
           <Menu className="w-5 h-5" />
         </button>
 
-        {/* Barre de Recherche Globale Active */}
-        <GlobalSearch />
+        {/* Dynamic Breadcrumb */}
+        <Breadcrumb />
+
+        {/* Global Search Bar */}
+        <div className="min-w-0 max-w-xs sm:max-w-sm flex-1">
+          <GlobalSearch />
+        </div>
       </div>
 
-
       {/* Right Actions */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-        {/* Pointage Rapide */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        {/* Quick Actions Menu (Nouveau prospect, facture, etc.) */}
+        <QuickActionsMenu />
+
+        {/* Attendance Fast Tracking */}
         <HeaderAttendancePill />
 
-        {/* Role Badge (Masqué sur mobile pour éviter la surcharge) */}
-        {userRole && (
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[11px] font-semibold text-blue-400">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>{userRole}</span>
-          </div>
-        )}
-
-        {/* Notifications */}
-        <div className="relative">
+        {/* Notifications Center */}
+        <div className="relative" ref={notifRef}>
           <button
-            onClick={handleToggle}
+            onClick={handleToggleNotifications}
             className="p-2 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-xl transition-colors relative cursor-pointer"
             title="Notifications"
           >
@@ -238,17 +282,7 @@ export function Header({ userName, userRole }: HeaderProps) {
                       </p>
                       {n.link && (
                         <div className="mt-2 flex items-center gap-1 text-[10px] text-blue-400 hover:underline font-medium">
-                          <span>
-                            {n.link.startsWith("/rendez-vous")
-                              ? "Voir le rendez-vous"
-                              : n.link.startsWith("/clients")
-                              ? "Voir le client"
-                              : n.link.startsWith("/projets")
-                              ? "Voir le projet"
-                              : n.link.startsWith("/chat")
-                              ? "Ouvrir la discussion"
-                              : "Voir les détails"}
-                          </span>
+                          <span>Voir les détails</span>
                           <ExternalLink className="w-2.5 h-2.5" />
                         </div>
                       )}
@@ -274,17 +308,109 @@ export function Header({ userName, userRole }: HeaderProps) {
           )}
         </div>
 
-        {/* Logout Form */}
-        <form action={logoutAction}>
+        {/* Administrator Profile & Menu Trigger */}
+        <div className="relative" ref={userMenuRef}>
           <button
-            type="submit"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl border border-neutral-800 hover:border-rose-500/20 transition-colors cursor-pointer"
-            title="Déconnexion"
+            type="button"
+            onClick={() => {
+              setShowUserMenu((prev) => !prev);
+              setShowNotifications(false);
+            }}
+            className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-neutral-900 border border-transparent hover:border-neutral-800 transition-all cursor-pointer"
+            title="Menu Utilisateur & Système"
           >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Quitter</span>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shadow-blue-500/20">
+              {userName ? userName.charAt(0).toUpperCase() : "A"}
+            </div>
+            <div className="hidden xl:flex flex-col text-left">
+              <span className="text-xs font-bold text-neutral-200 truncate max-w-[110px]">
+                {userName || "Administrateur"}
+              </span>
+              <span className="text-[10px] text-blue-400 font-medium">
+                {userRole || "Admin"}
+              </span>
+            </div>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 hidden sm:block ${
+                showUserMenu ? "rotate-180" : ""
+              }`}
+            />
           </button>
-        </form>
+
+          {/* User Dropdown Menu */}
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-64 bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl p-2.5 z-50 animate-in fade-in zoom-in-95 space-y-2">
+              {/* Identity Header */}
+              <div className="px-3 py-2.5 rounded-xl bg-neutral-950/60 border border-neutral-800/80">
+                <p className="text-xs font-bold text-neutral-100 truncate">
+                  {userName || "Administrateur"}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] text-emerald-400 font-semibold">
+                    {userRole || "Administrateur Général"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Admin Shortcuts */}
+              {isAdmin && (
+                <div className="space-y-0.5 border-b border-neutral-800/80 pb-2">
+                  <Link
+                    href="/parametres"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Paramètres Généraux</span>
+                  </Link>
+                  <Link
+                    href="/parametres?tab=AUDIT"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                  >
+                    <History className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Journal d'Activité (Audit)</span>
+                  </Link>
+                  <Link
+                    href="/parametres?tab=BACKUP"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors"
+                  >
+                    <Database className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Sauvegardes Base de Données</span>
+                  </Link>
+                </div>
+              )}
+
+              {/* Theme Switcher Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUserMenu(false);
+                  setIsModalOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <Palette className="w-3.5 h-3.5 text-purple-400" />
+                <span>Personnaliser l'Apparence</span>
+              </button>
+
+              {/* Logout Form */}
+              <div className="pt-1 border-t border-neutral-800/80">
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Se Déconnecter</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

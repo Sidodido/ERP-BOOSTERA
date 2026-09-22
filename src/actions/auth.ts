@@ -5,7 +5,13 @@ import { verifyPassword, signToken, setSessionCookie, clearSessionCookie, getCur
 import { createAuditLog } from "@/lib/audit";
 import { redirect } from "next/navigation";
 
-export async function loginAction(formData: FormData) {
+export interface LoginResult {
+  error?: string;
+  status?: string;
+  email?: string;
+}
+
+export async function loginAction(formData: FormData): Promise<LoginResult | void> {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
@@ -38,14 +44,63 @@ export async function loginAction(formData: FormData) {
     };
   }
 
-  if (!user || !user.isActive) {
-    return { error: "Identifiants invalides ou compte inactif." };
+  if (!user) {
+    return { error: "Identifiants invalides." };
   }
 
   const passwordMatch = await verifyPassword(password, user.passwordHash);
   if (!passwordMatch) {
     return { error: "Identifiants invalides." };
   }
+
+  // Contrôle strict des statuts de compte du collaborateur
+  if (user.status === "EMAIL_UNVERIFIED" || !user.emailVerified) {
+    return {
+      error: "Veuillez confirmer votre adresse e-mail avant de vous connecter. Consultez votre boîte de réception pour valider votre compte.",
+      status: "EMAIL_UNVERIFIED",
+      email: user.email,
+    };
+  }
+
+  if (user.status === "PENDING") {
+    return {
+      error: "Votre e-mail est vérifié, mais votre compte est en attente d'approbation par un administrateur. Vous recevrez un e-mail de confirmation dès sa validation.",
+      status: "PENDING",
+    };
+  }
+
+  if (user.status === "REJECTED") {
+    return {
+      error: `Votre demande de compte n'a pas été retenue par l'administration.${
+        user.rejectionReason ? ` Motif : ${user.rejectionReason}` : ""
+      }`,
+      status: "REJECTED",
+    };
+  }
+
+  if (user.status === "SUSPENDED") {
+    return {
+      error: "Ce compte collaborateur est temporairement suspendu. Veuillez contacter un administrateur.",
+      status: "SUSPENDED",
+    };
+  }
+
+  if (user.status === "ARCHIVED" || !user.isActive) {
+    return {
+      error: "Ce compte a été désactivé par l'administration.",
+      status: "ARCHIVED",
+    };
+  }
+
+  // Mise à jour de la dernière connexion et passage à ACTIVE si APPROVED
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      status: "ACTIVE",
+      isActive: true,
+      lastLoginAt: new Date(),
+    },
+  });
 
   const token = await signToken({
     userId: user.id,

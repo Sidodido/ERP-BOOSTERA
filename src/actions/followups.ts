@@ -675,3 +675,66 @@ export async function logFollowUpCallAction(data: {
 
   return { success: true, call, nextFollowUp };
 }
+
+export async function updateFollowUpRemarksAndNotesAction(data: {
+  followUpId: string;
+  prospectId: string;
+  notes?: string | null;
+  response?: string | null;
+  followUpNotes?: string | null;
+}) {
+  const user = await requireAuth();
+
+  const prospectUpdateData: any = {};
+  if (data.notes !== undefined) {
+    prospectUpdateData.notes = data.notes?.trim() || null;
+  }
+  if (data.response !== undefined) {
+    prospectUpdateData.response = data.response?.trim() || null;
+  }
+
+  const updatedProspect = await prisma.prospect.update({
+    where: { id: data.prospectId },
+    data: prospectUpdateData,
+  });
+
+  let updatedFollowUp = null;
+  if (data.followUpNotes !== undefined) {
+    updatedFollowUp = await prisma.followUp.update({
+      where: { id: data.followUpId },
+      data: {
+        notes: data.followUpNotes?.trim() || null,
+      },
+    });
+  }
+
+  try {
+    await createAuditLog({
+      userId: user.id,
+      action: "UPDATE_REMARKS_AND_RESPONSE",
+      module: "FOLLOWUPS",
+      entityId: data.followUpId,
+      details: {
+        prospectId: data.prospectId,
+        notes: data.notes,
+        response: data.response,
+        followUpNotes: data.followUpNotes,
+      },
+    });
+  } catch (auditErr) {
+    console.warn("Audit log error:", auditErr);
+  }
+
+  revalidatePath("/relances");
+  revalidatePath("/prospection");
+  revalidatePath("/appels");
+  revalidatePath("/dashboard");
+
+  return {
+    success: true,
+    prospect: updatedProspect,
+    followUp: updatedFollowUp,
+    message: "Remarques et réponses enregistrées avec succès.",
+  };
+}
+

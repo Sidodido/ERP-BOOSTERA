@@ -24,6 +24,16 @@ enum Role {
   HR
 }
 
+enum UserStatus {
+  PENDING
+  EMAIL_UNVERIFIED
+  APPROVED
+  ACTIVE
+  REJECTED
+  SUSPENDED
+  ARCHIVED
+}
+
 enum ProspectStatus {
   NEW
   CONTACTED
@@ -217,6 +227,29 @@ model User {
   avatarUrl    String?
   phone        String?
   isActive     Boolean   @default(true)
+  status       UserStatus @default(ACTIVE)
+
+  emailVerified                   Boolean   @default(true)
+  emailVerifiedAt                 DateTime?
+  emailVerificationToken          String?   @unique
+  emailVerificationTokenExpiresAt DateTime?
+
+  resetPasswordToken              String?   @unique
+  resetPasswordTokenExpiresAt     DateTime?
+
+  pendingEmail                    String?
+  emailChangeToken                String?   @unique
+  emailChangeTokenExpiresAt       DateTime?
+
+  rejectionReason                 String?
+  rejectedAt                      DateTime?
+  rejectedById                    String?
+  approvedAt                      DateTime?
+  approvedById                    String?
+
+  lastLoginAt                     DateTime?
+  passwordChangedAt               DateTime?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 

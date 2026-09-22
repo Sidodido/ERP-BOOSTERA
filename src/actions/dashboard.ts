@@ -36,6 +36,45 @@ export interface DashboardMetricsResult {
   recentActivities: any[];
   salesReps: any[];
 
+  // Données Spécifiques Administrateur (Pilotage Exécutif & Alertes)
+  adminData?: {
+    totalEmployees: number;
+    activeProjectsCount: number;
+    pendingTasksUrgentCount: number;
+    overdueInvoicesCount: number;
+    overdueInvoicesAmount: number;
+    pipelineBreakdown: {
+      newCount: number;
+      contactedCount: number;
+      interestedCount: number;
+      meetingScheduledCount: number;
+      proposalSentCount: number;
+      convertedCount: number;
+    };
+    criticalAlerts: Array<{
+      id: string;
+      type: "INVOICE" | "TASK" | "ATTENDANCE" | "SUBSCRIPTION";
+      title: string;
+      subtitle: string;
+      severity: "URGENT" | "WARNING" | "INFO";
+      link: string;
+    }>;
+    recentUrgentTasks: Array<{
+      id: string;
+      title: string;
+      priority: string;
+      projectName: string;
+      clientName: string;
+      dueDate?: string | null;
+    }>;
+    attendanceTodayStats: {
+      present: number;
+      late: number;
+      absent: number;
+      total: number;
+    };
+  };
+
   // Données Spécifiques Commercial
   commercialData?: {
     myProspectsCount: number;
@@ -243,6 +282,168 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
         },
       })
     : [];
+
+  // Données Administrateur spécifiques (Pilotage & Supervision)
+  let adminData: DashboardMetricsResult["adminData"] = undefined;
+  if (isAdmin) {
+    const [
+      totalEmployees,
+      activeProjectsCount,
+      pendingTasksUrgentCount,
+      overdueInvoices,
+      pNew,
+      pContacted,
+      pInterested,
+      pMeeting,
+      pProposal,
+      pConverted,
+      todayAttendances,
+      rawUrgentTasks,
+      pendingRegistrationsCount,
+    ] = await Promise.all([
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.project.count({
+        where: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
+      }),
+      prisma.projectTask.count({
+        where: {
+          status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+          priority: { in: [TaskPriority.HIGH, TaskPriority.URGENT] },
+        },
+      }),
+      prisma.invoice.findMany({
+        where: {
+          balanceDue: { gt: 0 },
+          dueDate: { lt: new Date() },
+          status: { notIn: ["PAID", "CANCELLED"] },
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          balanceDue: true,
+          dueDate: true,
+          client: { select: { companyName: true } },
+        },
+        take: 5,
+      }),
+      prisma.prospect.count({ where: { status: ProspectStatus.NEW } }),
+      prisma.prospect.count({ where: { status: ProspectStatus.CONTACTED } }),
+      prisma.prospect.count({ where: { status: ProspectStatus.INTERESTED } }),
+      prisma.prospect.count({ where: { status: ProspectStatus.MEETING_SCHEDULED } }),
+      prisma.prospect.count({ where: { status: ProspectStatus.PROPOSAL_SENT } }),
+      prisma.prospect.count({ where: { status: ProspectStatus.CONVERTED } }),
+      prisma.attendance.findMany({
+        where: { date: today },
+        select: { status: true },
+      }),
+      prisma.projectTask.findMany({
+        where: {
+          status: { in: [TaskStatus.TODO, TaskStatus.IN_PROGRESS] },
+          priority: { in: [TaskPriority.HIGH, TaskPriority.URGENT] },
+        },
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+        take: 5,
+        include: {
+          project: {
+            select: {
+              name: true,
+              client: { select: { companyName: true } },
+            },
+          },
+        },
+      }),
+      prisma.user.count({
+        where: { status: "PENDING" },
+      }),
+    ]);
+
+    const overdueInvoicesCount = overdueInvoices.length;
+    const overdueInvoicesAmount = overdueInvoices.reduce(
+      (sum, inv) => sum + Number(inv.balanceDue || 0),
+      0
+    );
+
+    const presentCount = todayAttendances.filter((a) => a.status === "PRESENT").length;
+    const lateCount = todayAttendances.filter((a) => a.status === "LATE").length;
+    const absentCount = todayAttendances.filter((a) => a.status === "ABSENT").length;
+
+    const criticalAlerts: NonNullable<DashboardMetricsResult["adminData"]>["criticalAlerts"] = [];
+
+    if (pendingRegistrationsCount > 0) {
+      criticalAlerts.push({
+        id: "alert-pending-registrations",
+        type: "ATTENDANCE",
+        title: `${pendingRegistrationsCount} Demande${pendingRegistrationsCount > 1 ? "s" : ""} d'Inscription Collaborateur`,
+        subtitle: "Comptes vérifiés en attente d'approbation par la direction",
+        severity: "WARNING",
+        link: "/collaborateurs?tab=REQUESTS",
+      });
+    }
+
+    if (overdueInvoicesCount > 0) {
+      criticalAlerts.push({
+        id: "alert-overdue-inv",
+        type: "INVOICE",
+        title: `${overdueInvoicesCount} Facture${overdueInvoicesCount > 1 ? "s" : ""} en Échéance Dépassée`,
+        subtitle: `Montant en attente : ${Math.round(overdueInvoicesAmount).toLocaleString("fr-FR")} DA`,
+        severity: "URGENT",
+        link: "/facturation",
+      });
+    }
+
+    if (pendingTasksUrgentCount > 0) {
+      criticalAlerts.push({
+        id: "alert-urgent-tasks",
+        type: "TASK",
+        title: `${pendingTasksUrgentCount} Tâche${pendingTasksUrgentCount > 1 ? "s" : ""} Prioritaire(s)`,
+        subtitle: "Missions critiques en cours de production",
+        severity: "WARNING",
+        link: "/production",
+      });
+    }
+
+    if (lateCount > 0 || absentCount > 0) {
+      criticalAlerts.push({
+        id: "alert-attendance",
+        type: "ATTENDANCE",
+        title: `Pointage Agence : ${lateCount} retard(s), ${absentCount} absence(s)`,
+        subtitle: `${presentCount} présent(s) à l'heure aujourd'hui`,
+        severity: "INFO",
+        link: "/parametres?tab=ATTENDANCE",
+      });
+    }
+
+    adminData = {
+      totalEmployees,
+      activeProjectsCount,
+      pendingTasksUrgentCount,
+      overdueInvoicesCount,
+      overdueInvoicesAmount,
+      pipelineBreakdown: {
+        newCount: pNew,
+        contactedCount: pContacted,
+        interestedCount: pInterested,
+        meetingScheduledCount: pMeeting,
+        proposalSentCount: pProposal,
+        convertedCount: pConverted,
+      },
+      criticalAlerts,
+      recentUrgentTasks: rawUrgentTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        projectName: t.project.name,
+        clientName: t.project.client.companyName,
+        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+      })),
+      attendanceTodayStats: {
+        present: presentCount,
+        late: lateCount,
+        absent: absentCount,
+        total: totalEmployees,
+      },
+    };
+  }
 
   // 8. Données Commerciales spécifiques
   let commercialData: DashboardMetricsResult["commercialData"] = undefined;
@@ -512,5 +713,6 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
     salesReps,
     commercialData,
     technicianData,
+    adminData,
   };
 }

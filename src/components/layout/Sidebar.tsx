@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
@@ -34,6 +34,8 @@ import {
   X,
   MessagesSquare,
   MapPin,
+  ShieldCheck,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
@@ -47,16 +49,85 @@ interface SidebarProps {
   initialCollapsed?: boolean;
 }
 
-
 interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  phase?: number;
   badge?: string;
 }
 
-const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
+interface NavGroup {
+  groupTitle: string;
+  items: NavItem[];
+}
+
+const ADMIN_NAV_GROUPS: NavGroup[] = [
+  {
+    groupTitle: "PRINCIPAL",
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "Chat Équipe", href: "/chat", icon: MessagesSquare, badge: "Live" },
+      { label: "Assistant IA", href: "/assistant-ia", icon: Bot, badge: "IA" },
+    ],
+  },
+  {
+    groupTitle: "GESTION",
+    items: [
+      { label: "Collaborateurs", href: "/collaborateurs", icon: UserCheck },
+      { label: "Demandes d'accès", href: "/collaborateurs?tab=REQUESTS", icon: UserPlus, badge: "Demandes" },
+      { label: "Clients", href: "/clients", icon: Users },
+      { label: "Ressources Humaines", href: "/rh", icon: Briefcase },
+      { label: "Équipes", href: "/equipes", icon: Layers },
+      { label: "Rôles & Permissions", href: "/parametres?tab=USERS", icon: Settings, badge: "RBAC" },
+    ],
+  },
+  {
+    groupTitle: "OPÉRATIONS",
+    items: [
+      { label: "Base Prospects", href: "/base-prospects", icon: Database },
+      { label: "Prospection", href: "/prospection", icon: Target, badge: "Vierges" },
+      { label: "Appels", href: "/appels", icon: PhoneCall },
+      { label: "Rendez-vous", href: "/rendez-vous", icon: Calendar },
+      { label: "Relances", href: "/relances", icon: Clock },
+      { label: "Import Google Maps", href: "/direction/google-maps", icon: MapPin, badge: "DZ" },
+      { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
+      { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
+      { label: "Production", href: "/production", icon: Kanban },
+      { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
+      { label: "Documents", href: "/documents", icon: FileText },
+    ],
+  },
+  {
+    groupTitle: "FINANCE & ACHATS",
+    items: [
+      { label: "Finance & Trésorerie", href: "/finance", icon: CreditCard },
+      { label: "Facturation", href: "/facturation", icon: Receipt },
+      { label: "Rentabilité", href: "/rentabilite", icon: TrendingUp },
+      { label: "Fournisseurs", href: "/fournisseurs", icon: Truck },
+      { label: "Achats & Commandes", href: "/achats", icon: ShoppingCart },
+      { label: "Stocks & Matériel", href: "/stocks", icon: Database },
+    ],
+  },
+  {
+    groupTitle: "ANALYTIQUE",
+    items: [
+      { label: "Reporting & KPIs", href: "/reporting", icon: BarChart3 },
+      { label: "Activités Collaborateurs", href: "/activites", icon: Activity },
+    ],
+  },
+  {
+    groupTitle: "SYSTÈME",
+    items: [
+      { label: "Paramètres Généraux", href: "/parametres", icon: Settings },
+      { label: "Configuration Agence", href: "/parametres?tab=AGENCY", icon: RefreshCw },
+      { label: "Journal d'Activité (Audit)", href: "/parametres?tab=AUDIT", icon: Clock },
+      { label: "Sauvegardes DB", href: "/parametres?tab=BACKUP", icon: Database },
+      { label: "Mises à jour", href: "/parametres?tab=UPDATES", icon: RefreshCw, badge: "Deploy" },
+    ],
+  },
+];
+
+const COMMERCIAL_NAV_GROUPS: NavGroup[] = [
   {
     groupTitle: "PRINCIPAL",
     items: [
@@ -76,51 +147,25 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
       { label: "Clients", href: "/clients", icon: Users },
     ],
   },
+];
+
+const TECHNICIAN_NAV_GROUPS: NavGroup[] = [
   {
-    groupTitle: "DIRECTION & STRATÉGIE",
+    groupTitle: "PRINCIPAL",
     items: [
-      { label: "Import Google Maps", href: "/direction/google-maps", icon: MapPin, badge: "DZ" },
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "Chat Équipe", href: "/chat", icon: MessagesSquare, badge: "Live" },
+      { label: "Assistant IA", href: "/assistant-ia", icon: Bot, badge: "IA" },
     ],
   },
   {
-    groupTitle: "PRODUCTION & GESTION",
+    groupTitle: "PRODUCTION & MISSIONS",
     items: [
+      { label: "Clients", href: "/clients", icon: Users },
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
       { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
-      { label: "Documents", href: "/documents", icon: FileText },
-    ],
-  },
-  {
-    groupTitle: "FINANCE & FACTURATION",
-    items: [
-      { label: "Finance", href: "/finance", icon: CreditCard },
-      { label: "Facturation", href: "/facturation", icon: Receipt },
-      { label: "Rentabilité", href: "/rentabilite", icon: TrendingUp },
-    ],
-  },
-  {
-    groupTitle: "RESSOURCES HUMAINES",
-    items: [
-      { label: "RH & Paie", href: "/rh", icon: UserCheck },
-      { label: "Équipes", href: "/equipes", icon: Layers },
-      { label: "Activités", href: "/activites", icon: Activity },
-    ],
-  },
-  {
-    groupTitle: "LOGISTIQUE & ACHATS",
-    items: [
-      { label: "Fournisseurs", href: "/fournisseurs", icon: Truck },
-      { label: "Achats", href: "/achats", icon: ShoppingCart },
-    ],
-  },
-  {
-    groupTitle: "SYSTÈME",
-    items: [
-      { label: "Reporting", href: "/reporting", icon: BarChart3 },
-      { label: "Paramètres", href: "/parametres", icon: Settings },
-      { label: "Mises à jour", href: "/parametres?tab=UPDATES", icon: RefreshCw, badge: "Deploy" },
     ],
   },
 ];
@@ -128,11 +173,17 @@ const NAV_GROUPS: { groupTitle: string; items: NavItem[] }[] = [
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? React.useLayoutEffect : React.useEffect;
 
-export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false }: SidebarProps) {
+export function Sidebar({
+  userRole,
+  rawRole,
+  userName,
+  initialCollapsed = false,
+}: SidebarProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { mobileOpen, setMobileOpen } = useSidebar();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const navRef = useRef<HTMLDivElement>(null);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const isRestoringRef = useRef(true);
@@ -172,19 +223,16 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
     });
   };
 
-  // Détection du rôle Commercial (SALES_REP, COMMERCIAL ou libellé Commercial / Commerciale)
+  // Détection du rôle Commercial
   const isCommercial =
     rawRole === "SALES_REP" ||
     rawRole === "COMMERCIAL" ||
-    rawRole === "SALES_DIRECTOR" ||
     userRole === "Commercial" ||
     userRole === "Commerciale" ||
-    userRole === "Directeur Commercial" ||
     userRole?.trim().toLowerCase() === "commercial" ||
-    userRole?.trim().toLowerCase() === "commerciale" ||
-    userRole?.trim().toLowerCase().includes("commercial");
+    userRole?.trim().toLowerCase() === "commerciale";
 
-  // Détection du rôle Technicien (TECH_LEAD, DEVELOPER, DESIGNER, VIDEO_EDITOR ou libellé Technicien / Chef Technique)
+  // Détection du rôle Technicien
   const isTechnician =
     !isCommercial &&
     (rawRole === "TECH_LEAD" ||
@@ -194,51 +242,38 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
       rawRole === "TECHNICIEN" ||
       rawRole === "TECHNICIAN" ||
       userRole?.toLowerCase().includes("technic") ||
-      userRole?.toLowerCase().includes("tech") ||
       userRole?.toLowerCase().includes("développeur") ||
       userRole?.toLowerCase().includes("developpeur") ||
       userRole?.toLowerCase().includes("designer") ||
       userRole?.toLowerCase().includes("monteur"));
 
-  // Filtrage selon le rôle
-  let visibleGroups = NAV_GROUPS;
-
+  // Sélection du groupe de navigation selon le profil
+  let visibleGroups = ADMIN_NAV_GROUPS;
   if (isCommercial) {
-    // Rôle Commercial : uniquement PRINCIPAL et COMMERCIAL & CRM complet
-    visibleGroups = NAV_GROUPS.filter(
-      (group) =>
-        group.groupTitle === "PRINCIPAL" ||
-        group.groupTitle === "COMMERCIAL & CRM"
-    );
+    visibleGroups = COMMERCIAL_NAV_GROUPS;
   } else if (isTechnician) {
-    // Rôle Technicien : Dashboard, Assistant IA, Clients, Projets, Abonnements, Production
-    visibleGroups = NAV_GROUPS.map((group) => {
-      if (group.groupTitle === "PRINCIPAL") {
-        return group; // Dashboard, Assistant IA
-      }
-      if (group.groupTitle === "COMMERCIAL & CRM") {
-        return {
-          ...group,
-          items: group.items.filter((item) => item.href === "/clients"),
-        };
-      }
-      if (group.groupTitle === "PRODUCTION & GESTION") {
-        return {
-          ...group,
-          items: group.items.filter(
-            (item) =>
-              item.href === "/projets" ||
-              item.href === "/abonnements" ||
-              item.href === "/production" ||
-              item.href === "/calendrier-technicien"
-          ),
-        };
-      }
-      return null;
-    }).filter(Boolean) as typeof NAV_GROUPS;
+    visibleGroups = TECHNICIAN_NAV_GROUPS;
   }
 
-  // Restore scroll position so clicking items does not jump to top
+  // Active checking helper supporting query parameters
+  const isItemActive = (href: string) => {
+    if (href.includes("?")) {
+      const [path, query] = href.split("?");
+      if (pathname !== path) return false;
+      const targetParam = new URLSearchParams(query);
+      for (const [key, value] of targetParam.entries()) {
+        if (searchParams?.get(key) !== value) return false;
+      }
+      return true;
+    }
+    // For parametres base without tab
+    if (href === "/parametres") {
+      return pathname === "/parametres" && (!searchParams?.get("tab") || searchParams.get("tab") === "ATTENDANCE");
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
+  // Restore scroll position
   useIsomorphicLayoutEffect(() => {
     isRestoringRef.current = true;
 
@@ -252,7 +287,6 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
         navRef.current.scrollTop = saved;
       }
 
-      // Ensure the active menu item stays in view within the sidebar without scrolling the window
       const activeEl = navRef.current.querySelector<HTMLElement>("[data-active='true']");
       if (activeEl && navRef.current) {
         const navRect = navRef.current.getBoundingClientRect();
@@ -275,7 +309,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
     });
 
     return () => cancelAnimationFrame(frameId);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   const handleNavScroll = (e: React.UIEvent<HTMLDivElement>) => {
     if (isRestoringRef.current) return;
@@ -288,7 +322,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
 
   return (
     <>
-      {/* Desktop Sidebar (hidden on mobile, retains collapsed/expanded state) */}
+      {/* Desktop Sidebar */}
       <aside
         className={cn(
           "hidden md:flex h-screen sticky top-0 flex-col bg-neutral-950 border-r border-neutral-800/80 transition-all duration-300 z-30 select-none",
@@ -309,7 +343,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                     ERP
                   </span>
                 </span>
-                <span className="text-[10px] text-neutral-500">Agence Digitale</span>
+                <span className="text-[10px] text-neutral-500">Direction & Gestion</span>
               </div>
             </Link>
           )}
@@ -339,12 +373,10 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
           ref={navRef}
           onScroll={handleNavScroll}
           style={{ overflowAnchor: "none" }}
-          className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-neutral-800"
+          className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
         >
           {visibleGroups.map((group) => {
-            const hasActiveItem = group.items.some(
-              (item) => pathname === item.href || pathname.startsWith(item.href + "/")
-            );
+            const hasActiveItem = group.items.some((item) => isItemActive(item.href));
             const isGroupCollapsed = !hasActiveItem && !!collapsedGroups[group.groupTitle];
 
             return (
@@ -367,7 +399,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                 )}
                 {(!collapsed && isGroupCollapsed) ? null : (
                   group.items.map((item) => {
-                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    const active = isItemActive(item.href);
                     const Icon = item.icon;
 
                     return (
@@ -375,7 +407,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                         key={item.href}
                         href={item.href}
                         scroll={false}
-                        data-active={isActive ? "true" : undefined}
+                        data-active={active ? "true" : undefined}
                         onClick={() => {
                           if (navRef.current) {
                             globalSidebarScrollTop = navRef.current.scrollTop;
@@ -386,8 +418,8 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                         }}
                         className={cn(
                           "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
-                          isActive
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                          active
+                            ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
                             : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
                         )}
                         title={collapsed ? item.label : undefined}
@@ -395,14 +427,21 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                         <Icon
                           className={cn(
                             "w-4 h-4 shrink-0 transition-colors",
-                            isActive ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                            active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
                           )}
                         />
                         {!collapsed && (
                           <span className="flex-1 truncate">{item.label}</span>
                         )}
                         {!collapsed && item.badge && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
+                              active
+                                ? "bg-white/20 text-white border-white/30"
+                                : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                            )}
+                          >
                             {item.badge}
                           </span>
                         )}
@@ -415,27 +454,33 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
           })}
         </div>
 
-        {/* Footer: User Info */}
-        <div className="p-3 border-t border-neutral-800/80 space-y-2">
-          <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
-            <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
-              {userName ? userName.charAt(0).toUpperCase() : "U"}
+        {/* Footer: User Identity Card */}
+        <div className="p-3 border-t border-neutral-800/80">
+          <Link
+            href="/parametres?tab=USERS"
+            className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60 hover:border-neutral-700 transition-colors group"
+          >
+            <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+              {userName ? userName.charAt(0).toUpperCase() : "A"}
             </div>
             {!collapsed && (
               <div className="flex-1 truncate">
-                <p className="text-xs font-semibold text-neutral-200 truncate">
-                  {userName || "Utilisateur"}
+                <p className="text-xs font-semibold text-neutral-200 truncate group-hover:text-white">
+                  {userName || "Administrateur"}
                 </p>
-                <p className="text-[10px] text-neutral-500 truncate">
-                  {userRole || "Rôle"}
-                </p>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="w-3 h-3 text-blue-400 shrink-0" />
+                  <p className="text-[10px] text-neutral-400 truncate">
+                    {userRole || "Administrateur"}
+                  </p>
+                </div>
               </div>
             )}
-          </div>
+          </Link>
         </div>
       </aside>
 
-      {/* Mobile Drawer (Always starts closed, only opens on hamburger click) */}
+      {/* Mobile Drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           {/* Backdrop */}
@@ -463,7 +508,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                       ERP
                     </span>
                   </span>
-                  <span className="text-[10px] text-neutral-500">Agence Digitale</span>
+                  <span className="text-[10px] text-neutral-500">Direction & Gestion</span>
                 </div>
               </Link>
 
@@ -480,12 +525,10 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
             {/* Navigation Groups for Mobile */}
             <div
               ref={mobileNavRef}
-              className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-thin scrollbar-thumb-neutral-800"
+              className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
             >
               {visibleGroups.map((group) => {
-                const hasActiveItem = group.items.some(
-                  (item) => pathname === item.href || pathname.startsWith(item.href + "/")
-                );
+                const hasActiveItem = group.items.some((item) => isItemActive(item.href));
                 const isGroupCollapsed = !hasActiveItem && !!collapsedGroups[group.groupTitle];
 
                 return (
@@ -506,7 +549,7 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
 
                     {!isGroupCollapsed && (
                       group.items.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                        const active = isItemActive(item.href);
                         const Icon = item.icon;
 
                         return (
@@ -516,20 +559,27 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
                             onClick={() => setMobileOpen(false)}
                             className={cn(
                               "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
-                              isActive
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/25"
+                              active
+                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
                                 : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
                             )}
                           >
                             <Icon
                               className={cn(
                                 "w-4 h-4 shrink-0 transition-colors",
-                                isActive ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                                active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
                               )}
                             />
                             <span className="flex-1 truncate">{item.label}</span>
                             {item.badge && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">
+                              <span
+                                className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
+                                  active
+                                    ? "bg-white/20 text-white border-white/30"
+                                    : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                                )}
+                              >
                                 {item.badge}
                               </span>
                             )}
@@ -546,14 +596,14 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
             <div className="p-3 border-t border-neutral-800/80">
               <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
                 <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
-                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                  {userName ? userName.charAt(0).toUpperCase() : "A"}
                 </div>
                 <div className="flex-1 truncate">
                   <p className="text-xs font-semibold text-neutral-200 truncate">
-                    {userName || "Utilisateur"}
+                    {userName || "Administrateur"}
                   </p>
-                  <p className="text-[10px] text-neutral-500 truncate">
-                    {userRole || "Rôle"}
+                  <p className="text-[10px] text-neutral-400 truncate">
+                    {userRole || "Administrateur"}
                   </p>
                 </div>
               </div>
@@ -564,4 +614,3 @@ export function Sidebar({ userRole, rawRole, userName, initialCollapsed = false 
     </>
   );
 }
-

@@ -19,9 +19,9 @@ export async function POST(req: Request) {
       where: { email: email.trim().toLowerCase() },
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       return NextResponse.json(
-        { error: "Identifiants invalides ou compte inactif." },
+        { error: "Identifiants invalides." },
         { status: 401 }
       );
     }
@@ -29,10 +29,71 @@ export async function POST(req: Request) {
     const passwordMatch = await verifyPassword(password, user.passwordHash);
     if (!passwordMatch) {
       return NextResponse.json(
-        { error: "Mot de passe incorrect." },
+        { error: "Identifiants invalides." },
         { status: 401 }
       );
     }
+
+    // Contrôle des statuts d'accès
+    if (user.status === "EMAIL_UNVERIFIED" || !user.emailVerified) {
+      return NextResponse.json(
+        {
+          error: "Veuillez confirmer votre adresse e-mail avant de vous connecter. Consultez votre boîte de réception.",
+          status: "EMAIL_UNVERIFIED",
+          email: user.email,
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.status === "PENDING") {
+      return NextResponse.json(
+        {
+          error: "Votre e-mail est vérifié, mais votre compte est en attente d'approbation par la direction générale.",
+          status: "PENDING",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.status === "REJECTED") {
+      return NextResponse.json(
+        {
+          error: `Votre demande d'accès n'a pas été retenue.${
+            user.rejectionReason ? ` Motif : ${user.rejectionReason}` : ""
+          }`,
+          status: "REJECTED",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.status === "SUSPENDED") {
+      return NextResponse.json(
+        {
+          error: "Ce compte collaborateur est temporairement suspendu. Contactez un administrateur.",
+          status: "SUSPENDED",
+        },
+        { status: 403 }
+      );
+    }
+
+    if (user.status === "ARCHIVED" || !user.isActive) {
+      return NextResponse.json(
+        { error: "Ce compte a été désactivé.", status: "ARCHIVED" },
+        { status: 403 }
+      );
+    }
+
+    // Mise à jour de la dernière connexion et statut actif
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        status: "ACTIVE",
+        isActive: true,
+        lastLoginAt: new Date(),
+      },
+    });
 
     const token = await signToken({
       userId: user.id,

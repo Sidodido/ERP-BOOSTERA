@@ -10,6 +10,7 @@ import {
   processFollowUpAction,
   rescheduleFollowUpAction,
   logFollowUpCallAction,
+  updateFollowUpRemarksAndNotesAction,
 } from "@/actions/followups";
 import { updateProspectField } from "@/actions/prospects";
 import { Modal } from "@/components/ui/Modal";
@@ -31,6 +32,15 @@ import {
   AlertTriangle,
   User,
   Sparkles,
+  Edit3,
+  SlidersHorizontal,
+  Filter,
+  X,
+  MessageSquare,
+  RotateCcw,
+  Tag,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 
 interface FollowUpItem {
@@ -90,6 +100,68 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
     text: string;
   } | null>(null);
 
+  // Filtres avancés supplémentaires
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterCommercial, setFilterCommercial] = useState<string>("ALL");
+  const [filterCallStatus, setFilterCallStatus] = useState<string>("ALL");
+  const [filterRawState, setFilterRawState] = useState<string>("ALL");
+  const [filterStep, setFilterStep] = useState<string>("ALL");
+  const [filterWilaya, setFilterWilaya] = useState<string>("ALL");
+  const [filterHasRemarks, setFilterHasRemarks] = useState<string>("ALL"); // "ALL" | "WITH" | "WITHOUT"
+
+  // Modale d'édition des Remarques et Réponses
+  const [remarksModalOpen, setRemarksModalOpen] = useState(false);
+  const [targetRemarksItem, setTargetRemarksItem] = useState<FollowUpItem | null>(null);
+  const [editProspectNotes, setEditProspectNotes] = useState("");
+  const [editProspectResponse, setEditProspectResponse] = useState("");
+  const [editFollowUpNotes, setEditFollowUpNotes] = useState("");
+  const [isSavingRemarks, setIsSavingRemarks] = useState(false);
+  const [remarksError, setRemarksError] = useState<string | null>(null);
+
+  // Options uniques pour les filtres
+  const availableCommercials = useMemo(() => {
+    const map = new Map<string, string>();
+    followUps.forEach((f) => {
+      if (f.user?.id) {
+        map.set(f.user.id, f.user.name);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [followUps]);
+
+  const availableWilayas = useMemo(() => {
+    const set = new Set<string>();
+    followUps.forEach((f) => {
+      if (f.prospect.wilaya && f.prospect.wilaya.trim()) {
+        set.add(f.prospect.wilaya.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [followUps]);
+
+  const activeExtraFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filterCommercial !== "ALL") count++;
+    if (filterCallStatus !== "ALL") count++;
+    if (filterRawState !== "ALL") count++;
+    if (filterStep !== "ALL") count++;
+    if (filterWilaya !== "ALL") count++;
+    if (filterHasRemarks !== "ALL") count++;
+    return count;
+  }, [filterCommercial, filterCallStatus, filterRawState, filterStep, filterWilaya, filterHasRemarks]);
+
+  const resetAllFilters = () => {
+    setSelectedFilter("ALL");
+    setSearch("");
+    setFilterCommercial("ALL");
+    setFilterCallStatus("ALL");
+    setFilterRawState("ALL");
+    setFilterStep("ALL");
+    setFilterWilaya("ALL");
+    setFilterHasRemarks("ALL");
+    setCurrentPage(1);
+  };
+
   // Reschedule Follow-up Modal State
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const [targetFollowUp, setTargetFollowUp] = useState<FollowUpItem | null>(null);
@@ -110,6 +182,78 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
   const now = new Date();
   const todayStr = toLocalDateString(now);
 
+  // Open Remarks Modal
+  const openRemarksModal = (item: FollowUpItem) => {
+    setTargetRemarksItem(item);
+    setEditProspectNotes(item.prospect.notes || "");
+    setEditProspectResponse(item.prospect.response || "");
+    setEditFollowUpNotes(item.notes && !item.notes.startsWith("Relance Étape") ? item.notes : "");
+    setRemarksError(null);
+    setRemarksModalOpen(true);
+  };
+
+  // Save Remarks & Response Handler
+  const handleSaveRemarksSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetRemarksItem) return;
+
+    setIsSavingRemarks(true);
+    setRemarksError(null);
+
+    const newProspectNotes = editProspectNotes.trim() || null;
+    const newProspectResponse = editProspectResponse.trim() || null;
+    const newFollowUpNotes = editFollowUpNotes.trim() || null;
+
+    // Optimistic UI Update
+    setFollowUps((prev) =>
+      prev.map((f) =>
+        f.id === targetRemarksItem.id
+          ? {
+              ...f,
+              notes: newFollowUpNotes || f.notes,
+              prospect: {
+                ...f.prospect,
+                notes: newProspectNotes,
+                response: newProspectResponse,
+              },
+            }
+          : f.prospect.id === targetRemarksItem.prospect.id
+          ? {
+              ...f,
+              prospect: {
+                ...f.prospect,
+                notes: newProspectNotes,
+                response: newProspectResponse,
+              },
+            }
+          : f
+      )
+    );
+
+    try {
+      const res = await updateFollowUpRemarksAndNotesAction({
+        followUpId: targetRemarksItem.id,
+        prospectId: targetRemarksItem.prospect.id,
+        notes: newProspectNotes,
+        response: newProspectResponse,
+        followUpNotes: newFollowUpNotes,
+      });
+
+      if (res.success) {
+        setFeedbackMessage({
+          type: "success",
+          text: `✓ Remarques et réponses pour "${targetRemarksItem.prospect.companyName}" enregistrées avec succès.`,
+        });
+        setRemarksModalOpen(false);
+        setTargetRemarksItem(null);
+      }
+    } catch (err: any) {
+      setRemarksError(err?.message || "Erreur lors de l'enregistrement des remarques.");
+    } finally {
+      setIsSavingRemarks(false);
+    }
+  };
+
   // Filtered follow-ups
   const filtered = followUps.filter((f) => {
     // 1. Status Filter
@@ -125,7 +269,61 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
       if (f.status !== "COMPLETED" && f.status !== "CONVERTED" && f.status !== "LOST") return false;
     }
 
-    // 2. Search Filter
+    // 2. Commercial Filter
+    if (filterCommercial !== "ALL" && f.user.id !== filterCommercial) {
+      return false;
+    }
+
+    // 3. Statut d'appel (APPEL)
+    if (filterCallStatus !== "ALL") {
+      if (filterCallStatus === "VIDE") {
+        if (f.prospect.callStatus && f.prospect.callStatus.trim()) return false;
+      } else if (f.prospect.callStatus !== filterCallStatus) {
+        return false;
+      }
+    }
+
+    // 4. Résultat d'appel (RÉSULTAT D'APPEL / RAW STATE)
+    if (filterRawState !== "ALL") {
+      if (filterRawState === "VIDE") {
+        if (f.prospect.rawState && f.prospect.rawState.trim()) return false;
+      } else if (f.prospect.rawState !== filterRawState) {
+        return false;
+      }
+    }
+
+    // 5. Étape de relance
+    if (filterStep !== "ALL") {
+      if (filterStep === "4_PLUS") {
+        if (f.stepNumber < 4) return false;
+      } else if (f.stepNumber !== Number(filterStep)) {
+        return false;
+      }
+    }
+
+    // 6. Wilaya
+    if (filterWilaya !== "ALL" && f.prospect.wilaya !== filterWilaya) {
+      return false;
+    }
+
+    // 7. Présence de remarques / réponses
+    if (filterHasRemarks === "WITH") {
+      const hasAny = Boolean(
+        (f.prospect.notes && f.prospect.notes.trim()) ||
+        (f.prospect.response && f.prospect.response.trim()) ||
+        (f.notes && f.notes.trim() && !f.notes.startsWith("Relance Étape"))
+      );
+      if (!hasAny) return false;
+    } else if (filterHasRemarks === "WITHOUT") {
+      const hasAny = Boolean(
+        (f.prospect.notes && f.prospect.notes.trim()) ||
+        (f.prospect.response && f.prospect.response.trim()) ||
+        (f.notes && f.notes.trim() && !f.notes.startsWith("Relance Étape"))
+      );
+      if (hasAny) return false;
+    }
+
+    // 8. Recherche texte
     if (!search.trim()) return true;
     const q = search.toLowerCase().trim();
     return (
@@ -148,7 +346,16 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
   // Revenir à la première page quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, selectedFilter]);
+  }, [
+    search,
+    selectedFilter,
+    filterCommercial,
+    filterCallStatus,
+    filterRawState,
+    filterStep,
+    filterWilaya,
+    filterHasRemarks,
+  ]);
 
   const totalPages = pageSize === "all" ? 1 : Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginatedFollowUps = useMemo(() => {
@@ -498,71 +705,251 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-neutral-900/80 border border-neutral-800 p-2.5 rounded-2xl">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Rechercher par entreprise, contact, téléphone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-9 pl-9 pr-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
-          />
+      {/* Filter and Search Control Center */}
+      <div className="space-y-3 bg-neutral-900/80 border border-neutral-800 p-3 rounded-2xl shadow-md">
+        {/* Main Bar */}
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative w-full lg:w-80">
+            <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Rechercher entreprise, contact, tél, remarques..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-8 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
+                title="Effacer la recherche"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick Status Buttons & Filter Toggles */}
+          <div className="flex items-center gap-1.5 overflow-x-auto w-full lg:w-auto text-xs pb-1 lg:pb-0 scrollbar-none">
+            <button
+              onClick={() => setSelectedFilter("ALL")}
+              className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
+                selectedFilter === "ALL"
+                  ? "bg-neutral-800 text-white shadow-xs"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              Toutes ({followUps.length})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("TODAY")}
+              className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
+                selectedFilter === "TODAY"
+                  ? "bg-blue-600/30 text-blue-300 border border-blue-500/40"
+                  : "text-neutral-400 hover:text-blue-400"
+              }`}
+            >
+              Aujourd'hui ({todayCount})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("OVERDUE")}
+              className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
+                selectedFilter === "OVERDUE"
+                  ? "bg-rose-500/30 text-rose-300 border border-rose-500/40"
+                  : "text-neutral-400 hover:text-rose-400"
+              }`}
+            >
+              En retard ({overdueCount})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("SCHEDULED")}
+              className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
+                selectedFilter === "SCHEDULED"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                  : "text-neutral-400 hover:text-amber-400"
+              }`}
+            >
+              À venir
+            </button>
+            <button
+              onClick={() => setSelectedFilter("COMPLETED")}
+              className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
+                selectedFilter === "COMPLETED"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                  : "text-neutral-400 hover:text-emerald-400"
+              }`}
+            >
+              Terminées ({completedCount})
+            </button>
+
+            {/* Toggle Advanced Filters Button */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-xl border transition-all cursor-pointer shrink-0 ml-1 ${
+                showAdvancedFilters || activeExtraFiltersCount > 0
+                  ? "bg-blue-600/25 text-blue-300 border-blue-500/50 shadow-xs"
+                  : "bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-neutral-200"
+              }`}
+              title="Options de filtres par commercial, statut d'appel, résultat, étape, wilaya, remarques"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Filtres</span>
+              {activeExtraFiltersCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-blue-500 text-neutral-950 text-[10px] font-extrabold flex items-center justify-center">
+                  {activeExtraFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Reset All Filters Button */}
+            {(activeExtraFiltersCount > 0 || search || selectedFilter !== "ALL") && (
+              <button
+                type="button"
+                onClick={resetAllFilters}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-950 hover:bg-rose-500/10 text-neutral-400 hover:text-rose-400 border border-neutral-800 hover:border-rose-500/30 text-xs transition-colors cursor-pointer shrink-0"
+                title="Réinitialiser tous les filtres"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Effacer ({filtered.length}/{followUps.length})</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto text-xs pb-1 sm:pb-0 scrollbar-none">
-          <button
-            onClick={() => setSelectedFilter("ALL")}
-            className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
-              selectedFilter === "ALL"
-                ? "bg-neutral-800 text-white shadow-xs"
-                : "text-neutral-400 hover:text-neutral-200"
-            }`}
-          >
-            Toutes ({followUps.length})
-          </button>
-          <button
-            onClick={() => setSelectedFilter("TODAY")}
-            className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
-              selectedFilter === "TODAY"
-                ? "bg-blue-600/30 text-blue-300 border border-blue-500/40"
-                : "text-neutral-400 hover:text-blue-400"
-            }`}
-          >
-            Aujourd'hui ({todayCount})
-          </button>
-          <button
-            onClick={() => setSelectedFilter("OVERDUE")}
-            className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
-              selectedFilter === "OVERDUE"
-                ? "bg-rose-500/30 text-rose-300 border border-rose-500/40"
-                : "text-neutral-400 hover:text-rose-400"
-            }`}
-          >
-            En retard ({overdueCount})
-          </button>
-          <button
-            onClick={() => setSelectedFilter("SCHEDULED")}
-            className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
-              selectedFilter === "SCHEDULED"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                : "text-neutral-400 hover:text-amber-400"
-            }`}
-          >
-            À venir
-          </button>
-          <button
-            onClick={() => setSelectedFilter("COMPLETED")}
-            className={`px-3 py-1.5 font-semibold rounded-xl transition-colors shrink-0 cursor-pointer ${
-              selectedFilter === "COMPLETED"
-                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                : "text-neutral-400 hover:text-emerald-400"
-            }`}
-          >
-            Terminées ({completedCount})
-          </button>
-        </div>
+        {/* Panneau de filtres avancés (Déroulable) */}
+        {showAdvancedFilters && (
+          <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+            {/* 1. Commercial */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Commercial :
+              </label>
+              <select
+                value={filterCommercial}
+                onChange={(e) => setFilterCommercial(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterCommercial !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Tous ({availableCommercials.length})</option>
+                {availableCommercials.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Statut d'appel */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Statut Appel :
+              </label>
+              <select
+                value={filterCallStatus}
+                onChange={(e) => setFilterCallStatus(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterCallStatus !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Tous les statuts d'appel</option>
+                <option value="EFFECTUE">✓ EFFECTUE</option>
+                <option value="PAS DE REPONSE">PAS DE REPONSE</option>
+                <option value="OCCUPE">OCCUPE</option>
+                <option value="INJOIGNABLE">INJOIGNABLE</option>
+                <option value="A RAPPELER">A RAPPELER</option>
+                <option value="NON EFFECTUE">NON EFFECTUE</option>
+                <option value="VIDE">Non renseigné</option>
+              </select>
+            </div>
+
+            {/* 3. Résultat d'appel */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Résultat d'appel :
+              </label>
+              <select
+                value={filterRawState}
+                onChange={(e) => setFilterRawState(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterRawState !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Tous les résultats</option>
+                <option value="INTERESSE">INTERESSE</option>
+                <option value="RDV PRIS">RDV PRIS</option>
+                <option value="A RAPPELER">A RAPPELER</option>
+                <option value="PAS INTERESSE">PAS INTERESSE</option>
+                <option value="PAS DE REPONSE">PAS DE REPONSE</option>
+                <option value="OCCUPE">OCCUPE</option>
+                <option value="INJOIGNABLE">INJOIGNABLE</option>
+                <option value="VIDE">Non renseigné</option>
+              </select>
+            </div>
+
+            {/* 4. Étape de relance */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Étape :
+              </label>
+              <select
+                value={filterStep}
+                onChange={(e) => setFilterStep(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterStep !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Toutes les étapes</option>
+                <option value="1">Étape 1 (Initiale)</option>
+                <option value="2">Étape 2 (J+3 / J+7)</option>
+                <option value="3">Étape 3</option>
+                <option value="4_PLUS">Étape 4+</option>
+              </select>
+            </div>
+
+            {/* 5. Wilaya */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Wilaya :
+              </label>
+              <select
+                value={filterWilaya}
+                onChange={(e) => setFilterWilaya(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterWilaya !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Toutes les wilayas ({availableWilayas.length})</option>
+                {availableWilayas.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 6. Remarques & Réponses */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Remarques & Réponses :
+              </label>
+              <select
+                value={filterHasRemarks}
+                onChange={(e) => setFilterHasRemarks(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterHasRemarks !== "ALL" ? "border-amber-500/60 text-amber-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Toutes (avec ou sans)</option>
+                <option value="WITH">💬 Avec remarques / réponses</option>
+                <option value="WITHOUT">Sans remarques</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Feedback Alert */}
@@ -712,29 +1099,64 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                     </div>
                   </div>
 
-                  {/* Prospect Remarks & Follow-up Notes */}
-                  {(item.prospect.notes || item.prospect.response || item.notes) && (
-                    <div className="space-y-1.5 pt-1">
-                      {item.prospect.notes && (
-                        <div className="bg-amber-500/10 border border-amber-500/25 p-2.5 rounded-xl text-xs text-amber-200">
-                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1 mb-0.5">
-                            💬 Remarque prospect :
-                          </span>
-                          <p className="font-medium text-amber-100 whitespace-normal">{item.prospect.notes}</p>
-                        </div>
-                      )}
-                      {item.prospect.response && item.prospect.response !== item.prospect.notes && (
-                        <p className="text-[11px] text-neutral-300 px-1">
-                          <span className="text-neutral-500 font-semibold">Réponse :</span> {item.prospect.response}
-                        </p>
-                      )}
-                      {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes && (
-                        <p className="text-[11px] text-neutral-400 italic bg-neutral-950/40 p-2 rounded-lg border border-neutral-850 whitespace-normal">
-                          Note relance : "{item.notes}"
-                        </p>
-                      )}
+                  {/* Prospect Remarks & Follow-up Notes with EDIT button */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3 text-amber-400" />
+                        <span>Remarques & Réponses</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openRemarksModal(item)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold text-amber-300 hover:text-white bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 transition-all cursor-pointer"
+                        title="Modifier la remarque, la réponse ou la note de relance"
+                      >
+                        <Edit3 className="w-2.5 h-2.5" />
+                        <span>{item.prospect.notes || item.prospect.response ? "Modifier" : "+ Ajouter"}</span>
+                      </button>
                     </div>
-                  )}
+
+                    {item.prospect.notes && (
+                      <div
+                        onClick={() => openRemarksModal(item)}
+                        className="bg-amber-500/10 hover:bg-amber-500/15 border border-amber-500/25 p-2 rounded-xl text-xs text-amber-200 cursor-pointer transition-colors group"
+                        title="Cliquer pour modifier la remarque"
+                      >
+                        <p className="font-medium text-amber-100 whitespace-normal line-clamp-3">{item.prospect.notes}</p>
+                      </div>
+                    )}
+
+                    {item.prospect.response && item.prospect.response !== item.prospect.notes && (
+                      <p
+                        onClick={() => openRemarksModal(item)}
+                        className="text-[11px] text-neutral-300 px-1 cursor-pointer hover:text-white transition-colors"
+                        title="Cliquer pour modifier la réponse"
+                      >
+                        <span className="text-neutral-500 font-semibold">Réponse :</span> {item.prospect.response}
+                      </p>
+                    )}
+
+                    {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes && (
+                      <p
+                        onClick={() => openRemarksModal(item)}
+                        className="text-[11px] text-neutral-400 italic bg-neutral-950/40 hover:bg-neutral-950/70 p-2 rounded-lg border border-neutral-850 hover:border-neutral-700 whitespace-normal cursor-pointer transition-colors"
+                        title="Cliquer pour modifier la note"
+                      >
+                        Note relance : "{item.notes}"
+                      </p>
+                    )}
+
+                    {!item.prospect.notes && !item.prospect.response && (!item.notes || item.notes.startsWith("Relance Étape")) && (
+                      <button
+                        type="button"
+                        onClick={() => openRemarksModal(item)}
+                        className="w-full py-2 px-2 text-[11px] text-neutral-500 hover:text-amber-300 bg-neutral-950/40 hover:bg-amber-500/5 border border-dashed border-neutral-800 hover:border-amber-500/30 rounded-xl text-center transition-all cursor-pointer"
+                      >
+                        + Ajouter une remarque ou réponse
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* BOTTOM ACTION BUTTONS: PAS INTÉRESSÉ | INTÉRESSÉ (+3j) | À RELANCER (+7j ou +15j) */}
@@ -999,13 +1421,14 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                       </td>
 
                       {/* 4. Remarques du prospect */}
-                      <td className="py-3 px-3 min-w-[220px] max-w-[320px]">
-                        {item.prospect.notes || item.prospect.response || (item.notes && !item.notes.startsWith("Relance Étape")) ? (
-                          <div className="space-y-1">
-                            {item.prospect.notes && (
+                      <td className="py-2.5 px-3 min-w-[240px] max-w-[340px]">
+                        <div className="flex items-start justify-between gap-1.5 group">
+                          <div className="space-y-1 flex-1 min-w-0">
+                            {item.prospect.notes ? (
                               <div
-                                className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1.5 rounded-lg max-w-[300px]"
-                                title={item.prospect.notes}
+                                onClick={() => openRemarksModal(item)}
+                                className="text-xs text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                                title="Cliquer pour modifier la remarque"
                               >
                                 <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
                                   💬 Remarque :
@@ -1014,27 +1437,50 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                                   {item.prospect.notes}
                                 </p>
                               </div>
-                            )}
-                            {item.prospect.response && item.prospect.response !== item.prospect.notes && (
+                            ) : null}
+
+                            {item.prospect.response && item.prospect.response !== item.prospect.notes ? (
                               <p
-                                className="text-[11px] text-neutral-300 whitespace-normal line-clamp-1 truncate pl-1"
-                                title={item.prospect.response}
+                                onClick={() => openRemarksModal(item)}
+                                className="text-[11px] text-neutral-300 whitespace-normal line-clamp-1 truncate pl-1 cursor-pointer hover:text-white transition-colors"
+                                title="Cliquer pour modifier la réponse"
                               >
                                 <span className="text-neutral-500 font-semibold">Rép :</span> {item.prospect.response}
                               </p>
-                            )}
-                            {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes && (
+                            ) : null}
+
+                            {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes ? (
                               <p
-                                className="text-[10px] text-neutral-400 italic whitespace-normal line-clamp-1 pl-1"
-                                title={item.notes}
+                                onClick={() => openRemarksModal(item)}
+                                className="text-[10px] text-neutral-400 italic whitespace-normal line-clamp-1 pl-1 cursor-pointer hover:text-neutral-300 transition-colors"
+                                title="Cliquer pour modifier la note"
                               >
                                 Note : {item.notes}
                               </p>
-                            )}
+                            ) : null}
+
+                            {!item.prospect.notes && !item.prospect.response && (!item.notes || item.notes.startsWith("Relance Étape")) ? (
+                              <button
+                                type="button"
+                                onClick={() => openRemarksModal(item)}
+                                className="inline-flex items-center gap-1 text-[11px] text-neutral-500 hover:text-amber-300 py-1 px-1.5 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" />
+                                <span>Ajouter remarque</span>
+                              </button>
+                            ) : null}
                           </div>
-                        ) : (
-                          <span className="text-neutral-600 text-xs italic pl-1">—</span>
-                        )}
+
+                          {/* Bouton d'édition rapide */}
+                          <button
+                            type="button"
+                            onClick={() => openRemarksModal(item)}
+                            className="p-1.5 rounded-lg bg-neutral-900/80 hover:bg-amber-500/20 text-neutral-400 hover:text-amber-300 border border-neutral-800 hover:border-amber-500/30 transition-all cursor-pointer shrink-0 opacity-70 group-hover:opacity-100"
+                            title="Modifier les remarques et réponses"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
 
                       {/* 5. Date Prévue */}
@@ -1687,6 +2133,173 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               >
                 <PhoneCall className="w-4 h-4" />
                 <span>+ Enregistrer & Transférer dans les Appels</span>
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* MODAL: MODIFIER LES REMARQUES ET RÉPONSES */}
+      <Modal
+        isOpen={remarksModalOpen}
+        onClose={() => {
+          setRemarksModalOpen(false);
+          setTargetRemarksItem(null);
+        }}
+        title="Modifier les remarques et réponses"
+        description={
+          targetRemarksItem
+            ? `Mise à jour des notes commerciales et retours prospect pour ${targetRemarksItem.prospect.companyName}`
+            : "Mise à jour des remarques et réponses"
+        }
+        maxWidth="lg"
+      >
+        {targetRemarksItem && (
+          <form onSubmit={handleSaveRemarksSubmit} className="space-y-4">
+            {/* Prospect Info Card */}
+            <div className="p-3 bg-neutral-950/80 border border-neutral-800 rounded-xl space-y-1.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-400">Entreprise :</span>
+                <span className="font-bold text-neutral-100 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{targetRemarksItem.prospect.companyName}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-400">Contact / Téléphone :</span>
+                <span className="text-neutral-200 font-mono">
+                  {targetRemarksItem.prospect.contactName || "Contact principal"} ({targetRemarksItem.prospect.phone})
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-400">Commercial en charge :</span>
+                <span className="text-blue-300 font-medium">{targetRemarksItem.user.name}</span>
+              </div>
+            </div>
+
+            {remarksError && (
+              <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{remarksError}</span>
+              </div>
+            )}
+
+            {/* 1. Remarque du prospect */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Remarque du prospect (Besoins, objections, contexte) :</span>
+                </label>
+                <span className="text-[10px] text-neutral-500">Visible dans tout le CRM</span>
+              </div>
+              <textarea
+                rows={3}
+                value={editProspectNotes}
+                onChange={(e) => setEditProspectNotes(e.target.value)}
+                placeholder="Ex: Le prospect est très intéressé par la gestion des factures et du stock. Souhaite être rappelé mardi matin..."
+                className="w-full p-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-amber-500 transition-colors"
+              />
+
+              {/* Quick tags for remarks */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-semibold text-neutral-400">Suggestions rapides :</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    "Très intéressé par l'ERP",
+                    "Demande de devis détaillé",
+                    "Rappeler le gérant la semaine prochaine",
+                    "Décisionnaire en déplacement",
+                    "Budget à valider pour le mois prochain",
+                    "Déjà équipé, comparer les offres",
+                    "Demande une démonstration à distance",
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        setEditProspectNotes((prev) => (prev ? `${prev} • ${tag}` : tag));
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-neutral-950 hover:bg-amber-500/15 border border-neutral-800 hover:border-amber-500/30 text-[10px] text-neutral-400 hover:text-amber-300 transition-colors cursor-pointer"
+                    >
+                      + {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Réponse du prospect */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" />
+                  <span>Réponse du prospect (Retour immédiat ou synthèse de l'échange) :</span>
+                </label>
+              </div>
+              <textarea
+                rows={2}
+                value={editProspectResponse}
+                onChange={(e) => setEditProspectResponse(e.target.value)}
+                placeholder="Ex: Intéressé par une présentation, envoyer catalogue sur WhatsApp"
+                className="w-full p-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+
+              {/* Quick tags for responses */}
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "Intéressé, à relancer",
+                  "Envoyer présentation par WhatsApp",
+                  "Demande de rappel",
+                  "Refus temporaire",
+                  "Ne répond pas pour le moment",
+                ].map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setEditProspectResponse(tag)}
+                    className="px-2 py-0.5 rounded-md bg-neutral-950 hover:bg-emerald-500/15 border border-neutral-800 hover:border-emerald-500/30 text-[10px] text-neutral-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                  >
+                    = {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Note spécifique de la relance */}
+            <div className="space-y-1.5 pt-1">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span>Note interne de suivi de la relance :</span>
+              </label>
+              <input
+                type="text"
+                value={editFollowUpNotes}
+                onChange={(e) => setEditFollowUpNotes(e.target.value)}
+                placeholder="Ex: Relance prévue le 24/09 pour finaliser la proposition"
+                className="w-full h-9 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setRemarksModalOpen(false);
+                  setTargetRemarksItem(null);
+                }}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                isLoading={isSavingRemarks}
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold gap-1.5 shadow-lg shadow-amber-600/20"
+              >
+                <Check className="w-4 h-4" />
+                <span>Enregistrer les modifications</span>
               </Button>
             </div>
           </form>
