@@ -3218,9 +3218,11 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
                   {/* Gauche : Logo & Informations de l'Agence */}
                   <div className="space-y-3 flex-1">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0">
-                        B
-                      </div>
+                      <img
+                        src="/logo.png"
+                        alt="BOOSTERA"
+                        className="w-14 h-14 object-contain rounded-xl border border-neutral-200 p-1 shrink-0 bg-white"
+                      />
                       <div>
                         <h2 className="text-xl font-black tracking-wider text-neutral-950 flex items-center gap-2">
                           <span>BOOSTERA</span>
@@ -3625,9 +3627,11 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
                   {/* Gauche : Logo & Coordonnées de l'Agence */}
                   <div className="space-y-3 flex-1">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-600 flex items-center justify-center text-white font-black text-2xl shadow-md shrink-0">
-                        B
-                      </div>
+                      <img
+                        src="/logo.png"
+                        alt="BOOSTERA"
+                        className="w-14 h-14 object-contain rounded-xl border border-neutral-200 p-1 shrink-0 bg-white"
+                      />
                       <div>
                         <h2 className="text-xl font-black tracking-wider text-neutral-950 flex items-center gap-2">
                           <span>BOOSTERA</span>

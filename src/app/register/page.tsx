@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { registerCollaboratorAction } from "@/actions/register";
 import { Button } from "@/components/ui/Button";
@@ -78,9 +79,16 @@ export default function RegisterPage() {
 
       <div className="w-full max-w-xl space-y-6 relative z-10">
         {/* Brand Header */}
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 shadow-xl shadow-blue-500/25 mb-1">
-            <span className="text-white font-black text-xl">B</span>
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/25 mb-1 border border-neutral-800">
+            <Image
+              src="/logo.png"
+              alt="BOOSTERA Logo"
+              width={70}
+              height={70}
+              className="w-16 h-16 object-contain"
+              priority
+            />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center justify-center gap-2">
             Demande d'Accès Collaborateur

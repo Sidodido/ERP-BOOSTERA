@@ -18,6 +18,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BOOSTERA — ERP & CRM SaaS Agence Digitale",
   description: "Plateforme unifiée ERP, CRM, Production, Finance & RH pour BOOSTERA",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export const viewport: Viewport = {

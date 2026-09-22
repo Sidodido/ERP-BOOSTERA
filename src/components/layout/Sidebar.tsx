@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
@@ -330,11 +331,18 @@ export function Sidebar({
         )}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
+        <div className="h-16 flex items-center justify-between px-3.5 border-b border-neutral-800/80">
           {!collapsed && (
-            <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
-                B
+            <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
+                <Image
+                  src="/logo.png"
+                  alt="BOOSTERA Logo"
+                  width={34}
+                  height={34}
+                  className="w-full h-full object-contain"
+                  priority
+                />
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
@@ -349,8 +357,15 @@ export function Sidebar({
           )}
 
           {collapsed && (
-            <div className="w-8 h-8 mx-auto rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm">
-              B
+            <div className="w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="BOOSTERA ERP">
+              <Image
+                src="/logo.png"
+                alt="BOOSTERA"
+                width={32}
+                height={32}
+                className="w-full h-full object-contain"
+                priority
+              />
             </div>
           )}
 
@@ -498,8 +513,15 @@ export function Sidebar({
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-2.5"
               >
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20">
-                  B
+                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0">
+                  <Image
+                    src="/logo.png"
+                    alt="BOOSTERA Logo"
+                    width={34}
+                    height={34}
+                    className="w-full h-full object-contain"
+                    priority
+                  />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
