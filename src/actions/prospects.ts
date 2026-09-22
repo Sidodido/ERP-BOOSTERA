@@ -557,7 +557,7 @@ export async function assignProspect(prospectId: string, assignedToId: string | 
 
 export async function updateProspectField(
   id: string,
-  field: "callStatus" | "rawState" | "response" | "notes" | "assignedToId" | "companyName" | "phone" | "sector" | "address" | "wilaya" | "email" | "callResult",
+  field: "callStatus" | "rawState" | "response" | "notes" | "assignedToId" | "companyName" | "phone" | "sector" | "address" | "wilaya" | "email" | "callResult" | "contactName",
   value: string | null
 ) {
   const user = await requireAuth();
@@ -1256,6 +1256,7 @@ export async function bulkImportProspects(
   rows: Array<{
     companyName: string;   // CLIENT
     phone: string | number;// NUMERO
+    contactName?: string;  // PERSONNE CONTACTÉE
     date?: any;            // DATE
     sector?: string;       // TYPE
     address?: string;      // ADRESS
@@ -1320,6 +1321,7 @@ export async function bulkImportProspects(
     sector: string;
     address: string | null;
     wilaya: string;
+    contactName: string | null;
     callStatus: string | null;
     status: ProspectStatus;
     rawState: string | null;
@@ -1413,6 +1415,7 @@ export async function bulkImportProspects(
       sector: row.sector?.trim() || "Autre prestation",
       address: row.address?.trim() || null,
       wilaya: row.wilaya?.trim() || (row.address?.trim() ? row.address.trim() : "Alger"),
+      contactName: row.contactName?.trim() || null,
       callStatus: isVirginProspect ? null : (row.callStatus?.trim() || null),
       status: mappedStatus,
       rawState: isVirginProspect ? null : (row.rawState?.trim() || null),
@@ -1431,6 +1434,7 @@ export async function bulkImportProspects(
       const prospectsData = validRowsToInsert.map((item) => ({
         companyName: item.cleanCompany,
         phone: item.cleanPhone,
+        contactName: item.contactName,
         prospectionDate: item.isVirginProspect ? null : item.prospectionDate,
         sector: item.sector,
         address: item.address,

@@ -1698,6 +1698,7 @@ export function AppointmentsClient({
                     <th className="py-3 px-3">ADRESS</th>
                     <th className="py-3 px-3">APPEL</th>
                     <th className="py-3 px-3 text-emerald-400">RÉSULTAT D'APPEL</th>
+                    <th className="py-3 px-3">PERSONNE CONTACTÉE</th>
                     <th className="py-3 px-3">MAIL</th>
                     <th className="py-3 px-3">REPENSE</th>
                     <th className="py-3 px-3">REMARQUE</th>
@@ -1708,7 +1709,7 @@ export function AppointmentsClient({
                 <tbody className="divide-y divide-neutral-800/60 font-medium text-neutral-300">
                   {filteredFollowUps.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="py-12 text-center text-neutral-500 font-normal">
+                      <td colSpan={13} className="py-12 text-center text-neutral-500 font-normal">
                         Aucune relance post-rendez-vous enregistrée. Dès qu'un RDV est marqué "Effectué" ou "Annulé", ses relances automatiques à +3j, +7j et +15j apparaîtront directement ici.
                       </td>
                     </tr>
@@ -1810,6 +1811,11 @@ export function AppointmentsClient({
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             {isCompleted ? "Intéressé (Post-RDV)" : isCancelled ? "À rappeler" : "RDV Fixé"}
                           </span>
+                        </td>
+
+                        {/* 7b. PERSONNE CONTACTÉE */}
+                        <td className="py-2.5 px-3 text-neutral-300 text-[11px] max-w-[140px] truncate" title={prospect.contactName || ""}>
+                          {prospect.contactName || "—"}
                         </td>
 
                         {/* 8. MAIL */}

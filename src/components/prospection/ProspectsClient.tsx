@@ -299,6 +299,7 @@ export function ProspectsClient({
     let repenseIdx = -1;
     let remarqueIdx = -1;
     let commercialIdx = -1;
+    let contactIdx = -1;
 
     rawHeaders.forEach((h, colIdx) => {
       const norm = String(h || "")
@@ -317,6 +318,8 @@ export function ProspectsClient({
         typeIdx = colIdx;
       } else if (adressIdx === -1 && (norm.includes("ADRESS") || norm.includes("ZONE") || norm.includes("PLACE") || norm.includes("WILAYA") || norm.includes("VILLE"))) {
         adressIdx = colIdx;
+      } else if (contactIdx === -1 && (norm.includes("CONTACT") || norm.includes("INTERLOCUTEUR") || norm.includes("PERSONNE"))) {
+        contactIdx = colIdx;
       } else if (appelIdx === -1 && norm.includes("APPEL")) {
         appelIdx = colIdx;
       } else if (etatIdx === -1 && (norm.includes("ETAT") || norm.includes("STATUT"))) {
@@ -357,6 +360,7 @@ export function ProspectsClient({
       parsed.push({
         companyName: clientStr || "Sans nom",
         phone: numeroStr,
+        contactName: contactIdx !== -1 && row[contactIdx] ? String(row[contactIdx]).trim() : null,
         date: dateIdx !== -1 ? row[dateIdx] : null,
         sector: typeIdx !== -1 && row[typeIdx] ? String(row[typeIdx]).trim() : "Agence de voyage",
         address: adressIdx !== -1 && row[adressIdx] ? String(row[adressIdx]).trim() : "Alger",
@@ -679,7 +683,7 @@ export function ProspectsClient({
   // Handle direct inline cell modification from the table
   const handleInlineFieldChange = async (
     prospectId: string,
-    field: "callStatus" | "rawState" | "response" | "notes" | "callResult",
+    field: "callStatus" | "rawState" | "response" | "notes" | "callResult" | "contactName",
     value: string
   ) => {
     const today = new Date();
@@ -744,6 +748,11 @@ export function ProspectsClient({
         setFeedbackMessage({
           type: "success",
           text: `Statut d'appel mis à jour. Le prospect reste dans la prospection tant que vous ne cliquez pas sur « + Appels ».`,
+        });
+      } else if (field === "contactName") {
+        setFeedbackMessage({
+          type: "success",
+          text: `Nom de la personne contactée enregistré.`,
         });
       }
     } catch (err: any) {
@@ -1153,6 +1162,7 @@ export function ProspectsClient({
                   <th className="py-3 px-3">ADRESS</th>
                   <th className="py-3 px-3">APPEL</th>
                   <th className="py-3 px-3 text-emerald-400">RÉSULTAT D'APPEL</th>
+                  <th className="py-3 px-3">PERSONNE CONTACTÉE</th>
                   <th className="py-3 px-3">MAIL</th>
                   <th className="py-3 px-3">REPENSE</th>
                   <th className="py-3 px-3">REMARQUE</th>
@@ -1163,7 +1173,7 @@ export function ProspectsClient({
               <tbody className="divide-y divide-neutral-800/60 font-medium text-neutral-300">
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={13} className="py-12 text-center text-neutral-500 font-normal">
+                    <td colSpan={14} className="py-12 text-center text-neutral-500 font-normal">
                       Aucun prospect trouvé. Cliquez sur "Importer Excel" pour charger vos fichiers.
                     </td>
                   </tr>
@@ -1340,6 +1350,28 @@ export function ProspectsClient({
                             </select>
                           );
                         })()}
+                      </td>
+
+                      {/* 8a. PERSONNE CONTACTÉE (Édition directe en ligne) */}
+                      <td className="py-2 px-2">
+                        <input
+                          type="text"
+                          key={`${prospect.id}-${prospect.contactName || ""}`}
+                          defaultValue={prospect.contactName || ""}
+                          onBlur={(e) => {
+                            if (e.target.value !== (prospect.contactName || "")) {
+                              handleInlineFieldChange(prospect.id, "contactName", e.target.value);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              (e.target as HTMLInputElement).blur();
+                            }
+                          }}
+                          placeholder="Nom du contact..."
+                          className="w-32 h-7 px-2 text-[11px] bg-neutral-950/70 border border-transparent hover:border-neutral-700 focus:border-blue-500 focus:bg-neutral-900 rounded-lg text-neutral-200 placeholder:text-neutral-600 focus:outline-none font-sans truncate transition-colors"
+                          title="Modifier directement la personne contactée (Entrée pour valider)"
+                        />
                       </td>
 
                       {/* 8. MAIL */}
