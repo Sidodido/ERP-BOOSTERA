@@ -34,7 +34,11 @@ export default async function ClientDetailPage({ params }: PageProps) {
 
   return (
     <AppShell>
-      <ClientDetailView client={client} salesUsers={salesUsers} />
+      <ClientDetailView
+        client={client}
+        salesUsers={salesUsers}
+        currentUserRole={user.role}
+      />
     </AppShell>
   );
 }

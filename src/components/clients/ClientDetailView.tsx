@@ -51,6 +51,7 @@ import {
   updateClientMediaAction,
   updateClientAction,
   updateClientStatusAction,
+  deleteClientAction,
 } from "@/actions/clients";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -84,6 +85,8 @@ import {
   UploadCloud,
   Paperclip,
   Trash2,
+  AlertTriangle,
+  AlertCircle,
   Download,
   Printer,
   Building2,
@@ -99,6 +102,7 @@ import {
 interface Props {
   client: any;
   salesUsers?: { id: string; name: string; role?: string }[];
+  currentUserRole?: string;
 }
 
 const PROJECT_STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -224,13 +228,19 @@ export function parseCallPurpose(comment: string | null | undefined, fallbackRes
   };
 }
 
-export function ClientDetailView({ client, salesUsers = [] }: Props) {
+export function ClientDetailView({ client, salesUsers = [], currentUserRole }: Props) {
   const router = useRouter();
+  const isAdmin = currentUserRole === "ADMIN";
   const [clientData, setClientData] = useState(client);
   const [activeTab, setActiveTab] = useState<
     "history" | "projects" | "invoices" | "payments" | "documents" | "media"
   >("history");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Delete Client State (Admin uniquement)
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
+  const [deleteClientError, setDeleteClientError] = useState<string | null>(null);
 
   // Edit Client Modal State (Gérer les informations du client)
   const [openEditClientModal, setOpenEditClientModal] = useState(false);
@@ -398,6 +408,25 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
       alert(err?.message || "Erreur lors de la mise à jour des informations du client.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    setIsDeletingClient(true);
+    setDeleteClientError(null);
+    try {
+      const res = await deleteClientAction(clientData.id);
+      if (!res.success) {
+        setDeleteClientError(res.error || "Erreur lors de la suppression du client.");
+        setIsDeletingClient(false);
+        return;
+      }
+      setOpenDeleteModal(false);
+      router.push("/clients");
+      router.refresh();
+    } catch (err: any) {
+      setDeleteClientError(err?.message || "Erreur inattendue lors de la suppression.");
+      setIsDeletingClient(false);
     }
   };
 
@@ -987,6 +1016,18 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
           <ArrowLeft className="w-4 h-4" />
           <span>Retour à la liste des clients</span>
         </Link>
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setOpenDeleteModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/20 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+            title="Supprimer définitivement ce client (Admin)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Supprimer le client</span>
+          </button>
+        )}
       </div>
 
       {/* Main Header Card with Monthly Contract Focus */}
@@ -1029,6 +1070,18 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
               <Edit3 className="w-4 h-4" />
               <span>Gérer les informations</span>
             </button>
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setOpenDeleteModal(true)}
+                className="flex items-center gap-2 px-4 py-3 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/25 rounded-2xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                title="Supprimer définitivement ce client (Administrateur uniquement)"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Supprimer le client</span>
+              </button>
+            )}
 
             {/* Monthly Contract Pill */}
             <div className="flex items-center gap-3 px-4 py-3 bg-neutral-950/80 border border-neutral-800 rounded-2xl">
@@ -4389,6 +4442,75 @@ export function ClientDetailView({ client, salesUsers = [] }: Props) {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Confirmation de suppression du client (Admin uniquement) */}
+      <Modal
+        isOpen={openDeleteModal}
+        onClose={() => {
+          if (!isDeletingClient) {
+            setOpenDeleteModal(false);
+            setDeleteClientError(null);
+          }
+        }}
+        title="Supprimer définitivement le client"
+        maxWidth="md"
+      >
+        <div className="p-5 space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-semibold text-red-300">Action irréversible (Rôle Administrateur)</p>
+              <p className="text-neutral-300 leading-relaxed">
+                Êtes-vous sûr de vouloir supprimer définitivement le client{" "}
+                <strong className="text-white font-bold">{clientData.companyName}</strong>{" "}
+                {clientData.brandName ? `(${clientData.brandName})` : ""} ?
+              </p>
+              <p className="text-red-400/90 text-[11px] mt-1">
+                ⚠️ Cette opération supprimera définitivement le compte client, ainsi que tous ses projets, factures, paiements, appels et documents rattachés.
+              </p>
+            </div>
+          </div>
+
+          {deleteClientError && (
+            <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{deleteClientError}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDeletingClient}
+              onClick={() => {
+                setOpenDeleteModal(false);
+                setDeleteClientError(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              disabled={isDeletingClient}
+              onClick={handleDeleteClient}
+              className="bg-red-600 hover:bg-red-500 text-white font-bold gap-1.5 shadow-lg shadow-red-600/20 cursor-pointer"
+            >
+              {isDeletingClient ? (
+                <>
+                  <Clock className="w-4 h-4 animate-spin" />
+                  <span>Suppression en cours...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer définitivement</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

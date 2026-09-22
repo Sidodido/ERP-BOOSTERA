@@ -860,3 +860,48 @@ export async function createClientDocumentAction(data: {
   revalidatePath(`/clients/${data.clientId}`);
   return { success: true, document: doc };
 }
+
+export async function deleteClientAction(clientId: string) {
+  const user = await requireAuth();
+
+  if (user.role !== "ADMIN") {
+    return {
+      success: false,
+      error: "Accès refusé : Seul un administrateur peut supprimer un client.",
+    };
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    select: { id: true, companyName: true, brandName: true },
+  });
+
+  if (!client) {
+    return {
+      success: false,
+      error: "Client introuvable.",
+    };
+  }
+
+  await prisma.client.delete({
+    where: { id: clientId },
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "DELETE_CLIENT",
+    module: "CLIENTS",
+    entityId: clientId,
+    details: {
+      companyName: client.companyName,
+      brandName: client.brandName,
+    },
+  });
+
+  revalidatePath("/clients");
+  revalidatePath("/dashboard");
+  revalidatePath("/finance");
+  revalidatePath("/production");
+
+  return { success: true };
+}

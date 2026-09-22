@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { formatCurrency, toLocalDateString, formatDate } from "@/lib/utils";
-import { createClientAction } from "@/actions/clients";
+import { createClientAction, deleteClientAction } from "@/actions/clients";
 import {
   CustomOfferConfigurator,
   CustomOfferCalculationResult,
@@ -30,6 +30,8 @@ import {
   ArrowRight,
   X,
   AlertCircle,
+  AlertTriangle,
+  Trash2,
   Users,
   User,
 } from "lucide-react";
@@ -168,10 +170,15 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
     userRole === "SALES_REP" ||
     userRole === "COMMERCIAL" ||
     Boolean(userRole?.toLowerCase().includes("commercial"));
+  const isAdmin = userRole === "ADMIN";
 
   const [clients, setClients] = useState<ClientItem[]>(initialClients);
   const [selectedCommercialId, setSelectedCommercialId] = useState<string>("ALL");
   const [search, setSearch] = useState(initialSearch);
+
+  const [clientToDelete, setClientToDelete] = useState<ClientItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (initialSearch) {
@@ -475,6 +482,26 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!clientToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await deleteClientAction(clientToDelete.id);
+      if (!res.success) {
+        setDeleteError(res.error || "Erreur lors de la suppression du client.");
+        setIsDeleting(false);
+        return;
+      }
+      setClients((prev) => prev.filter((c) => c.id !== clientToDelete.id));
+      setClientToDelete(null);
+      setIsDeleting(false);
+    } catch (err: any) {
+      setDeleteError(err?.message || "Erreur inattendue lors de la suppression.");
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -733,13 +760,25 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
 
                     {!isCommercial && (
                       <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <Link
-                          href={`/clients/${client.id}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-blue-600 hover:text-white rounded-xl text-neutral-200 font-semibold text-xs transition-colors border border-neutral-700/60 shadow-xs whitespace-nowrap"
-                        >
-                          <span>Fiche 360°</span>
-                          <ArrowUpRight className="w-3.5 h-3.5" />
-                        </Link>
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <Link
+                            href={`/clients/${client.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-neutral-800 hover:bg-blue-600 hover:text-white rounded-xl text-neutral-200 font-semibold text-xs transition-colors border border-neutral-700/60 shadow-xs whitespace-nowrap"
+                          >
+                            <span>Fiche 360°</span>
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </Link>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setClientToDelete(client)}
+                              title="Supprimer définitivement ce client (Admin)"
+                              className="p-1.5 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all cursor-pointer shadow-xs"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -1487,6 +1526,75 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
           <div className="flex justify-end pt-2 border-t border-neutral-800">
             <Button variant="outline" onClick={() => setOffersCatalogOpen(false)}>
               Fermer la grille
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal: Confirmation de suppression du client (Admin uniquement) */}
+      <Modal
+        isOpen={Boolean(clientToDelete)}
+        onClose={() => {
+          if (!isDeleting) {
+            setClientToDelete(null);
+            setDeleteError(null);
+          }
+        }}
+        title="Supprimer définitivement le client"
+        maxWidth="md"
+      >
+        <div className="p-5 space-y-4">
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs">
+              <p className="font-semibold text-red-300">Action irréversible (Rôle Administrateur)</p>
+              <p className="text-neutral-300 leading-relaxed">
+                Êtes-vous certain de vouloir supprimer le client{" "}
+                <strong className="text-white font-bold">{clientToDelete?.companyName}</strong>{" "}
+                {clientToDelete?.brandName ? `(${clientToDelete.brandName})` : ""} ?
+              </p>
+              <p className="text-red-400/90 text-[11px] mt-1">
+                ⚠️ Cette opération supprimera définitivement le compte client, ainsi que tous ses projets, factures, paiements, appels et documents rattachés.
+              </p>
+            </div>
+          </div>
+
+          {deleteError && (
+            <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{deleteError}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isDeleting}
+              onClick={() => {
+                setClientToDelete(null);
+                setDeleteError(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-500 text-white font-bold gap-1.5 shadow-lg shadow-red-600/20 cursor-pointer"
+            >
+              {isDeleting ? (
+                <>
+                  <Clock className="w-4 h-4 animate-spin" />
+                  <span>Suppression en cours...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Supprimer définitivement</span>
+                </>
+              )}
             </Button>
           </div>
         </div>
