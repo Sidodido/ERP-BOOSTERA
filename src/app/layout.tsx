@@ -18,11 +18,22 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BOOSTERA — ERP & CRM SaaS Agence Digitale",
   description: "Plateforme unifiée ERP, CRM, Production, Finance & RH pour BOOSTERA",
-  icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+  applicationName: "BOOSTERA",
+  appleWebApp: {
+    capable: true,
+    title: "BOOSTERA",
+    statusBarStyle: "black-translucent",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
@@ -45,6 +56,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        <link rel="manifest" href="/manifest.json" />
         <script
           dangerouslySetInnerHTML={{
             __html: `

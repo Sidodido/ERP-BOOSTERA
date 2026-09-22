@@ -245,6 +245,9 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
         employeeId: emp.id,
         date: { gte: cycleStartDate, lt: endDate },
         status: "ABSENT",
+        NOT: {
+          notes: { contains: "Absence automatique" },
+        },
       },
       select: { date: true },
     });
