@@ -88,34 +88,34 @@ export function Breadcrumb() {
     >
       <Link
         href="/dashboard"
-        className="flex items-center gap-1 hover:text-neutral-200 transition-colors shrink-0"
+        className="breadcrumb-root-icon flex items-center gap-1 hover:text-white transition-colors shrink-0"
         title="Retour au Dashboard"
       >
-        <Home className="w-3.5 h-3.5 text-neutral-500" />
+        <Home className="w-3.5 h-3.5 text-neutral-400" />
       </Link>
 
-      <ChevronRight className="w-3 h-3 text-neutral-600 shrink-0" />
+      <ChevronRight className="breadcrumb-separator w-3 h-3 text-neutral-500 shrink-0" />
 
       {route.parent && (
         <>
           <Link
             href={route.parent.href}
-            className="hover:text-neutral-200 transition-colors truncate max-w-[120px]"
+            className="breadcrumb-link text-neutral-400 hover:text-white transition-colors truncate max-w-[120px]"
           >
             {route.parent.label}
           </Link>
-          <ChevronRight className="w-3 h-3 text-neutral-600 shrink-0" />
+          <ChevronRight className="breadcrumb-separator w-3 h-3 text-neutral-500 shrink-0" />
         </>
       )}
 
-      <span className="font-semibold text-neutral-200 truncate max-w-[160px]">
+      <span className="breadcrumb-current font-bold text-white truncate max-w-[170px]">
         {route.label}
       </span>
 
       {subLabel && (
         <>
-          <ChevronRight className="w-3 h-3 text-neutral-600 shrink-0" />
-          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium text-[11px] border border-blue-500/20 truncate max-w-[180px]">
+          <ChevronRight className="breadcrumb-separator w-3 h-3 text-neutral-500 shrink-0" />
+          <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-semibold text-[11px] border border-blue-500/30 truncate max-w-[180px]">
             {subLabel}
           </span>
         </>

@@ -650,3 +650,121 @@ html, body {
   touch-action: pan-x pan-y;
 }
 
+/* ========================================================
+   TOPBAR / HEADER PRO DARK HARMONY & CONTRAST LOCK
+   ======================================================== */
+header.app-top-header,
+.app-top-header {
+  background-color: rgba(10, 10, 14, 0.95) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f4f4f5 !important;
+}
+
+/* 1. Global Search Bar dans le Header */
+.app-top-header input,
+.app-top-header .global-search-input,
+[data-theme-mode="light"] .app-top-header input,
+html.light .app-top-header input {
+  background-color: rgba(24, 24, 27, 0.9) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4) !important;
+}
+
+.app-top-header input::placeholder,
+.app-top-header .global-search-input::placeholder,
+[data-theme-mode="light"] .app-top-header input::placeholder {
+  color: #a1a1aa !important;
+}
+
+.app-top-header input:focus,
+.app-top-header .global-search-input:focus,
+[data-theme-mode="light"] .app-top-header input:focus {
+  background-color: #18181b !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
+  color: #ffffff !important;
+}
+
+.app-top-header .search-shortcut-badge,
+[data-theme-mode="light"] .app-top-header .search-shortcut-badge {
+  background-color: rgba(39, 39, 42, 0.8) !important;
+  color: #a1a1aa !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 2. Breadcrumb dans le Header */
+.app-top-header .breadcrumb-root-icon,
+[data-theme-mode="light"] .app-top-header .breadcrumb-root-icon {
+  color: #a1a1aa !important;
+}
+.app-top-header .breadcrumb-separator,
+[data-theme-mode="light"] .app-top-header .breadcrumb-separator {
+  color: #52525b !important;
+}
+.app-top-header .breadcrumb-link,
+[data-theme-mode="light"] .app-top-header .breadcrumb-link {
+  color: #a1a1aa !important;
+}
+.app-top-header .breadcrumb-link:hover,
+[data-theme-mode="light"] .app-top-header .breadcrumb-link:hover {
+  color: #ffffff !important;
+}
+.app-top-header .breadcrumb-current,
+[data-theme-mode="light"] .app-top-header .breadcrumb-current {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* 3. Bloc de pointage (Attendance Pill) dans le Header */
+.app-top-header .attendance-header-container,
+[data-theme-mode="light"] .app-top-header .attendance-header-container,
+[data-theme-mode="light"] .app-top-header .bg-neutral-900 {
+  background-color: rgba(24, 24, 27, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #f4f4f5 !important;
+}
+
+.app-top-header .attendance-time-pill,
+[data-theme-mode="light"] .app-top-header .attendance-time-pill {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+.app-top-header .attendance-checkout-btn,
+[data-theme-mode="light"] .app-top-header .attendance-checkout-btn {
+  background-color: #ea580c !important;
+  color: #ffffff !important;
+}
+
+.app-top-header .attendance-checkout-btn:hover,
+[data-theme-mode="light"] .app-top-header .attendance-checkout-btn:hover {
+  background-color: #f97316 !important;
+}
+
+/* 4. Profil utilisateur & Icones dans le Header */
+.app-top-header .user-profile-name,
+[data-theme-mode="light"] .app-top-header .user-profile-name {
+  color: #f4f4f5 !important;
+  font-weight: 700 !important;
+}
+
+.app-top-header .user-profile-role,
+[data-theme-mode="light"] .app-top-header .user-profile-role {
+  color: #60a5fa !important;
+  font-weight: 600 !important;
+}
+
+.app-top-header .header-icon-btn,
+[data-theme-mode="light"] .app-top-header .header-icon-btn {
+  color: #d4d4d8 !important;
+}
+
+.app-top-header .header-icon-btn:hover,
+[data-theme-mode="light"] .app-top-header .header-icon-btn:hover {
+  color: #ffffff !important;
+  background-color: rgba(39, 39, 42, 0.7) !important;
+}
+

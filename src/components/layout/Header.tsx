@@ -164,13 +164,13 @@ export function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 sticky top-0 z-20 bg-neutral-950/85 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full select-none">
+    <header className="app-top-header h-16 sticky top-0 z-20 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full select-none">
       {/* Left side: Hamburger on mobile + Breadcrumb + GlobalSearch */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <button
           type="button"
           onClick={toggleMobile}
-          className="p-2 -ml-1 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-xl md:hidden transition-colors cursor-pointer shrink-0"
+          className="header-icon-btn p-2 -ml-1 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-xl md:hidden transition-colors cursor-pointer shrink-0"
           title="Menu de navigation"
         >
           <Menu className="w-5 h-5" />
@@ -197,7 +197,7 @@ export function Header({ userName, userRole }: HeaderProps) {
         <div className="relative" ref={notifRef}>
           <button
             onClick={handleToggleNotifications}
-            className="p-2 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-xl transition-colors relative cursor-pointer"
+            className="header-icon-btn p-2 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-xl transition-colors relative cursor-pointer"
             title="Notifications"
           >
             <Bell className="w-4 h-4" />
@@ -323,10 +323,10 @@ export function Header({ userName, userRole }: HeaderProps) {
               {userName ? userName.charAt(0).toUpperCase() : "A"}
             </div>
             <div className="hidden xl:flex flex-col text-left">
-              <span className="text-xs font-bold text-neutral-200 truncate max-w-[110px]">
+              <span className="user-profile-name text-xs font-bold text-neutral-100 truncate max-w-[130px]">
                 {userName || "Administrateur"}
               </span>
-              <span className="text-[10px] text-blue-400 font-medium">
+              <span className="user-profile-role text-[10px] text-blue-400 font-semibold">
                 {userRole || "Admin"}
               </span>
             </div>

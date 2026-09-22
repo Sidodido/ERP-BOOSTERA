@@ -125,7 +125,7 @@ export function HeaderAttendancePill() {
         type="button"
         onClick={handleClockIn}
         disabled={isPending}
-        className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/40 text-emerald-400 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
+        className="attendance-header-container hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/40 text-emerald-400 text-xs font-semibold transition cursor-pointer disabled:opacity-50 shadow-xs"
         title="Pointer mon arrivée maintenant"
       >
         <LogIn className="w-3.5 h-3.5" />
@@ -137,7 +137,7 @@ export function HeaderAttendancePill() {
   if (data.clockIn && !data.clockOut) {
     if (data.isOnBreak) {
       return (
-        <div className="hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-amber-800/60 text-xs shadow-xs">
+        <div className="attendance-header-container hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-amber-800/60 text-xs shadow-xs">
           <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-amber-950/70 text-amber-300 font-medium text-[11px] animate-pulse">
             <Coffee className="w-3 h-3 text-amber-400" />
             <span>Pause ({data.elapsedMinutes}m)</span>
@@ -157,8 +157,8 @@ export function HeaderAttendancePill() {
     }
 
     return (
-      <div className="hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-neutral-800 text-xs">
-        <span className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/60 text-emerald-400 font-mono font-semibold text-[11px]">
+      <div className="attendance-header-container hidden sm:inline-flex items-center gap-1.5 p-1 rounded-xl bg-neutral-900 border border-neutral-800 text-xs shadow-xs">
+        <span className="attendance-time-pill flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-950/60 text-emerald-400 font-mono font-semibold text-[11px] border border-emerald-500/20">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
           {formatTime(data.clockIn)}
         </span>
@@ -166,7 +166,7 @@ export function HeaderAttendancePill() {
           type="button"
           onClick={handleClockOut}
           disabled={isPending}
-          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-[11px] transition shadow-xs cursor-pointer disabled:opacity-50"
+          className="attendance-checkout-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] transition shadow-xs cursor-pointer disabled:opacity-50"
           title="Pointer ma sortie en fin de journée"
         >
           <LogOut className="w-3 h-3" />
@@ -177,7 +177,7 @@ export function HeaderAttendancePill() {
   }
 
   return (
-    <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 font-mono text-[11px]">
+    <div className="attendance-header-container hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 font-mono text-[11px] shadow-xs">
       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
       <span>
         {formatTime(data.clockIn)} - {formatTime(data.clockOut)}

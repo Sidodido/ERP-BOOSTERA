@@ -123,7 +123,7 @@ export function GlobalSearch() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={handleFocus}
           placeholder="Recherche globale... (Ctrl+K)"
-          className="w-full h-8.5 sm:h-9 pl-8 sm:pl-9 pr-14 text-xs bg-neutral-900/90 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all shadow-inner"
+          className="global-search-input w-full h-8.5 sm:h-9 pl-8 sm:pl-9 pr-14 text-xs bg-neutral-900/90 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-all shadow-inner"
         />
 
         <div className="absolute right-2 flex items-center gap-1">
@@ -138,7 +138,7 @@ export function GlobalSearch() {
               <X className="w-3 h-3" />
             </button>
           ) : (
-            <span className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-neutral-800 text-neutral-400 border border-neutral-700 pointer-events-none">
+            <span className="search-shortcut-badge hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-neutral-800 text-neutral-400 border border-neutral-700 pointer-events-none">
               <Command className="w-2.5 h-2.5" /> K
             </span>
           )}
