@@ -100,15 +100,15 @@ export function Breadcrumb() {
         <>
           <Link
             href={route.parent.href}
-            className="breadcrumb-link text-neutral-400 hover:text-white transition-colors truncate max-w-[120px]"
+            className="breadcrumb-link text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors truncate max-w-[120px]"
           >
             {route.parent.label}
           </Link>
-          <ChevronRight className="breadcrumb-separator w-3 h-3 text-neutral-500 shrink-0" />
+          <ChevronRight className="breadcrumb-separator w-3 h-3 text-neutral-400 dark:text-neutral-500 shrink-0" />
         </>
       )}
 
-      <span className="breadcrumb-current font-bold text-white truncate max-w-[170px]">
+      <span className="breadcrumb-current font-bold text-neutral-900 dark:text-white truncate max-w-[170px]">
         {route.label}
       </span>
 

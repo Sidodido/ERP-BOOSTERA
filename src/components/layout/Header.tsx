@@ -197,12 +197,12 @@ export function Header({ userName, userRole }: HeaderProps) {
         <div className="relative" ref={notifRef}>
           <button
             onClick={handleToggleNotifications}
-            className="header-icon-btn p-2 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900 rounded-xl transition-colors relative cursor-pointer"
+            className="header-icon-btn p-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-xl transition-colors relative cursor-pointer"
             title="Notifications"
           >
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && (
-              <span className="min-w-4 h-4 px-1 rounded-full bg-blue-500 text-[10px] font-bold text-white flex items-center justify-center absolute -top-0.5 -right-0.5 ring-2 ring-neutral-950 animate-pulse">
+              <span className="min-w-4 h-4 px-1 rounded-full bg-blue-600 dark:bg-blue-500 text-[10px] font-bold text-white flex items-center justify-center absolute -top-0.5 -right-0.5 ring-2 ring-white dark:ring-neutral-950 animate-pulse">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -323,15 +323,15 @@ export function Header({ userName, userRole }: HeaderProps) {
               {userName ? userName.charAt(0).toUpperCase() : "A"}
             </div>
             <div className="hidden xl:flex flex-col text-left">
-              <span className="user-profile-name text-xs font-bold text-neutral-100 truncate max-w-[130px]">
+              <span className="user-profile-name text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate max-w-[130px]">
                 {userName || "Administrateur"}
               </span>
-              <span className="user-profile-role text-[10px] text-blue-400 font-semibold">
+              <span className="user-profile-role text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
                 {userRole || "Admin"}
               </span>
             </div>
             <ChevronDown
-              className={`w-3.5 h-3.5 text-neutral-400 transition-transform duration-200 hidden sm:block ${
+              className={`w-3.5 h-3.5 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 hidden sm:block ${
                 showUserMenu ? "rotate-180" : ""
               }`}
             />

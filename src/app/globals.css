@@ -651,8 +651,10 @@ html, body {
 }
 
 /* ========================================================
-   TOPBAR / HEADER PRO DARK HARMONY & CONTRAST LOCK
+   TOPBAR / HEADER PRO DARK & LIGHT ADAPTIVE CONTRAST
    ======================================================== */
+
+/* --- DARK MODE (Défaut & Thèmes Sombres) --- */
 header.app-top-header,
 .app-top-header {
   background-color: rgba(10, 10, 14, 0.95) !important;
@@ -661,110 +663,202 @@ header.app-top-header,
   color: #f4f4f5 !important;
 }
 
-/* 1. Global Search Bar dans le Header */
 .app-top-header input,
-.app-top-header .global-search-input,
-[data-theme-mode="light"] .app-top-header input,
-html.light .app-top-header input {
-  background-color: rgba(24, 24, 27, 0.9) !important;
+.app-top-header .global-search-input {
+  background-color: rgba(24, 24, 27, 0.85) !important;
   color: #ffffff !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4) !important;
 }
 
 .app-top-header input::placeholder,
-.app-top-header .global-search-input::placeholder,
-[data-theme-mode="light"] .app-top-header input::placeholder {
+.app-top-header .global-search-input::placeholder {
   color: #a1a1aa !important;
 }
 
 .app-top-header input:focus,
-.app-top-header .global-search-input:focus,
-[data-theme-mode="light"] .app-top-header input:focus {
+.app-top-header .global-search-input:focus {
   background-color: #18181b !important;
   border-color: #3b82f6 !important;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3) !important;
   color: #ffffff !important;
 }
 
-.app-top-header .search-shortcut-badge,
-[data-theme-mode="light"] .app-top-header .search-shortcut-badge {
+.app-top-header .search-shortcut-badge {
   background-color: rgba(39, 39, 42, 0.8) !important;
   color: #a1a1aa !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-/* 2. Breadcrumb dans le Header */
-.app-top-header .breadcrumb-root-icon,
-[data-theme-mode="light"] .app-top-header .breadcrumb-root-icon {
+.app-top-header .breadcrumb-root-icon {
   color: #a1a1aa !important;
 }
-.app-top-header .breadcrumb-separator,
-[data-theme-mode="light"] .app-top-header .breadcrumb-separator {
+.app-top-header .breadcrumb-separator {
   color: #52525b !important;
 }
-.app-top-header .breadcrumb-link,
-[data-theme-mode="light"] .app-top-header .breadcrumb-link {
+.app-top-header .breadcrumb-link {
   color: #a1a1aa !important;
 }
-.app-top-header .breadcrumb-link:hover,
-[data-theme-mode="light"] .app-top-header .breadcrumb-link:hover {
+.app-top-header .breadcrumb-link:hover {
   color: #ffffff !important;
 }
-.app-top-header .breadcrumb-current,
-[data-theme-mode="light"] .app-top-header .breadcrumb-current {
+.app-top-header .breadcrumb-current {
   color: #ffffff !important;
   font-weight: 700 !important;
 }
 
-/* 3. Bloc de pointage (Attendance Pill) dans le Header */
-.app-top-header .attendance-header-container,
-[data-theme-mode="light"] .app-top-header .attendance-header-container,
-[data-theme-mode="light"] .app-top-header .bg-neutral-900 {
+.app-top-header .attendance-header-container {
   background-color: rgba(24, 24, 27, 0.9) !important;
   border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #f4f4f5 !important;
 }
-
-.app-top-header .attendance-time-pill,
-[data-theme-mode="light"] .app-top-header .attendance-time-pill {
+.app-top-header .attendance-time-pill {
   background-color: rgba(16, 185, 129, 0.18) !important;
   color: #34d399 !important;
   border: 1px solid rgba(16, 185, 129, 0.3) !important;
 }
-
-.app-top-header .attendance-checkout-btn,
-[data-theme-mode="light"] .app-top-header .attendance-checkout-btn {
+.app-top-header .attendance-checkout-btn {
   background-color: #ea580c !important;
   color: #ffffff !important;
 }
-
-.app-top-header .attendance-checkout-btn:hover,
-[data-theme-mode="light"] .app-top-header .attendance-checkout-btn:hover {
+.app-top-header .attendance-checkout-btn:hover {
   background-color: #f97316 !important;
 }
 
-/* 4. Profil utilisateur & Icones dans le Header */
-.app-top-header .user-profile-name,
-[data-theme-mode="light"] .app-top-header .user-profile-name {
+.app-top-header .user-profile-name {
   color: #f4f4f5 !important;
   font-weight: 700 !important;
 }
-
-.app-top-header .user-profile-role,
-[data-theme-mode="light"] .app-top-header .user-profile-role {
+.app-top-header .user-profile-role {
   color: #60a5fa !important;
   font-weight: 600 !important;
 }
-
-.app-top-header .header-icon-btn,
-[data-theme-mode="light"] .app-top-header .header-icon-btn {
+.app-top-header .header-icon-btn {
   color: #d4d4d8 !important;
 }
-
-.app-top-header .header-icon-btn:hover,
-[data-theme-mode="light"] .app-top-header .header-icon-btn:hover {
+.app-top-header .header-icon-btn:hover {
   color: #ffffff !important;
   background-color: rgba(39, 39, 42, 0.7) !important;
+}
+
+/* --- LIGHT MODE (Thèmes Clairs : Clean Snow, Pearl, Sage, Lavender) --- */
+[data-theme-mode="light"] header.app-top-header,
+[data-theme-mode="light"] .app-top-header,
+html.light header.app-top-header,
+html.light .app-top-header {
+  background-color: #ffffff !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+}
+
+/* Recherche en Mode Clair */
+[data-theme-mode="light"] .app-top-header input,
+[data-theme-mode="light"] .app-top-header .global-search-input,
+html.light .app-top-header input,
+html.light .app-top-header .global-search-input {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: inset 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-theme-mode="light"] .app-top-header input::placeholder,
+[data-theme-mode="light"] .app-top-header .global-search-input::placeholder,
+html.light .app-top-header input::placeholder {
+  color: #64748b !important;
+}
+
+[data-theme-mode="light"] .app-top-header input:focus,
+[data-theme-mode="light"] .app-top-header .global-search-input:focus,
+html.light .app-top-header input:focus {
+  background-color: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  color: #0f172a !important;
+}
+
+[data-theme-mode="light"] .app-top-header .search-shortcut-badge,
+html.light .app-top-header .search-shortcut-badge {
+  background-color: #e2e8f0 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme-mode="light"] .app-top-header svg.lucide-search,
+html.light .app-top-header svg.lucide-search {
+  color: #64748b !important;
+}
+
+/* Breadcrumb en Mode Clair : texte sombre net et 100% lisible */
+[data-theme-mode="light"] .app-top-header .breadcrumb-root-icon,
+html.light .app-top-header .breadcrumb-root-icon {
+  color: #64748b !important;
+}
+[data-theme-mode="light"] .app-top-header .breadcrumb-separator,
+html.light .app-top-header .breadcrumb-separator {
+  color: #94a3b8 !important;
+}
+[data-theme-mode="light"] .app-top-header .breadcrumb-link,
+html.light .app-top-header .breadcrumb-link {
+  color: #64748b !important;
+}
+[data-theme-mode="light"] .app-top-header .breadcrumb-link:hover,
+html.light .app-top-header .breadcrumb-link:hover {
+  color: #0f172a !important;
+}
+[data-theme-mode="light"] .app-top-header .breadcrumb-current,
+html.light .app-top-header .breadcrumb-current {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
+/* Bloc Pointage en Mode Clair */
+[data-theme-mode="light"] .app-top-header .attendance-header-container,
+html.light .app-top-header .attendance-header-container {
+  background-color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
+}
+[data-theme-mode="light"] .app-top-header .attendance-time-pill,
+html.light .app-top-header .attendance-time-pill {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border: 1px solid #a7f3d0 !important;
+}
+[data-theme-mode="light"] .app-top-header .attendance-checkout-btn,
+html.light .app-top-header .attendance-checkout-btn {
+  background-color: #ea580c !important;
+  color: #ffffff !important;
+}
+[data-theme-mode="light"] .app-top-header .attendance-checkout-btn:hover,
+html.light .app-top-header .attendance-checkout-btn:hover {
+  background-color: #c2410c !important;
+}
+
+/* Profil Utilisateur & Icônes en Mode Clair */
+[data-theme-mode="light"] .app-top-header .user-profile-name,
+html.light .app-top-header .user-profile-name {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+[data-theme-mode="light"] .app-top-header .user-profile-role,
+html.light .app-top-header .user-profile-role {
+  color: #2563eb !important;
+  font-weight: 600 !important;
+}
+[data-theme-mode="light"] .app-top-header .header-icon-btn,
+html.light .app-top-header .header-icon-btn {
+  color: #475569 !important;
+}
+[data-theme-mode="light"] .app-top-header .header-icon-btn:hover,
+html.light .app-top-header .header-icon-btn:hover {
+  color: #0f172a !important;
+  background-color: #f1f5f9 !important;
+}
+[data-theme-mode="light"] .app-top-header svg.lucide-chevron-down,
+html.light .app-top-header svg.lucide-chevron-down {
+  color: #64748b !important;
 }
 
