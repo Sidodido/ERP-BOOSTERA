@@ -103,6 +103,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
   // Filtres avancés supplémentaires
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [filterCommercial, setFilterCommercial] = useState<string>("ALL");
+  const [filterType, setFilterType] = useState<string>("ALL");
   const [filterCallStatus, setFilterCallStatus] = useState<string>("ALL");
   const [filterRawState, setFilterRawState] = useState<string>("ALL");
   const [filterStep, setFilterStep] = useState<string>("ALL");
@@ -129,6 +130,16 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [followUps]);
 
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>();
+    followUps.forEach((f) => {
+      if (f.prospect.sector && f.prospect.sector.trim()) {
+        set.add(f.prospect.sector.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }));
+  }, [followUps]);
+
   const availableWilayas = useMemo(() => {
     const set = new Set<string>();
     followUps.forEach((f) => {
@@ -142,18 +153,20 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
   const activeExtraFiltersCount = useMemo(() => {
     let count = 0;
     if (filterCommercial !== "ALL") count++;
+    if (filterType !== "ALL") count++;
     if (filterCallStatus !== "ALL") count++;
     if (filterRawState !== "ALL") count++;
     if (filterStep !== "ALL") count++;
     if (filterWilaya !== "ALL") count++;
     if (filterHasRemarks !== "ALL") count++;
     return count;
-  }, [filterCommercial, filterCallStatus, filterRawState, filterStep, filterWilaya, filterHasRemarks]);
+  }, [filterCommercial, filterType, filterCallStatus, filterRawState, filterStep, filterWilaya, filterHasRemarks]);
 
   const resetAllFilters = () => {
     setSelectedFilter("ALL");
     setSearch("");
     setFilterCommercial("ALL");
+    setFilterType("ALL");
     setFilterCallStatus("ALL");
     setFilterRawState("ALL");
     setFilterStep("ALL");
@@ -274,6 +287,15 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
       return false;
     }
 
+    // 2b. Type (Secteur d'activité) Filter
+    if (filterType !== "ALL") {
+      if (filterType === "VIDE") {
+        if (f.prospect.sector && f.prospect.sector.trim()) return false;
+      } else if (f.prospect.sector !== filterType) {
+        return false;
+      }
+    }
+
     // 3. Statut d'appel (APPEL)
     if (filterCallStatus !== "ALL") {
       if (filterCallStatus === "VIDE") {
@@ -350,6 +372,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
     search,
     selectedFilter,
     filterCommercial,
+    filterType,
     filterCallStatus,
     filterRawState,
     filterStep,
@@ -821,7 +844,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
 
         {/* Panneau de filtres avancés (Déroulable) */}
         {showAdvancedFilters && (
-          <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+          <div className="pt-3 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5 text-xs">
             {/* 1. Commercial */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
@@ -843,7 +866,28 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </select>
             </div>
 
-            {/* 2. Statut d'appel */}
+            {/* 2. Type (Secteur d'activité) */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+                Type :
+              </label>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className={`w-full h-8 px-2 bg-neutral-950 border rounded-lg text-xs focus:outline-none focus:border-blue-500 cursor-pointer ${
+                  filterType !== "ALL" ? "border-blue-500/60 text-blue-300 font-semibold" : "border-neutral-800 text-neutral-200"
+                }`}
+              >
+                <option value="ALL">Tous les types ({availableTypes.length})</option>
+                {availableTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Statut d'appel */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
                 Statut Appel :
@@ -866,7 +910,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </select>
             </div>
 
-            {/* 3. Résultat d'appel */}
+            {/* 4. Résultat d'appel */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
                 Résultat d'appel :
@@ -890,7 +934,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </select>
             </div>
 
-            {/* 4. Étape de relance */}
+            {/* 5. Étape de relance */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
                 Étape :
@@ -910,7 +954,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </select>
             </div>
 
-            {/* 5. Wilaya */}
+            {/* 6. Wilaya */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
                 Wilaya :
@@ -931,7 +975,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
               </select>
             </div>
 
-            {/* 6. Remarques & Réponses */}
+            {/* 7. Remarques & Réponses */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
                 Remarques & Réponses :
