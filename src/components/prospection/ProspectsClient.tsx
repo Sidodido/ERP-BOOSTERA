@@ -525,8 +525,6 @@ export function ProspectsClient({
         ? CallResult.NOT_INTERESTED
         : prospect.rawState === "A RAPPELER" || prospect.callStatus === "A RAPPELER"
         ? CallResult.CALLBACK_REQUESTED
-        : prospect.callStatus === "PAS DE REPONSE" || prospect.rawState === "PAS DE CONTACT"
-        ? CallResult.NO_ANSWER
         : prospect.callStatus === "INJOIGNABLE" || prospect.callStatus === "OCCUPE"
         ? CallResult.UNREACHABLE
         : "");
@@ -1313,8 +1311,6 @@ export function ProspectsClient({
                               ? CallResult.NOT_INTERESTED
                               : prospect.rawState === "A RAPPELER" || prospect.callStatus === "A RAPPELER"
                               ? CallResult.CALLBACK_REQUESTED
-                              : prospect.callStatus === "PAS DE REPONSE" || prospect.rawState === "PAS DE CONTACT"
-                              ? CallResult.NO_ANSWER
                               : prospect.callStatus === "INJOIGNABLE" || prospect.callStatus === "OCCUPE"
                               ? CallResult.UNREACHABLE
                               : "");
@@ -1332,8 +1328,6 @@ export function ProspectsClient({
                                   ? "bg-blue-500/20 text-blue-400 border-blue-500/40"
                                   : latestResult === CallResult.NOT_INTERESTED
                                   ? "bg-rose-500/20 text-rose-400 border-rose-500/40"
-                                  : latestResult === CallResult.NO_ANSWER
-                                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
                                   : latestResult === CallResult.UNREACHABLE
                                   ? "bg-red-500/20 text-red-400 border-red-500/40"
                                   : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-700"
@@ -1345,7 +1339,6 @@ export function ProspectsClient({
                               <option value="APPOINTMENT_BOOKED" className="bg-neutral-950 text-purple-400 font-bold">RDV fixé</option>
                               <option value="CALLBACK_REQUESTED" className="bg-neutral-950 text-blue-400">Rappel demandé</option>
                               <option value="NOT_INTERESTED" className="bg-neutral-950 text-rose-400">Pas intéressé</option>
-                              <option value="NO_ANSWER" className="bg-neutral-950 text-amber-400">Ne répond pas</option>
                               <option value="UNREACHABLE" className="bg-neutral-950 text-red-400">Injoignable</option>
                             </select>
                           );
@@ -2407,7 +2400,6 @@ export function ProspectsClient({
                 <option value="APPOINTMENT_BOOKED">RDV fixé</option>
                 <option value="CALLBACK_REQUESTED">Rappel demandé</option>
                 <option value="NOT_INTERESTED">Pas intéressé</option>
-                <option value="NO_ANSWER">Ne répond pas</option>
                 <option value="UNREACHABLE">Injoignable</option>
               </select>
             </div>

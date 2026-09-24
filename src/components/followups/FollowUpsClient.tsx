@@ -1457,7 +1457,6 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                           <option value="RDV PRIS" className="bg-neutral-950 text-purple-400 font-bold">RDV PRIS</option>
                           <option value="A RAPPELER" className="bg-neutral-950 text-blue-400">A RAPPELER</option>
                           <option value="PAS INTERESSE" className="bg-neutral-950 text-rose-400">PAS INTERESSE</option>
-                          <option value="PAS DE REPONSE" className="bg-neutral-950 text-amber-400">PAS DE REPONSE</option>
                           <option value="OCCUPE" className="bg-neutral-950 text-amber-400">OCCUPE</option>
                           <option value="INJOIGNABLE" className="bg-neutral-950 text-red-400">INJOIGNABLE</option>
                           <option value="PAS DE CONTACT" className="bg-neutral-950 text-neutral-400">PAS DE CONTACT</option>
