@@ -14,6 +14,7 @@ export interface LoginResult {
 export async function loginAction(formData: FormData): Promise<LoginResult | void> {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
+  const rememberMe = formData.get("rememberMe") === "true" || formData.get("rememberMe") === "on" || formData.get("rememberMe") === "1";
 
   if (!email || !password) {
     return { error: "Veuillez renseigner votre email et mot de passe." };
@@ -102,14 +103,17 @@ export async function loginAction(formData: FormData): Promise<LoginResult | voi
     },
   });
 
-  const token = await signToken({
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-  });
+  const token = await signToken(
+    {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+    rememberMe
+  );
 
-  await setSessionCookie(token);
+  await setSessionCookie(token, rememberMe);
 
   await createAuditLog({
     userId: user.id,

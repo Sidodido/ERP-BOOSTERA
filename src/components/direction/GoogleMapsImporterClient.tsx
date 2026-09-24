@@ -35,6 +35,7 @@ import {
   Upload,
   Key,
   Copy,
+  AlertTriangle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -42,6 +43,7 @@ import {
   parseGoogleMapsTextAction,
   importGoogleMapsProspectsAction,
   checkProspectsDuplicatesAction,
+  testGoogleMapsApiKeyAction,
   type GoogleMapsProspectItem,
 } from "@/actions/googleMapsProspects";
 import { cleanDzPhone, formatDzPhoneDisplay } from "@/lib/phoneUtils";
@@ -85,7 +87,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
   // Advanced Search Filters State
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showRefineKeyword, setShowRefineKeyword] = useState(false);
-  const [onlyWithPhone, setOnlyWithPhone] = useState(false);
+  const [onlyWithPhone, setOnlyWithPhone] = useState(true);
   const [onlyWithoutWebsite, setOnlyWithoutWebsite] = useState(false);
   const [onlyWithWebsite, setOnlyWithWebsite] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
@@ -94,6 +96,14 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
   // Google Places API Key (optional)
   const [showApiKeySettings, setShowApiKeySettings] = useState(false);
   const [googleApiKey, setGoogleApiKey] = useState("");
+  const [isTestingApiKey, setIsTestingApiKey] = useState(false);
+  const [apiKeyTestResult, setApiKeyTestResult] = useState<{
+    success: boolean;
+    message: string;
+    apiType?: "NEW" | "LEGACY";
+    errorDetails?: string;
+  } | null>(null);
+  const [googleApiWarning, setGoogleApiWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -104,12 +114,38 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
 
   const handleSaveApiKey = (key: string) => {
     setGoogleApiKey(key);
+    setApiKeyTestResult(null);
+    setGoogleApiWarning(null);
     if (typeof window !== "undefined") {
       if (key.trim()) {
         localStorage.setItem("crm_gplaces_api_key", key.trim());
       } else {
         localStorage.removeItem("crm_gplaces_api_key");
       }
+    }
+  };
+
+  const handleTestApiKey = async () => {
+    if (!googleApiKey.trim()) {
+      setApiKeyTestResult({
+        success: false,
+        message: "Veuillez d'abord saisir une clé API.",
+      });
+      return;
+    }
+    setIsTestingApiKey(true);
+    setApiKeyTestResult(null);
+    try {
+      const res = await testGoogleMapsApiKeyAction(googleApiKey.trim());
+      setApiKeyTestResult(res);
+    } catch (err: any) {
+      setApiKeyTestResult({
+        success: false,
+        message: "Erreur de communication",
+        errorDetails: err?.message || "Impossible de joindre le serveur.",
+      });
+    } finally {
+      setIsTestingApiKey(false);
     }
   };
 
@@ -195,6 +231,12 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
           googleApiKey: googleApiKey.trim() || undefined,
         });
 
+        if (res.googleApiStatus?.error) {
+          setGoogleApiWarning(res.googleApiStatus.error);
+        } else {
+          setGoogleApiWarning(null);
+        }
+
         if (res.success && res.prospects) {
           setProspects(res.prospects);
           // Select only non-duplicates by default
@@ -213,13 +255,16 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                 selectedSubCategory ? ` (${selectedSubCategory})` : ""
               } à ${selectedWilaya}${
                 selectedCommune !== "Toutes les communes" ? ` (${selectedCommune})` : ""
-              }. Essayez d'élargir la commune ou d'utiliser le bouton "Ouvrir sur Google Maps".`,
+              }. Vous pouvez élargir les critères ou cliquer sur "Ouvrir sur Maps" puis utiliser le "📋 Coller 1-Clic".`,
             });
           } else {
             const newCount = res.prospects.filter((p) => !p.isDuplicate).length;
+            const apiNotice = res.googleApiStatus?.success
+              ? " (via Google Places API Officiel ✨)"
+              : "";
             setFeedback({
               type: "success",
-              message: `${res.prospects.length} établissements trouvés dans le secteur "${selectedSector}" (${newCount} nouveaux prospects qualifiés prêts à importer).`,
+              message: `${res.prospects.length} établissements trouvés${apiNotice} dans le secteur "${selectedSector}" (${newCount} nouveaux prospects qualifiés prêts à importer).`,
             });
           }
         }
@@ -463,15 +508,23 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
     reader.readAsBinaryString(file);
   };
 
+  // Phone counters & filter state
+  const [filterWithPhoneOnly, setFilterWithPhoneOnly] = useState(false);
+  const withPhoneCount = prospects.filter((p) => Boolean(p.phone)).length;
+  const withoutPhoneCount = prospects.length - withPhoneCount;
+
+  const displayedProspects = useMemo(() => {
+    if (!filterWithPhoneOnly) return prospects;
+    return prospects.filter((p) => Boolean(p.phone));
+  }, [prospects, filterWithPhoneOnly]);
+
   // Selection helpers
-  const toggleSelectAll = (onlyNew: boolean = false) => {
+  const toggleSelectAll = (onlyNew: boolean = false, onlyWithPhoneFlag: boolean = false) => {
     const next: Record<string, boolean> = {};
-    prospects.forEach((p) => {
-      if (onlyNew) {
-        if (!p.isDuplicate) next[p.id] = true;
-      } else {
-        next[p.id] = true;
-      }
+    displayedProspects.forEach((p) => {
+      if (onlyNew && p.isDuplicate) return;
+      if (onlyWithPhoneFlag && !p.phone) return;
+      next[p.id] = true;
     });
     setSelectedIds(next);
   };
@@ -704,36 +757,127 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
 
       {/* Google Places API Key Settings Panel */}
       {showApiKeySettings && (
-        <div className="p-4 rounded-2xl bg-neutral-950 border border-amber-500/30 space-y-2.5 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-neutral-950 border border-amber-500/30 space-y-3.5 animate-in fade-in slide-in-from-top-2 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-850 pb-2.5">
             <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
               <Key className="w-4 h-4" />
-              Clé API Google Places Officielle (Optionnel)
+              Configuration Clé API Google Places
             </span>
             <span className="text-[11px] text-neutral-400">
               Offre Google Cloud : 200$/mois offerts (~40 000 requêtes gratuites)
             </span>
           </div>
-          <p className="text-xs text-neutral-400">
-            En renseignant votre clé API Google Places, le CRM extrait directement les données officielles de Google Maps avec 100% des numéros de téléphone vérifiés, avis récents et coordonnées exactes.
+
+          <p className="text-xs text-neutral-300 leading-relaxed">
+            La clé API Google Places permet au CRM d&apos;interroger directement les serveurs officiels de Google Maps pour récupérer 100% des coordonnées (téléphones fixes/mobiles vérifiés, adresses exactes, notes et sites web).
           </p>
-          <div className="flex items-center gap-2">
-            <input
-              type="password"
-              value={googleApiKey}
-              onChange={(e) => handleSaveApiKey(e.target.value)}
-              placeholder="Collez votre clé API Google Maps (ex: AIzaSy...)"
-              className="flex-1 px-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 font-mono focus:outline-none focus:border-amber-500"
-            />
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={googleApiKey}
+                onChange={(e) => handleSaveApiKey(e.target.value)}
+                placeholder="Collez votre clé Google Cloud (ex: AIzaSy...)"
+                className="w-full px-3 py-2 text-xs bg-neutral-900 border border-neutral-750 rounded-xl text-neutral-200 font-mono focus:outline-none focus:border-amber-500 transition"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleTestApiKey}
+              disabled={isTestingApiKey || !googleApiKey.trim()}
+              className="px-4 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              {isTestingApiKey ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Test en cours...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Tester la clé</span>
+                </>
+              )}
+            </button>
+
             {googleApiKey && (
               <button
                 type="button"
                 onClick={() => handleSaveApiKey("")}
-                className="px-3 py-2 text-xs text-rose-400 hover:text-rose-300 transition cursor-pointer"
+                className="px-3 py-2 text-xs text-rose-400 hover:text-rose-300 border border-neutral-800 rounded-xl transition cursor-pointer"
               >
                 Supprimer
               </button>
             )}
+          </div>
+
+          {/* Test Diagnostic Result */}
+          {apiKeyTestResult && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs space-y-1.5 animate-in fade-in ${
+                apiKeyTestResult.success
+                  ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
+                  : "bg-rose-950/40 border-rose-500/40 text-rose-200"
+              }`}
+            >
+              <div className="flex items-center gap-2 font-bold text-xs">
+                {apiKeyTestResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-400" />
+                )}
+                <span>{apiKeyTestResult.message}</span>
+              </div>
+              {apiKeyTestResult.errorDetails && (
+                <p className="text-[11px] leading-relaxed opacity-90 pl-6">
+                  {apiKeyTestResult.errorDetails}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Educational Diagnostic Guide */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-neutral-850 text-xs">
+            <div className="p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-1.5">
+              <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                Pourquoi Google Cloud peut refuser la clé ?
+              </div>
+              <ul className="list-disc list-inside text-[11px] text-neutral-400 space-y-1">
+                <li>
+                  <strong className="text-neutral-300">Places API désactivée :</strong> Activez &quot;Places API&quot; et &quot;Places API (New)&quot; dans votre console Google Cloud.
+                </li>
+                <li>
+                  <strong className="text-neutral-300">Facturation obligatoire :</strong> Google exige d&apos;activer la facturation (carte bancaire), même si vous avez 200$/mois offerts.
+                </li>
+                <li>
+                  <strong className="text-neutral-300">Restriction de clé HTTP :</strong> Ne restreignez pas la clé par domaine web (le CRM l&apos;appelle depuis le serveur). Réglez sur &quot;Aucune&quot; ou &quot;Adresses IP&quot;.
+                </li>
+                <li>
+                  <strong className="text-neutral-300">Clé Gemini non compatible :</strong> Une clé commençant par <code className="text-amber-400">AQ.</code> est pour l&apos;IA Gemini, pas pour Google Maps.
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 space-y-1.5">
+              <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                <ClipboardPaste className="w-3.5 h-3.5 text-emerald-400" />
+                Alternative 100% Gratuite (Sans carte bancaire) :
+              </div>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Vous n&apos;avez pas de compte Google Cloud ? Utilisez la méthode la plus populaire :
+              </p>
+              <ol className="list-decimal list-inside text-[11px] text-neutral-400 space-y-1">
+                <li>Cliquez sur le bouton bleu <strong className="text-blue-300">&quot;Ouvrir sur Maps&quot;</strong>.</li>
+                <li>Sur Google Maps, faites <strong className="text-neutral-200">Ctrl+A</strong> puis <strong className="text-neutral-200">Ctrl+C</strong> pour tout copier.</li>
+                <li>Revenez ici et cliquez sur <strong className="text-emerald-300">&quot;📋 Coller 1-Clic&quot;</strong>.</li>
+              </ol>
+              <div className="text-[10px] text-emerald-400/80 font-medium">
+                👉 Vous obtenez instantanément tous les prospects avec leurs numéros réels sans payer aucun frais API !
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -875,7 +1019,133 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
             )}
           </div>
 
-          {/* Section 3: Action Buttons Bar */}
+          {/* Section 3: Méthode 1-Clic Express (Sans Clé API - 100% Gratuite) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-neutral-950 to-teal-950/30 border border-emerald-500/30 shadow-lg space-y-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  Méthode 100% Gratuite & Recommandée
+                </span>
+                <span className="text-xs font-bold text-neutral-100">
+                  Extraction Express Google Maps (Sans Clé API)
+                </span>
+              </div>
+              <span className="text-[11px] text-emerald-400/90 font-medium">
+                Aucun compte Google Cloud requis • Données 100% réelles
+              </span>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Pour importer instantanément tous les établissements du secteur <strong className="text-emerald-400">&quot;{selectedSector}&quot;</strong> à <strong className="text-emerald-400">{selectedWilaya}</strong> avec leurs vrais téléphones :
+            </p>
+
+            {/* 3 Step Visual Flow */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+              <div className="p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-400 font-black text-xs flex items-center justify-center shrink-0 border border-blue-500/30">
+                  1
+                </span>
+                <div className="leading-tight">
+                  <div className="font-bold text-neutral-200">Ouvrez Google Maps</div>
+                  <div className="text-[11px] text-neutral-400">Cliquez sur &quot;Ouvrir sur Maps&quot;</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 font-black text-xs flex items-center justify-center shrink-0 border border-amber-500/30">
+                  2
+                </span>
+                <div className="leading-tight">
+                  <div className="font-bold text-neutral-200">Faites Ctrl+A puis Ctrl+C</div>
+                  <div className="text-[11px] text-neutral-400">Tout copier sur la page Maps</div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-center gap-2.5">
+                <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center shrink-0 border border-emerald-500/40">
+                  3
+                </span>
+                <div className="leading-tight">
+                  <div className="font-bold text-emerald-300">Cliquez sur &quot;Coller 1-Clic&quot;</div>
+                  <div className="text-[11px] text-emerald-400/80">Extraction automatique instantanée</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Action Buttons for the 1-Click Method */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              {/* Recommended: Google Local Search with DIRECTLY VISIBLE phone numbers */}
+              <a
+                href={`https://www.google.com/search?tbm=lcl&q=${encodeURIComponent(
+                  [
+                    selectedSubCategory || selectedSector,
+                    selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                    selectedWilaya,
+                    "Algérie",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                )}&hl=fr`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-4 rounded-xl border border-blue-500/40 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm"
+                title="Ouvre Google Local où TOUS les numéros de téléphone sont affichés en clair sur chaque fiche !"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>1. Ouvrir Google Local (Numéros Visibles) ↗</span>
+              </a>
+
+              {/* Classic Maps Link */}
+              <a
+                href={`https://www.google.com/maps/search/${encodeURIComponent(
+                  [
+                    selectedSubCategory || selectedSector,
+                    selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                    selectedWilaya,
+                    "Algérie",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="py-2.5 px-3 rounded-xl border border-neutral-750 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 text-xs transition flex items-center gap-1.5 cursor-pointer"
+                title="Ouvrir sur l'application Google Maps standard"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Maps classique ↗</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={handleClipboardImport}
+                disabled={isSearching}
+                className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-600/30 cursor-pointer"
+              >
+                {isSearching ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>Extraction en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <ClipboardPaste className="w-4 h-4 text-white" />
+                    <span>2. 📋 Coller 1-Clic & Extraire les Prospects</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-blue-950/20 border border-blue-500/20 text-[11px] text-blue-300/90 flex items-center gap-2">
+              <span className="font-bold text-blue-400">💡 Astuce Numéros :</span>
+              <span>
+                Sur <strong>Google Local</strong>, tous les numéros de téléphone sont affichés directement sur chaque fiche (ex: <em>023 37 80 00</em>). En faisant <strong>Ctrl+A puis Ctrl+C</strong> sur cette page, vous copiez 100% des téléphones sans rien manquer !
+              </span>
+            </div>
+          </div>
+
+          {/* Section 4: Secondary Direct Search & Filters */}
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <div className="flex items-center gap-2">
               {/* Toggle advanced qualification filters */}
@@ -916,33 +1186,13 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
             </div>
 
             <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
-              {/* Direct Link to Google Maps */}
-              <a
-                href={`https://www.google.com/maps/search/${encodeURIComponent(
-                  [
-                    selectedSubCategory || selectedSector,
-                    selectedCommune !== "Toutes les communes" ? selectedCommune : "",
-                    selectedWilaya,
-                    "Algérie",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="py-2 px-3.5 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer h-[38px]"
-                title="Ouvrir directement cette recherche sectorielle sur Google Maps"
-              >
-                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-                <span>Ouvrir sur Maps</span>
-              </a>
-
-              {/* Main Search Button: 100% Direct by Sector */}
+              {/* Direct API Search Button */}
               <button
                 type="button"
                 onClick={handleSearch}
                 disabled={isSearching || !selectedSector}
-                className="py-2 px-5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer h-[38px] min-w-[170px]"
+                className="py-2 px-5 rounded-xl bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 disabled:opacity-50 text-neutral-200 font-semibold text-xs transition flex items-center justify-center gap-2 cursor-pointer h-[38px]"
+                title="Recherche directe automatisée via l'annuaire et Places API"
               >
                 {isSearching ? (
                   <>
@@ -951,8 +1201,8 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Rechercher "{selectedSector}"</span>
+                    <Search className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Recherche Automatisée</span>
                   </>
                 )}
               </button>
@@ -1073,22 +1323,36 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
 
       {/* Mode 2: Paste Form */}
       {activeTab === "PASTE" && (
-        <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 space-y-4 shadow-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-neutral-400">
-            <span className="flex items-center gap-1.5">
-              <ClipboardPaste className="w-4 h-4 text-emerald-400" />
-              Copiez-collez les résultats de recherche Google Maps ou des listes d'entreprises :
+        <div className="p-6 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-4 shadow-sm">
+          {/* Top 1-Click Clipboard Action */}
+          <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/60 to-neutral-950 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+            <div>
+              <div className="text-xs font-black text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <ClipboardPaste className="w-4 h-4 text-emerald-400" />
+                Extraction 1-Clic depuis votre Presse-Papier
+              </div>
+              <p className="text-xs text-neutral-300 mt-0.5">
+                Copiez n&apos;importe quelle page ou fiche Google Maps (Ctrl+A puis Ctrl+C), puis cliquez ci-contre :
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleClipboardImport}
+              disabled={isSearching}
+              className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-600/30 cursor-pointer shrink-0"
+            >
+              <ClipboardPaste className="w-4 h-4" />
+              <span>📋 Coller & Extraire en 1 Clic</span>
+            </button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs text-neutral-400 pt-1">
+            <span className="flex items-center gap-1.5 text-neutral-300 font-semibold">
+              Ou collez manuellement votre texte ci-dessous (Ctrl+V) :
             </span>
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleClipboardImport}
-                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer flex items-center gap-1"
-              >
-                <Copy className="w-3 h-3" />
-                <span>Coller depuis le presse-papier</span>
-              </button>
-              <button
                 onClick={() =>
                   setPastedText(`Clinique Médico Chirurgicale El Azhar
 4,3 (682) · Clinique privée
@@ -1113,11 +1377,11 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
           </div>
 
           <textarea
-            rows={6}
+            rows={7}
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
-            placeholder="Collez ici le texte copié depuis Google Maps..."
-            className="w-full p-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 font-mono transition"
+            placeholder="Collez ici le texte copié depuis Google Maps (ou faites Ctrl+V)..."
+            className="w-full p-3.5 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-emerald-500 font-mono transition"
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1225,6 +1489,38 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
         </div>
       )}
 
+      {/* Google API Diagnostic Warning Banner */}
+      {googleApiWarning && (
+        <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200 flex items-start gap-3 shadow-md animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1.5 flex-1">
+            <div className="font-bold text-amber-300 flex items-center justify-between">
+              <span>Diagnostic Clé Google Places API</span>
+              <button
+                type="button"
+                onClick={() => setGoogleApiWarning(null)}
+                className="text-[11px] text-amber-400/70 hover:text-amber-200 cursor-pointer"
+              >
+                Ignorer
+              </button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-amber-200/90">{googleApiWarning}</p>
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px]">
+              <button
+                type="button"
+                onClick={() => setShowApiKeySettings(true)}
+                className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold border border-amber-500/30 cursor-pointer"
+              >
+                ⚙️ Vérifier / Corriger la clé
+              </button>
+              <span className="text-neutral-400">
+                💡 Les résultats ci-dessous ont été complétés via l&apos;annuaire de secours.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Feedback Alert */}
       {feedback && (
         <div
@@ -1250,13 +1546,61 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
       {/* Results Section */}
       {prospects.length > 0 && (
         <div className="space-y-4">
+          {/* Missing Phone Alert (Occurs when user copies from standard Google Maps overview which hides phone numbers) */}
+          {withoutPhoneCount > 0 && withPhoneCount === 0 && (
+            <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs space-y-2.5 animate-in fade-in">
+              <div className="font-bold flex items-center gap-2 text-amber-300 text-sm">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Pourquoi tous les numéros indiquent &quot;Non renseigné&quot; ?</span>
+              </div>
+              <p className="text-neutral-300 leading-relaxed">
+                Sur le site <strong>Google Maps classique (maps.google.com)</strong>, Google <u>masque volontairement</u> les numéros de téléphone dans la liste des résultats. En sélectionnant tout avec <em>Ctrl+A</em> sur cette page, aucun numéro n&apos;est copié.
+              </p>
+              <div className="p-3 rounded-xl bg-neutral-900/90 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="text-[11px] text-neutral-300">
+                  <span className="font-bold text-emerald-400">💡 Solution 100% Efficace : </span>
+                  Ouvrez <strong>Google Local</strong> où <u>chaque carte affiche son numéro de téléphone en clair</u> (ex: <em>023 37 80 00</em> ou <em>0550...</em>).
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <a
+                    href={`https://www.google.com/search?tbm=lcl&q=${encodeURIComponent(
+                      [
+                        selectedSubCategory || selectedSector,
+                        selectedCommune !== "Toutes les communes" ? selectedCommune : "",
+                        selectedWilaya,
+                        "Algérie",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                    )}&hl=fr`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>1. Ouvrir Google Local ↗</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleClipboardImport}
+                    className="py-2 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>2. Re-Coller 1-Clic</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Actions Bar & Selection Controls */}
           <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 flex flex-col gap-4 shadow-sm">
             {/* Top row of action bar */}
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-neutral-200">
-                  {prospects.length} Établissements :
+                  {displayedProspects.length}{" "}
+                  {filterWithPhoneOnly ? "Établissements (avec tél)" : "Établissements"} :
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   {newCount} Nouveaux
@@ -1269,12 +1613,28 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
 
                 <div className="h-4 w-px bg-neutral-750 mx-1 hidden sm:block" />
 
+                {/* Filter phone toggle if mixed */}
+                {withPhoneCount > 0 && withoutPhoneCount > 0 && (
+                  <button
+                    onClick={() => setFilterWithPhoneOnly(!filterWithPhoneOnly)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition cursor-pointer flex items-center gap-1.5 ${
+                      filterWithPhoneOnly
+                        ? "bg-emerald-600/30 text-emerald-300 border-emerald-500/50"
+                        : "bg-neutral-800 hover:bg-neutral-750 text-neutral-300 border-neutral-700"
+                    }`}
+                    title="Afficher uniquement les prospects qui ont un numéro de téléphone"
+                  >
+                    <Phone className="w-3 h-3 text-emerald-400" />
+                    <span>Avec téléphone ({withPhoneCount})</span>
+                  </button>
+                )}
+
                 <button
-                  onClick={() => toggleSelectAll(true)}
+                  onClick={() => toggleSelectAll(true, true)}
                   className="text-xs px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-750 text-neutral-300 border border-neutral-700 transition cursor-pointer"
-                  title="Cocher uniquement les entreprises qui ne sont pas encore dans le CRM"
+                  title="Cocher uniquement les nouveaux prospects qui ont un numéro de téléphone"
                 >
-                  Cocher nouveaux ({newCount})
+                  Cocher nouveaux avec tél ({prospects.filter((p) => !p.isDuplicate && p.phone).length})
                 </button>
                 <button
                   onClick={() => toggleSelectAll(false)}
@@ -1297,7 +1657,7 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
                 title="Télécharger la sélection en fichier Excel .xlsx"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Exporter Excel ({selectedCount > 0 ? selectedCount : prospects.length})</span>
+                <span>Exporter Excel ({selectedCount > 0 ? selectedCount : displayedProspects.length})</span>
               </button>
             </div>
 
@@ -1417,7 +1777,7 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
                     <th className="p-3 w-10 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedCount > 0 && selectedCount === prospects.length}
+                        checked={selectedCount > 0 && selectedCount === displayedProspects.length}
                         onChange={(e) => (e.target.checked ? toggleSelectAll(false) : deselectAll())}
                         className="rounded border-neutral-700 bg-neutral-800 text-blue-600 focus:ring-0 cursor-pointer"
                       />
@@ -1430,7 +1790,7 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-850 text-xs">
-                  {prospects.map((item) => {
+                  {displayedProspects.map((item) => {
                     const isSelected = Boolean(selectedIds[item.id]);
 
                     return (
@@ -1453,13 +1813,18 @@ BP 12 5 Route de l'Aéroport, Bab Ezzouar
                         {/* Company & Details */}
                         <td className="p-3">
                           <div className="flex flex-col">
-                            <span className="font-bold text-neutral-100 flex items-center gap-1.5">
+                            <span className="font-bold text-neutral-100 flex items-center flex-wrap gap-1.5">
                               {item.companyName}
                               {item.rating && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px] font-semibold">
                                   <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
                                   {item.rating}
                                   {item.reviewsCount ? ` (${item.reviewsCount})` : ""}
+                                </span>
+                              )}
+                              {item.source === "Google Places API (Officiel)" && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                  Google Places ✨
                                 </span>
                               )}
                             </span>

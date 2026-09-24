@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { bulkImportProspects } from "@/actions/prospects";
 import { revalidatePath } from "next/cache";
 import { cleanDzPhone, formatDzPhoneDisplay } from "@/lib/phoneUtils";
+import { WILAYAS } from "@/lib/constants";
 
 export interface GoogleMapsProspectItem {
   id: string; // temporary client key
@@ -282,6 +283,339 @@ const SECTOR_SEARCH_QUERIES: Record<string, string> = {
   "Autre prestation": "entreprise prestation société service",
 };
 
+// High-performance sector query terms tailored specifically for Algerian Google Maps listings
+const SECTOR_GOOGLE_QUERIES: Record<string, string[]> = {
+  "Cabinet médical": [
+    "clinique médicale cabinet médical docteur",
+    "médecin spécialiste cabinet centre médical",
+    "laboratoire d'analyses médicales radiologie",
+  ],
+  "Industrie": [
+    "grossiste distribution usine importation",
+    "fournisseur négoce vente en gros",
+    "société industrielle fabrication matériel",
+  ],
+  "Immobilier": [
+    "agence immobilière promotion immobilière",
+    "promoteur immobilier bureau d'études",
+    "entreprise bâtiment BTP construction",
+  ],
+  "Hôtel": [
+    "hôtel",
+    "résidence touristique complexe hôtelier",
+  ],
+  "Restaurant": [
+    "restaurant café pizzeria",
+    "salon de thé fast food traiteur",
+  ],
+  "Beauté": [
+    "salon de coiffure institut de beauté",
+    "centre esthétique spa bien-être",
+    "parfumerie cosmétique",
+  ],
+  "Éducation / Formation": [
+    "école privée",
+    "centre de formation professionnelle institut",
+    "crèche école primaire",
+  ],
+  "Voyage": [
+    "agence de voyage omra tourisme",
+    "billetterie voyages visas",
+  ],
+  "E-commerce": [
+    "magasin showroom boutique",
+    "vente électroménager meubles",
+  ],
+  "Autre prestation": [
+    "société entreprise service",
+    "cabinet bureau conseil prestation",
+  ],
+};
+
+export function parseGooglePlacesError(errorMsg: string, rawStatus?: string): string {
+  const lower = (errorMsg || "").toLowerCase();
+  const statusLower = (rawStatus || "").toLowerCase();
+
+  if (lower.includes("billing") || lower.includes("billable") || statusLower.includes("billing")) {
+    return "Facturation Google Cloud non activée : Google offre 200 $/mois (~40 000 requêtes gratuites), mais impose d'associer un compte de facturation (Billing) sur console.cloud.google.com/billing.";
+  }
+  if (
+    lower.includes("not authorized") ||
+    lower.includes("has not been used") ||
+    lower.includes("disabled") ||
+    lower.includes("permission_denied") ||
+    statusLower.includes("permission_denied")
+  ) {
+    return "L'API Google Places n'est pas encore activée sur votre projet Google Cloud. Rendez-vous sur Google Cloud Console > 'API & Services' > 'Bibliothèque' et activez 'Places API' (ou 'Places API (New)').";
+  }
+  if (lower.includes("referer") || lower.includes("ip") || lower.includes("unauthenticated")) {
+    return "Restriction de clé bloquante : Si votre clé est restreinte par 'Référents HTTP', modifiez la restriction dans Google Cloud > Identifiants sur 'Adresses IP' ou 'Aucune' pour autoriser les requêtes du serveur CRM.";
+  }
+  if (
+    lower.includes("api key not valid") ||
+    lower.includes("invalid") ||
+    lower.includes("credentials_missing") ||
+    statusLower.includes("invalid_argument")
+  ) {
+    return "Clé API Google non valide pour Places API. Attention : les clés Google Gemini (commençant par AQ.) ne fonctionnent pas pour Maps. Utilisez une clé Google Cloud Console (commençant par AIzaSy...) avec Places API activée.";
+  }
+  if (lower.includes("over_query_limit") || lower.includes("quota")) {
+    return "Quota Google Places dépassé ou limite temporaire atteinte pour cette clé.";
+  }
+  return errorMsg || rawStatus || "Erreur de configuration Google Places API.";
+}
+
+/**
+ * Diagnostic Action: Test Google Maps API Key in real-time
+ */
+export async function testGoogleMapsApiKeyAction(apiKey: string): Promise<{
+  success: boolean;
+  message: string;
+  apiType?: "NEW" | "LEGACY";
+  errorDetails?: string;
+}> {
+  await requireAuth();
+  const key = (apiKey || "").trim();
+  if (!key) {
+    return { success: false, message: "Veuillez saisir une clé API Google." };
+  }
+
+  if (key.startsWith("AQ.")) {
+    return {
+      success: false,
+      message: "Clé non compatible (Google Gemini)",
+      errorDetails:
+        "La clé saisie commence par 'AQ.', ce qui correspond à une clé Google Gemini (IA Studio). Pour importer depuis Google Maps, vous devez créer une clé Google Cloud Console avec l'API 'Places API' (commençant généralement par 'AIzaSy...').",
+    };
+  }
+
+  // 1. Try Places API (New)
+  try {
+    const resNew = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": key,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress",
+      },
+      body: JSON.stringify({
+        textQuery: "Pharmacie Alger",
+        languageCode: "fr",
+        maxResultCount: 2,
+      }),
+      cache: "no-store",
+    });
+
+    const dataNew = await resNew.json();
+    if (resNew.ok && dataNew.places && Array.isArray(dataNew.places) && dataNew.places.length > 0) {
+      return {
+        success: true,
+        message: "Clé Google Places (Places API New) connectée et 100% opérationnelle !",
+        apiType: "NEW",
+      };
+    }
+  } catch {}
+
+  // 2. Try Places API (Legacy)
+  try {
+    const resLeg = await fetch(
+      `https://maps.googleapis.com/maps/api/place/textsearch/json?query=Pharmacie+Alger&key=${key}&language=fr`,
+      { cache: "no-store" }
+    );
+    const dataLeg = await resLeg.json();
+    if (dataLeg.status === "OK" || dataLeg.status === "ZERO_RESULTS") {
+      return {
+        success: true,
+        message: "Clé Google Places (Places API Legacy) connectée et 100% opérationnelle !",
+        apiType: "LEGACY",
+      };
+    } else {
+      const parsed = parseGooglePlacesError(dataLeg.error_message || "", dataLeg.status);
+      return {
+        success: false,
+        message: `Erreur Google Cloud : ${dataLeg.status || "Échec"}`,
+        errorDetails: parsed,
+      };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: "Erreur de connexion au serveur Google",
+      errorDetails: err?.message || "Impossible de joindre Google Places.",
+    };
+  }
+}
+
+/**
+ * Robust Dual-Engine Google Places fetcher (New + Legacy) with multi-query support
+ */
+async function fetchFromGooglePlaces({
+  apiKey,
+  queries,
+  limit,
+  wilaya,
+  sector,
+}: {
+  apiKey: string;
+  queries: string[];
+  limit: number;
+  wilaya: string;
+  sector: string;
+}): Promise<{
+  items: GoogleMapsProspectItem[];
+  error?: string;
+  apiType?: "NEW" | "LEGACY";
+}> {
+  const cleanKey = apiKey.trim();
+  if (cleanKey.startsWith("AQ.")) {
+    return {
+      items: [],
+      error:
+        "La clé commence par 'AQ.' (clé Google Gemini IA). Pour Google Maps, il faut une clé Google Cloud 'Places API' (commençant par 'AIzaSy...').",
+    };
+  }
+
+  const items: GoogleMapsProspectItem[] = [];
+  const seenPlaceKeys = new Set<string>();
+  let lastError = "";
+
+  for (const q of queries) {
+    if (items.length >= limit) break;
+
+    let successWithNew = false;
+
+    // 1. Try Places API (New) - single round-trip with full fields
+    try {
+      const resNew = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": cleanKey,
+          "X-Goog-FieldMask":
+            "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.googleMapsUri",
+        },
+        body: JSON.stringify({
+          textQuery: q,
+          languageCode: "fr",
+          maxResultCount: Math.min(20, limit - items.length),
+        }),
+        cache: "no-store",
+      });
+
+      if (resNew.ok) {
+        const dataNew = await resNew.json();
+        if (dataNew.places && Array.isArray(dataNew.places)) {
+          successWithNew = true;
+          for (const p of dataNew.places) {
+            const name = p.displayName?.text || "";
+            if (!name) continue;
+            const rawPhone = p.nationalPhoneNumber || p.internationalPhoneNumber || "";
+            const phone = cleanDzPhone(rawPhone);
+            const address = p.formattedAddress || `${wilaya}, Algérie`;
+            const dedupeKey = `${name.toLowerCase()}_${phone || address.toLowerCase()}`;
+            if (seenPlaceKeys.has(dedupeKey)) continue;
+            seenPlaceKeys.add(dedupeKey);
+
+            items.push({
+              id: `g_${p.id || Math.random().toString(36).slice(2)}`,
+              companyName: name,
+              phone: phone || "",
+              formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
+              address,
+              wilaya,
+              sector: sector || "Autre prestation",
+              website: p.websiteUri || undefined,
+              rating: typeof p.rating === "number" ? p.rating : undefined,
+              reviewsCount: typeof p.userRatingCount === "number" ? p.userRatingCount : undefined,
+              googleMapsUrl:
+                p.googleMapsUri ||
+                `https://www.google.com/maps/place/?q=place_id:${p.id || ""}`,
+              source: "Google Places API (Officiel)",
+            });
+          }
+        }
+      } else {
+        const errJson = await resNew.json().catch(() => ({}));
+        const errMsg = errJson?.error?.message || resNew.statusText;
+        lastError = parseGooglePlacesError(errMsg, errJson?.error?.status);
+      }
+    } catch (e: any) {
+      // Ignore network error and attempt legacy
+    }
+
+    // 2. If Places API New didn't work, try Legacy TextSearch
+    if (!successWithNew && items.length === 0) {
+      try {
+        const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+          q
+        )}&key=${cleanKey}&language=fr`;
+        const gRes = await fetch(gUrl, { cache: "no-store" });
+        if (gRes.ok) {
+          const gData = await gRes.json();
+          if (gData.status === "OK" && Array.isArray(gData.results)) {
+            const topPlaces = gData.results.slice(0, Math.min(20, limit - items.length));
+            // Fetch Place Details for top results to extract phone numbers & websites
+            const detailedPlaces = await Promise.all(
+              topPlaces.map(async (place: any) => {
+                if (!place.place_id) return place;
+                try {
+                  const detUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,international_phone_number,formatted_address,website,rating,user_ratings_total&key=${cleanKey}&language=fr`;
+                  const detRes = await fetch(detUrl, { cache: "no-store" });
+                  if (detRes.ok) {
+                    const detData = await detRes.json();
+                    return { ...place, ...(detData.result || {}) };
+                  }
+                } catch {}
+                return place;
+              })
+            );
+
+            for (const place of detailedPlaces) {
+              const name = place.name || "";
+              if (!name) continue;
+              const address = place.formatted_address || `${wilaya}, Algérie`;
+              const rawPhone =
+                place.formatted_phone_number || place.international_phone_number || "";
+              const phone = cleanDzPhone(rawPhone);
+              const dedupeKey = `${name.toLowerCase()}_${phone || address.toLowerCase()}`;
+              if (seenPlaceKeys.has(dedupeKey)) continue;
+              seenPlaceKeys.add(dedupeKey);
+
+              items.push({
+                id: `g_${place.place_id || Math.random().toString(36).slice(2)}`,
+                companyName: name,
+                phone: phone || "",
+                formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
+                address,
+                wilaya,
+                sector: sector || "Autre prestation",
+                website: place.website || undefined,
+                rating: place.rating || undefined,
+                reviewsCount: place.user_ratings_total || undefined,
+                googleMapsUrl: place.place_id
+                  ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
+                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      name + " " + wilaya
+                    )}`,
+                source: "Google Places API (Officiel)",
+              });
+            }
+          } else if (gData.status !== "OK" && gData.status !== "ZERO_RESULTS") {
+            lastError = parseGooglePlacesError(gData.error_message || "", gData.status);
+          }
+        }
+      } catch (e: any) {
+        lastError = e?.message || "Erreur de requête Google Places Legacy.";
+      }
+    }
+  }
+
+  return {
+    items,
+    error: items.length === 0 && lastError ? lastError : undefined,
+  };
+}
+
 /**
  * Live Search Google Maps / Algerian Business Directory via Google Places API + Overpass OSM + Nominatim
  */
@@ -305,82 +639,64 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
   const results: GoogleMapsProspectItem[] = [];
   const seenKeys = new Set<string>();
 
+  let googleApiStatus: {
+    used: boolean;
+    success: boolean;
+    placesCount: number;
+    error?: string;
+    warning?: string;
+  } | undefined;
+
   // 1. Google Places API (if API Key provided or in .env)
   const apiKey =
     (params.googleApiKey || "").trim() ||
     process.env.GOOGLE_PLACES_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY;
+    process.env.GOOGLE_MAPS_API_KEY ||
+    "";
 
   if (apiKey) {
-    try {
-      const gTerm = subCat || (sector ? `${sector}` : "commerce");
-      const gQuery = [rawQuery, gTerm, rawCommune, wilaya, "Algerie"].filter(Boolean).join(" ");
-      const gUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
-        gQuery
-      )}&key=${apiKey}&language=fr`;
+    const queries: string[] = [];
+    const cleanCommune = rawCommune ? rawCommune.replace(/\s*\(.*\)/, "").trim() : "";
 
-      const gRes = await fetch(gUrl, { cache: "no-store" });
-      if (gRes.ok) {
-        const gData = await gRes.json();
-        if (gData.results && Array.isArray(gData.results)) {
-          const topPlaces = gData.results.slice(0, Math.min(limit, 30));
+    if (rawQuery) {
+      queries.push([rawQuery, cleanCommune, wilaya, "Algerie"].filter(Boolean).join(" "));
+    } else if (subCat) {
+      queries.push([subCat, cleanCommune, wilaya, "Algerie"].filter(Boolean).join(" "));
+    } else {
+      const sectorQueries = SECTOR_GOOGLE_QUERIES[sector] || [sector || "commerce"];
+      for (const sq of sectorQueries.slice(0, 2)) {
+        queries.push([sq, cleanCommune, wilaya, "Algerie"].filter(Boolean).join(" "));
+      }
+    }
 
-          // Fetch Place Details for top results to extract phone numbers & websites
-          const detailedPlaces = await Promise.all(
-            topPlaces.map(async (place: any) => {
-              if (!place.place_id) return place;
-              try {
-                const detUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=name,formatted_phone_number,international_phone_number,formatted_address,website,rating,user_ratings_total&key=${apiKey}&language=fr`;
-                const detRes = await fetch(detUrl, { cache: "no-store" });
-                if (detRes.ok) {
-                  const detData = await detRes.json();
-                  return { ...place, ...(detData.result || {}) };
-                }
-              } catch {
-                // Ignore individual detail error
-              }
-              return place;
-            })
-          );
+    const gResult = await fetchFromGooglePlaces({
+      apiKey,
+      queries,
+      limit,
+      wilaya,
+      sector,
+    });
 
-          for (const place of detailedPlaces) {
-            const name = place.name || "";
-            if (!name) continue;
-            const address = place.formatted_address || `${wilaya}, Algérie`;
-            const rawPhone = place.formatted_phone_number || place.international_phone_number || "";
-            const phone = cleanDzPhone(rawPhone);
-            const website = place.website || undefined;
-            const rating = place.rating || undefined;
-            const reviewsCount = place.user_ratings_total || undefined;
-            const mapsUrl = place.place_id
-              ? `https://www.google.com/maps/place/?q=place_id:${place.place_id}`
-              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  name + " " + wilaya
-                )}`;
-
-            const key = `${name.toLowerCase()}_${address.toLowerCase()}`;
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              results.push({
-                id: `g_${place.place_id || Math.random().toString(36).slice(2)}`,
-                companyName: name,
-                phone: phone || "",
-                formattedPhone: phone ? formatDzPhoneDisplay(phone) : "",
-                address,
-                wilaya,
-                sector: sector || "Autre prestation",
-                website,
-                rating,
-                reviewsCount,
-                googleMapsUrl: mapsUrl,
-                source: "Google Places API (Officiel)",
-              });
-            }
-          }
+    if (gResult.items.length > 0) {
+      for (const item of gResult.items) {
+        const key = `${item.companyName.toLowerCase()}_${(item.phone || item.address || "").toLowerCase()}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          results.push(item);
         }
       }
-    } catch (e) {
-      console.warn("Google Places API error:", e);
+      googleApiStatus = {
+        used: true,
+        success: true,
+        placesCount: gResult.items.length,
+      };
+    } else if (gResult.error) {
+      googleApiStatus = {
+        used: true,
+        success: false,
+        placesCount: 0,
+        error: gResult.error,
+      };
     }
   }
 
@@ -585,11 +901,7 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
   let filteredResults = results;
 
   if (params.onlyWithPhone) {
-    const withPhoneList = filteredResults.filter((p) => p.phone && p.phone.length >= 8);
-    // If user filtered by phone and we found some, apply. If none found, preserve all so the user isn't stuck with 0.
-    if (withPhoneList.length > 0) {
-      filteredResults = withPhoneList;
-    }
+    filteredResults = filteredResults.filter((p) => p.phone && p.phone.length >= 8);
   }
 
   if (params.onlyWithoutWebsite) {
@@ -621,16 +933,20 @@ export async function searchGoogleMapsProspectsAction(params: GoogleMapsSearchPa
     success: true,
     prospects: verifiedResults,
     totalFound: verifiedResults.length,
+    googleApiStatus,
   };
 }
 
 // Google Maps noise words and UI action buttons to ignore
 const GMAPS_NOISE_REGEX =
-  /^(ouvert|fermé|ferme|ouvre|itinéraire|enregistrer|partager|site web|appeler|avis|photos|à propos|suggérer|revendiquer|sponsorisé|annonce|résultat|itinéraires|envoyer|sauvegarder)/i;
+  /^(itinéraire|itinéraires|enregistrer|partager|site web|appeler|avis|photos|à propos|suggérer|revendiquer|sponsorisé|annonce|résultat|résultats|envoyer|sauvegarder|menu|aperçu|explorer|plus de filtres|trier par|rechercher|dans cette zone|rechercher dans cette zone|contributeur|étoiles|note|enregistré|récents|obtenir l'appli|vous êtes arrivé|mettre à jour|haut de page|calques|chargement)/i;
 
 function isGmapsNoiseLine(line: string): boolean {
   const l = line.trim().toLowerCase();
   if (l.length < 2) return true;
+  // If line contains an Algerian phone number, it is NEVER noise!
+  if (extractBestDzPhone(line)) return false;
+  if (line.trim().startsWith('"')) return true; // Review quotes
   if (GMAPS_NOISE_REGEX.test(l)) return true;
   if (
     l.includes("ferme à") ||
@@ -639,11 +955,40 @@ function isGmapsNoiseLine(line: string): boolean {
     l.includes("· fermé") ||
     l.includes("· ouvert") ||
     l.includes("fermé temporairement") ||
-    l.includes("fermé définitivement")
+    l.includes("fermé définitivement") ||
+    l.includes("mise à jour il y a") ||
+    l.includes("avis google") ||
+    l.includes("partager cette fiche") ||
+    l.includes("vous êtes arrivé à la fin") ||
+    l.includes("mettre à jour les résultats") ||
+    l.includes("haut de page") ||
+    l.includes("chargement en cours")
   ) {
     return true;
   }
   return false;
+}
+
+export function extractBestDzPhone(text: string): string {
+  if (!text) return "";
+  const patterns = [
+    // Mobile: 05, 06, 07 followed by 8 digits (supports spaces, dots, dashes, slashes)
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[5-7](?:[\s./-]*\d){8}/g,
+    // Landline: 02, 03, 04, 09 followed by 7 digits
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-49](?:[\s./-]*\d){7}/g,
+    // Standard catch-all: 7 to 8 digits
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s./-]*\d){7,8}/g,
+  ];
+  for (const regex of patterns) {
+    const matches = text.match(regex);
+    if (matches && matches.length > 0) {
+      for (const m of matches) {
+        const cleaned = cleanDzPhone(m);
+        if (cleaned.length >= 8 && cleaned.length <= 10) return cleaned;
+      }
+    }
+  }
+  return "";
 }
 
 /**
@@ -662,9 +1007,9 @@ export async function parseGoogleMapsTextAction(params: {
     return { success: true, prospects: [] };
   }
 
-  const phoneRegex = /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s.-]*\d){7,8}/;
+  const phoneRegex = /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s./-]*\d){7,8}/;
   const ratingRegex = /(\d[.,]\d)\s*(?:\((\d+[\s\d]*)\))?/;
-  const urlRegex = /https?:\/\/[^\s]+/;
+  const urlRegex = /https?:\/\/[^\s\)]+/;
 
   // Filter out noise lines
   const lines = rawText
@@ -679,14 +1024,17 @@ export async function parseGoogleMapsTextAction(params: {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const isSeparatingMarker = line === "---" || line === "***" || line.startsWith("===");
-    const hasPhone = phoneRegex.test(line);
+    const isMarkdownPlaceLink = line.startsWith("[") && line.includes("](");
+    const isSiteWebLink = line.toLowerCase().startsWith("[site web]");
+    const hasPhone = Boolean(extractBestDzPhone(line));
 
-    // If next line has rating, or previous had phone and current line has text
-    const curHasPhone = cur.some((l) => phoneRegex.test(l));
+    // If markdown place link, or next line has rating, or card boundary
+    const curHasPhone = cur.some((l) => Boolean(extractBestDzPhone(l)));
     const nextLine = lines[i + 1] || "";
     const isCardBoundary =
       isSeparatingMarker ||
-      (cur.length >= 2 && (ratingRegex.test(nextLine) || (curHasPhone && !hasPhone)));
+      (isMarkdownPlaceLink && !isSiteWebLink && cur.length > 0) ||
+      (cur.length >= 2 && (ratingRegex.test(nextLine) || (curHasPhone && !hasPhone && !nextLine.startsWith("http"))));
 
     if (isCardBoundary) {
       if (cur.length > 0) blocks.push(cur);
@@ -701,40 +1049,23 @@ export async function parseGoogleMapsTextAction(params: {
   const seenPhones = new Set<string>();
   const seenNames = new Set<string>();
 
-  const knownWilayas = [
-    "Alger",
-    "Oran",
-    "Constantine",
-    "Annaba",
-    "Blida",
-    "Batna",
-    "Sétif",
-    "Béjaïa",
-    "Tlemcen",
-    "Biskra",
-    "Boumerdès",
-    "Tipaza",
-    "Tizi Ouzou",
-    "Chlef",
-    "Mostaganem",
-  ];
+  const knownWilayas = Array.from(new Set([...WILAYAS, "Alger", "Oran", "Constantine", "Annaba", "Blida", "Sétif", "Batna", "Béjaïa", "Tlemcen", "Biskra", "Boumerdès", "Tipaza", "Tizi Ouzou", "Chlef", "Mostaganem"]));
 
   for (let b = 0; b < blocks.length; b++) {
     const block = blocks[b];
     const fullBlockText = block.join(" ");
 
-    // Extract phone
-    const phoneMatch = fullBlockText.match(phoneRegex);
-    const rawPhone = phoneMatch ? phoneMatch[0] : "";
-    const cleanPhone = cleanDzPhone(rawPhone);
+    // Extract phone cleanly with our multi-pattern extractor
+    const cleanPhone = extractBestDzPhone(fullBlockText);
 
     if (cleanPhone && seenPhones.has(cleanPhone)) continue;
     if (cleanPhone) seenPhones.add(cleanPhone);
 
-    // Rating and reviews
+    // Rating and reviews (strip URLs first so coordinates like !3d36.757 are not mistaken for ratings)
     let rating: number | undefined;
     let reviewsCount: number | undefined;
-    const ratingMatch = fullBlockText.match(ratingRegex);
+    const textWithoutUrls = fullBlockText.replace(/https?:\/\/[^\s\)]+/g, "");
+    const ratingMatch = textWithoutUrls.match(ratingRegex);
     if (ratingMatch) {
       rating = parseFloat(ratingMatch[1].replace(",", "."));
       if (ratingMatch[2]) {
@@ -742,18 +1073,36 @@ export async function parseGoogleMapsTextAction(params: {
       }
     }
 
-    // Company Name: first non-rating, non-phone, non-url line
-    let companyName =
-      block.find(
-        (l) => !ratingRegex.test(l) && !phoneRegex.test(l) && !urlRegex.test(l) && l.length > 2
-      ) || "";
+    // Company Name, Google Maps URL & Website from Markdown links if present
+    let companyName = "";
+    let placeMapsUrl = "";
+    let extractedWebsite: string | undefined;
+
+    for (const l of block) {
+      const mdMatch = l.match(/\[(.*?)\]\((.*?)\)/);
+      if (mdMatch) {
+        if (/site web/i.test(mdMatch[1])) {
+          extractedWebsite = mdMatch[2];
+        } else if (!companyName) {
+          companyName = mdMatch[1].trim();
+          placeMapsUrl = mdMatch[2].trim();
+        }
+      }
+    }
+
+    if (!companyName) {
+      companyName =
+        block.find(
+          (l) => !ratingRegex.test(l) && !extractBestDzPhone(l) && !urlRegex.test(l) && l.length > 2
+        ) || "";
+    }
 
     companyName = companyName
       .replace(/^[\d\.\-\•\*\#\s]+/, "")
       .replace(/^Nom\s*:\s*/i, "")
       .trim();
 
-    if (!companyName || companyName.length < 2) continue;
+    if (!companyName || companyName.length < 2 || companyName === "2") continue;
     const lowerName = companyName.toLowerCase();
     if (seenNames.has(lowerName)) continue;
     seenNames.add(lowerName);
@@ -773,10 +1122,26 @@ export async function parseGoogleMapsTextAction(params: {
           !ratingRegex.test(l) &&
           !phoneRegex.test(l) &&
           !urlRegex.test(l) &&
+          !l.startsWith("[") &&
           l.length > 4
       );
       if (addressCandidate) {
         address = addressCandidate;
+      } else if (cleanPhone) {
+        // Line with phone might contain the address (e.g. "Dely Ibrahim · 023 37 80 00")
+        const lineWithPhone = block.find((l) => phoneRegex.test(l));
+        if (lineWithPhone) {
+          const rawMatch = lineWithPhone.match(phoneRegex);
+          const toRemove = rawMatch ? rawMatch[0] : cleanPhone;
+          const cleanedAddr = lineWithPhone
+            .replace(toRemove, "")
+            .replace(/^[·•\-\|\,\s]+|[·•\-\|\,\s]+$/g, "")
+            .replace(/^tél(?:éphone)?\s*[:.]?\s*/i, "")
+            .trim();
+          if (cleanedAddr.length > 2 && cleanedAddr !== companyName) {
+            address = cleanedAddr;
+          }
+        }
       }
     }
 
@@ -789,15 +1154,16 @@ export async function parseGoogleMapsTextAction(params: {
     }
 
     // Website
-    let website: string | undefined;
     const urlMatch = fullBlockText.match(urlRegex);
-    if (urlMatch && !urlMatch[0].includes("google.com/maps")) {
-      website = urlMatch[0];
-    }
+    const website =
+      extractedWebsite ||
+      (urlMatch && !urlMatch[0].includes("google.com/maps") ? urlMatch[0] : undefined);
 
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      companyName + " " + detectedWilaya
-    )}`;
+    const mapsUrl =
+      placeMapsUrl ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        companyName + " " + detectedWilaya
+      )}`;
 
     prospects.push({
       id: `pasted_${b}_${Math.random().toString(36).slice(2, 7)}`,

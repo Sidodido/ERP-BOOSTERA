@@ -33,11 +33,15 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export async function signToken(payload: Omit<SessionPayload, "exp">): Promise<string> {
+export async function signToken(
+  payload: Omit<SessionPayload, "exp">,
+  rememberMe: boolean = true
+): Promise<string> {
+  const expiresIn = rememberMe ? "30d" : "1d";
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
+    .setExpirationTime(expiresIn)
     .sign(JWT_SECRET);
 }
 
@@ -79,14 +83,15 @@ export async function getCurrentUser() {
   return user;
 }
 
-export async function setSessionCookie(token: string) {
+export async function setSessionCookie(token: string, rememberMe: boolean = true) {
   const cookieStore = await cookies();
+  const maxAge = rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 1; // 30 days vs 1 day
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge,
   });
 }
 

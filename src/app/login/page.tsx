@@ -27,11 +27,25 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("Boostera2026!");
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendPending, startResendTransition] = useTransition();
   const [resendSuccess, setResendSuccess] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem("boostera_remember_email");
+      const savedRemember = localStorage.getItem("boostera_remember_me");
+      if (savedEmail) {
+        setEmail(savedEmail);
+      }
+      if (savedRemember !== null) {
+        setRememberMe(savedRemember === "true");
+      }
+    } catch {}
+  }, []);
 
   const handleQuickFill = (presetEmail: string) => {
     setEmail(presetEmail);
@@ -59,15 +73,26 @@ function LoginForm() {
     setErrorMessage(null);
     setUnverifiedEmail(null);
 
+    try {
+      if (rememberMe) {
+        localStorage.setItem("boostera_remember_email", email.trim());
+        localStorage.setItem("boostera_remember_me", "true");
+      } else {
+        localStorage.removeItem("boostera_remember_email");
+        localStorage.setItem("boostera_remember_me", "false");
+      }
+    } catch {}
+
     const formData = new FormData();
     formData.append("email", email);
     formData.append("password", password);
+    formData.append("rememberMe", String(rememberMe));
 
     try {
       const apiRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
 
       const data = await apiRes.json();
@@ -205,6 +230,22 @@ function LoginForm() {
               placeholder="••••••••"
               required
             />
+          </div>
+
+          {/* Option Rester connecté */}
+          <div className="flex items-center justify-between pt-0.5">
+            <label className="inline-flex items-center gap-2 cursor-pointer group select-none">
+              <input
+                type="checkbox"
+                name="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-neutral-700 bg-neutral-800 text-blue-600 focus:ring-blue-500/40 focus:ring-offset-0 cursor-pointer accent-blue-600 transition-colors"
+              />
+              <span className="text-xs text-neutral-300 group-hover:text-white font-medium transition-colors">
+                Rester connecté
+              </span>
+            </label>
           </div>
 
           <Button

@@ -6,7 +6,7 @@ import { createAuditLog } from "@/lib/audit";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, password } = body;
+    const { email, password, rememberMe = true } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -95,12 +95,16 @@ export async function POST(req: Request) {
       },
     });
 
-    const token = await signToken({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-    });
+    const isRemember = Boolean(rememberMe);
+    const token = await signToken(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      isRemember
+    );
 
     await createAuditLog({
       userId: user.id,
@@ -120,12 +124,14 @@ export async function POST(req: Request) {
       },
     });
 
+    const maxAge = isRemember ? 60 * 60 * 24 * 30 : 60 * 60 * 24 * 1;
+
     response.cookies.set("boostera_session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge,
     });
 
     return response;
