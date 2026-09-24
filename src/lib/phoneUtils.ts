@@ -49,3 +49,25 @@ export function formatDzPhoneDisplay(phone: string): string {
 
 // Universal Algerian phone regex matching landlines (021, 023, 025, 031, etc.) and mobiles (05, 06, 07)
 export const DZ_PHONE_REGEX = /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s.-]*\d){7,8}/g;
+
+export function extractBestDzPhone(text: string): string {
+  if (!text) return "";
+  const patterns = [
+    // Mobile: 05, 06, 07 followed by 8 digits (supports spaces, dots, dashes, slashes)
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[5-7](?:[\s./-]*\d){8}/g,
+    // Landline: 02, 03, 04, 09 followed by 7 digits
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-49](?:[\s./-]*\d){7}/g,
+    // Standard catch-all: 7 to 8 digits
+    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s./-]*\d){7,8}/g,
+  ];
+  for (const regex of patterns) {
+    const matches = text.match(regex);
+    if (matches && matches.length > 0) {
+      for (const m of matches) {
+        const cleaned = cleanDzPhone(m);
+        if (cleaned.length >= 8 && cleaned.length <= 10) return cleaned;
+      }
+    }
+  }
+  return "";
+}

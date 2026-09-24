@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { bulkImportProspects } from "@/actions/prospects";
 import { revalidatePath } from "next/cache";
-import { cleanDzPhone, formatDzPhoneDisplay } from "@/lib/phoneUtils";
+import { cleanDzPhone, formatDzPhoneDisplay, extractBestDzPhone } from "@/lib/phoneUtils";
 import { WILAYAS } from "@/lib/constants";
 
 export interface GoogleMapsProspectItem {
@@ -332,7 +332,7 @@ const SECTOR_GOOGLE_QUERIES: Record<string, string[]> = {
   ],
 };
 
-export function parseGooglePlacesError(errorMsg: string, rawStatus?: string): string {
+function parseGooglePlacesError(errorMsg: string, rawStatus?: string): string {
   const lower = (errorMsg || "").toLowerCase();
   const statusLower = (rawStatus || "").toLowerCase();
 
@@ -967,28 +967,6 @@ function isGmapsNoiseLine(line: string): boolean {
     return true;
   }
   return false;
-}
-
-export function extractBestDzPhone(text: string): string {
-  if (!text) return "";
-  const patterns = [
-    // Mobile: 05, 06, 07 followed by 8 digits (supports spaces, dots, dashes, slashes)
-    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[5-7](?:[\s./-]*\d){8}/g,
-    // Landline: 02, 03, 04, 09 followed by 7 digits
-    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-49](?:[\s./-]*\d){7}/g,
-    // Standard catch-all: 7 to 8 digits
-    /(?:(?:\+|00)213\s*(?:\(?0\)?\s*)?|0)\s*[2-79](?:[\s./-]*\d){7,8}/g,
-  ];
-  for (const regex of patterns) {
-    const matches = text.match(regex);
-    if (matches && matches.length > 0) {
-      for (const m of matches) {
-        const cleaned = cleanDzPhone(m);
-        if (cleaned.length >= 8 && cleaned.length <= 10) return cleaned;
-      }
-    }
-  }
-  return "";
 }
 
 /**
