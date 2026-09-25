@@ -11,8 +11,6 @@ import { Input } from "@/components/ui/Input";
 import {
   ShieldCheck,
   ArrowRight,
-  UserCheck,
-  Wrench,
   UserPlus,
   KeyRound,
   RefreshCw,
@@ -26,7 +24,7 @@ function LoginForm() {
   const resetParam = searchParams?.get("reset");
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("Boostera2026!");
+  const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -46,13 +44,6 @@ function LoginForm() {
       }
     } catch {}
   }, []);
-
-  const handleQuickFill = (presetEmail: string) => {
-    setEmail(presetEmail);
-    setPassword("Boostera2026!");
-    setErrorMessage(null);
-    setUnverifiedEmail(null);
-  };
 
   const handleResendVerification = () => {
     if (!unverifiedEmail) return;
@@ -269,62 +260,6 @@ function LoginForm() {
               <span>Nouveau collaborateur ? Créer une demande de compte</span>
             </button>
           </Link>
-        </div>
-
-        {/* Quick Demo Logins */}
-        <div className="pt-4 border-t border-neutral-800 space-y-3">
-          <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider text-center">
-            Comptes de démonstration (Accès rapide)
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickFill("wiam@boostera.dz")}
-              className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-emerald-400">
-                <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span className="truncate">Wiam</span>
-              </div>
-              <p className="text-[10px] text-neutral-500 truncate mt-0.5">Commerciale</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill("meroua@boostera.dz")}
-              className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-pink-400">
-                <UserCheck className="w-3.5 h-3.5 text-pink-400 shrink-0" />
-                <span className="truncate">Meroua</span>
-              </div>
-              <p className="text-[10px] text-neutral-500 truncate mt-0.5">Commerciale</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill("toufik@boostera.dz")}
-              className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-cyan-400">
-                <UserCheck className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="truncate">Toufik</span>
-              </div>
-              <p className="text-[10px] text-neutral-500 truncate mt-0.5">Commercial</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill("sidahmed@boostera.dz")}
-              className="p-2 text-left bg-neutral-800/60 hover:bg-neutral-800 border border-neutral-700/60 rounded-xl transition-all cursor-pointer group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 group-hover:text-indigo-400">
-                <Wrench className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span className="truncate">Sidahmed</span>
-              </div>
-              <p className="text-[10px] text-neutral-500 truncate mt-0.5">Technicien</p>
-            </button>
-          </div>
         </div>
       </div>
     </div>
