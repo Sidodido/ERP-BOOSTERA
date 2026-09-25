@@ -129,15 +129,15 @@ function LoginForm() {
         <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/25 mb-1 border border-neutral-800">
           <Image
             src="/logo.png"
-            alt="HDZ SECURITY Logo"
+            alt="BOOSTERA Logo"
             width={76}
             height={76}
-            className="w-18 h-18 object-contain rounded-2xl"
+            className="w-18 h-18 object-contain"
             priority
           />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center justify-center gap-2">
-          HDZ SECURITY
+          BOOSTERA
           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold">
             ERP v1.0
           </span>

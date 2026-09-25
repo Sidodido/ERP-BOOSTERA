@@ -1023,7 +1023,7 @@ export function CollaborateursClient({
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                placeholder="nouvelle-adresse@hdz-security.dz"
+                placeholder="nouvelle-adresse@boostera.dz"
                 required
               />
 

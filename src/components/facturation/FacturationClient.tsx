@@ -306,7 +306,7 @@ export function FacturationClient({
             Facturation & Devis
           </h1>
           <p className="text-sm text-neutral-400 mt-1">
-            Émission, suivi légal des factures et encaissements des clients HDZ SECURITY.
+            Émission, suivi légal des factures et encaissements des clients BOOSTERA.
           </p>
         </div>
         <button
@@ -554,7 +554,7 @@ export function FacturationClient({
               <div className="flex items-center gap-2.5">
                 <Receipt className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-lg font-bold text-neutral-100">
-                  Créer une Facture HDZ SECURITY
+                  Créer une Facture BOOSTERA
                 </h3>
               </div>
               <button
@@ -882,11 +882,12 @@ export function FacturationClient({
               <div className="flex justify-between items-start border-b border-neutral-200 pb-8">
                 <div>
                   <div className="text-2xl font-black tracking-tight text-neutral-950 flex items-center gap-2">
-                    <span className="text-blue-600">HDZ</span> SECURITY
+                    <span className="text-indigo-600">BOOSTERA</span> AGENCY
                   </div>
                   <div className="text-xs text-neutral-600 mt-1 leading-relaxed">
-                    Services de Sécurité, Surveillance & Solutions Technologiques<br />
-                    Tél : +213 (0) 550 00 00 00 • contact@hdz-security.dz
+                    Agence de Marketing Digital & Création Vidéo<br />
+                    Kouba, Alger, Algérie<br />
+                    Tél : +213 (0) 550 00 00 00 • Contact@boostera.dz
                   </div>
                 </div>
 
@@ -1020,7 +1021,7 @@ export function FacturationClient({
                     Cachet & Signature Agence
                   </span>
                   <div className="text-[11px] font-bold text-neutral-800">
-                    HDZ SECURITY SARL
+                    BOOSTERA DIGITAL MARKETING
                   </div>
                 </div>
               </div>

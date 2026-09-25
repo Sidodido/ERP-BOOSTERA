@@ -465,7 +465,7 @@ async function callAiEngine(systemPrompt: string, userPrompt: string): Promise<{
   return {
     reply: generateLocalCommercialAdvice(userPrompt),
     source: "LOCAL_AI",
-    modelUsed: "Moteur Expert Local HDZ SECURITY",
+    modelUsed: "Moteur Expert Local BOOSTERA",
   };
 }
 
@@ -510,12 +510,12 @@ Puis conclure par un créneau de calage :
 *Est-ce que vous seriez ouvert à un audit comparatif gratuit de 10 minutes pour voir ce qui pourrait être amélioré sur votre visibilité ?* »`;
   }
 
-  return `### 🎯 Recommandation Commerciale HDZ SECURITY :
+  return `### 🎯 Recommandation Commerciale BOOSTERA :
 
 Pour maximiser votre taux de conversion aujourd'hui :
 - **Priorité 1** : Traiter en premier vos relances en attente (+3 jours et +7 jours).
 - **Priorité 2** : Appeler les prospects qualifiés "Intéressé" pour verrouiller un rendez-vous (visio ou sur place).
-- **Règle d'or HDZ SECURITY** : Ne vendez jamais un "pack" mais une **solution de sécurité et de sérénité** (protection des locaux, surveillance continue, professionnalisme des installations).
+- **Règle d'or BOOSTERA** : Ne vendez jamais un "pack" mais une **solution business** (acquisition de nouveaux clients réguliers, notoriété locale, professionnalisme de la marque).
 
 *Besoin d'un script spécifique ou d'une relance WhatsApp ? Posez votre question précise !*`;
 }
@@ -531,7 +531,7 @@ export async function askCommercialAiAction(params: {
 }) {
   const context = await getCommercialAiContextAction(params.overrideUserId);
 
-  const systemPrompt = `Tu es l'Assistant IA Commercial Senior de la société HDZ SECURITY.
+  const systemPrompt = `Tu es l'Assistant IA Commercial Senior de l'agence digitale algérienne BOOSTERA.
 Tu accompagnes le commercial connecté : ${context.userName} (Rôle : ${context.userRole}).
 
 DONNÉES EN TEMPS RÉEL DU COMMERCIAL :
@@ -564,7 +564,7 @@ PROCHAINES ÉCHÉANCES RÉELLES DU COMMERCIAL :
       : "Aucun"
   }
 
-GRILLE TARIFAIRE HDZ SECURITY (MARCHÉ ALGÉRIEN) :
+GRILLE TARIFAIRE BOOSTERA (MARCHÉ ALGÉRIEN) :
 1. **Pack STARTER** (35 000 DA/mois) : 4 publications/mois (2 Carrousels + 2 Maquettes graphiques). Idéal pour débuter et poser les bases de la marque.
 2. **Pack SILVER** (65 000 DA/mois) : 8 publications/mois (3 Carrousels + 3 Maquettes + 2 Reels 9:16 dont 1 avec Voix Off). Formule la plus populaire.
 3. **Pack GOLD** (95 000 DA/mois) : 12 publications/mois (4 Carrousels + 4 Maquettes + 4 Reels 9:16 dont 2 Voix Off). Croissance maximale et omniprésence.
@@ -588,7 +588,7 @@ export async function generateColdPitchAction(params: {
 }) {
   const { sector, wilaya = "Alger", prospectName, prospectPhone } = params;
 
-  const systemPrompt = `Tu es l'expert n°1 du Cold Calling en Algérie pour la société HDZ SECURITY.
+  const systemPrompt = `Tu es l'expert n°1 du Cold Calling en Algérie pour l'agence digitale BOOSTERA.
 Ta mission est de fournir 3 scripts d'appel téléphonique percutants pour démarcher une entreprise du secteur : "${sector}" à "${wilaya}".
 Nom de l'entreprise ciblée : ${prospectName || "Entreprise ciblée"}.
 Numéro : ${prospectPhone || "Numéro professionnel"}.
@@ -598,7 +598,7 @@ Les 3 scripts doivent être très différents :
 2. **Accroche Concurrence / Opportunité Locale** : Souligne que les concurrents de la même wilaya captent les clients sur Instagram/TikTok.
 3. **Accroche Directe & Chiffrée** : Propose un test ou un audit rapide sans engagement.
 
-Format de réponse clair avec titres en gras, phrases mot-à-mot à prononcer, et questions de qualification. Mentionne l'entreprise HDZ SECURITY.`;
+Format de réponse clair avec titres en gras, phrases mot-à-mot à prononcer, et questions de qualification. Mentionne l'agence BOOSTERA.`;
 
   return await callAiEngine(
     systemPrompt,
@@ -616,7 +616,7 @@ export async function generateObjectionResponseAction(params: {
 }) {
   const { objectionKey, customObjection, sector } = params;
 
-  const systemPrompt = `Tu es le Directeur Commercial de l'entreprise HDZ SECURITY.
+  const systemPrompt = `Tu es le Directeur Commercial de l'agence BOOSTERA.
 Ta mission est d'armer le commercial avec une réponse chirurgicale et imparable à une objection client fréquente sur le marché algérien.
 
 Secteur du client : ${sector || "Entreprise / Commerce en Algérie"}.
@@ -625,7 +625,7 @@ Objection rencontrée : "${customObjection || objectionKey}".
 STRUCTURE OBLIGATOIRE DE TA RÉPONSE :
 1. **Principe psychologique** : Pourquoi le prospect dit cela (peur, habitude, manque de budget perçu).
 2. **Ce qu'il ne faut SURTOUT PAS dire** : L'erreur typique des commerciaux juniors.
-3. **Le Script Mot-à-Mot (Méthode HDZ SECURITY)** : La réponse exacte à prononcer avec ton assuré.
+3. **Le Script Mot-à-Mot (Méthode BOOSTERA)** : La réponse exacte à prononcer avec ton assuré.
 4. **La Question de Rebond immédiate** : Pour reprendre la main et closer le rendez-vous.`;
 
   return await callAiEngine(
@@ -648,7 +648,7 @@ export async function generateFollowUpMessageAction(params: {
 }) {
   const { companyName, contactName, phone, stepNumber, channel, lastNotes } = params;
 
-  const systemPrompt = `Tu es le copywriter commercial senior de HDZ SECURITY.
+  const systemPrompt = `Tu es le copywriter commercial senior de l'agence BOOSTERA.
 Rédige un message de relance ultra-professionnel et engageant pour le canal : ${channel}.
 
 DESTINATAIRE :
@@ -686,7 +686,7 @@ export async function generateMeetingPrepAction(params: {
 }) {
   const { companyName, sector, meetingType, notes } = params;
 
-  const systemPrompt = `Tu es le Directeur Commercial de HDZ SECURITY.
+  const systemPrompt = `Tu es le Directeur Commercial de l'agence BOOSTERA.
 Rédige une FICHE STRATÉGIQUE DE FERMETURE (Closing Sheet) pour le commercial qui s'apprête à animer un rendez-vous :
 - Client / Prospect : "${companyName}"
 - Secteur : "${sector}"
@@ -718,7 +718,7 @@ export async function generateClientUpsellAction(params: {
   const nextOffer =
     currentOffer === "STARTER" ? "SILVER (65 000 DA/mois)" : currentOffer === "SILVER" ? "GOLD (95 000 DA/mois)" : "Pack SUR-MESURE & Campagnes Meta Ads";
 
-  const systemPrompt = `Tu es le Directeur de Clientèle de HDZ SECURITY.
+  const systemPrompt = `Tu es le Directeur de Clientèle de l'agence BOOSTERA.
 Un client actuel sous pack "${currentOffer}" (${clientName}, secteur ${sector}) est satisfait de nos prestations.
 Rédige une proposition d'évolution naturelle (Upsell) vers le pack supérieur : "${nextOffer}".
 

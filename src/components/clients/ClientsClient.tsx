@@ -1134,7 +1134,7 @@ export function ClientsClient({ initialClients, salesUsers, userRole, currentUse
         isOpen={offersCatalogOpen}
         onClose={() => setOffersCatalogOpen(false)}
         title="Grille Officielle des Offres & Forfaits Marketing"
-        description="Packs principaux HDZ SECURITY (Starter, Silver, Gold), options avancées et prestations sur mesure"
+        description="Packs principaux BOOSTERA (Starter, Silver, Gold), option Site Vitrine (+2 000 DA) et prestations sur mesure"
         maxWidth="5xl"
       >
         <div className="space-y-6">

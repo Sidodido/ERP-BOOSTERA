@@ -1,7 +1,7 @@
 {
-  "name": "HDZ SECURITY — ERP & CRM",
-  "short_name": "HDZ SECURITY",
-  "description": "Plateforme ERP, CRM, Opérations, Finance & RH pour HDZ SECURITY",
+  "name": "BOOSTERA — ERP & CRM",
+  "short_name": "BOOSTERA",
+  "description": "Plateforme ERP, CRM, Production, Finance & RH pour BOOSTERA",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#080b11",

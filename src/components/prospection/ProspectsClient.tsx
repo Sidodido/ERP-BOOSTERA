@@ -1972,7 +1972,7 @@ export function ProspectsClient({
                 <div className="flex items-center gap-2 text-blue-400 font-semibold text-xs">
                   <Zap className="w-4 h-4 text-blue-400" />
                   <span>
-                    Fichier local détecté : {localFileInfo.filePath ? localFileInfo.filePath.split("/").pop() : "PROSPECTION HDZ SECURITY.xlsx"}
+                    Fichier local détecté : {localFileInfo.filePath ? localFileInfo.filePath.split("/").pop() : "PROSPECTION BOOSTERA.xlsx"}
                   </span>
                 </div>
                 <span className="text-[10px] text-neutral-400 font-mono">Dossier Downloads</span>

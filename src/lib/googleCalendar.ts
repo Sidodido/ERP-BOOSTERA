@@ -73,7 +73,7 @@ export function buildGoogleCalendarUrl(event: CalendarEventData): string {
   if (event.description) {
     descriptionParts.push(`\n📝 Notes & Détails :\n${event.description}`);
   }
-  descriptionParts.push(`\n🔗 Rendez-vous géré dans HDZ SECURITY CRM`);
+  descriptionParts.push(`\n🔗 Rendez-vous géré dans le CRM Boostera`);
 
   const fullDescription = descriptionParts.join("\n");
 
@@ -138,11 +138,11 @@ export function downloadIcsFile(event: CalendarEventData) {
   const icsContent = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//HDZ SECURITY CRM//FR",
+    "PRODID:-//Boostera CRM//FR",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:rdv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@hdz-security.crm`,
+    `UID:rdv-${Date.now()}-${Math.random().toString(36).substring(2, 9)}@boostera.crm`,
     `DTSTAMP:${nowStr}`,
     `DTSTART:${startStr}`,
     `DTEND:${endStr}`,

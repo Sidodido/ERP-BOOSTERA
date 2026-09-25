@@ -11,7 +11,7 @@ async function main() {
     create: {
       email: "admin@boostera.dz",
       passwordHash: hash,
-      name: "Direction HDZ SECURITY",
+      name: "Direction BOOSTERA",
       role: "ADMIN",
       phone: "0550 00 00 01",
     },
@@ -23,7 +23,7 @@ async function main() {
     create: {
       userId: user.id,
       firstName: "Direction",
-      lastName: "HDZ SECURITY",
+      lastName: "BOOSTERA",
       position: "Direction Générale",
       department: "ADMINISTRATION",
     },
@@ -36,12 +36,12 @@ async function main() {
       isActive: true,
       status: "ACTIVE",
       emailVerified: true,
-      name: "Direction HDZ SECURITY",
+      name: "Direction BOOSTERA",
     },
     create: {
       email: "zidanesidahmed18@gmail.com",
       passwordHash: hash,
-      name: "Direction HDZ SECURITY",
+      name: "Direction BOOSTERA",
       role: "ADMIN",
       phone: "0550 00 00 00",
       status: "ACTIVE",
@@ -55,7 +55,7 @@ async function main() {
     create: {
       userId: userZidane.id,
       firstName: "Direction",
-      lastName: "HDZ SECURITY",
+      lastName: "BOOSTERA",
       position: "Directeur Général",
       department: "ADMINISTRATION",
     },

@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
               Mot de passe oublié ?
             </h1>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              Saisissez l'adresse e-mail professionnelle associée à votre compte collaborateur HDZ SECURITY.
+              Saisissez l'adresse e-mail professionnelle associée à votre compte collaborateur BOOSTERA.
             </p>
           </div>
 

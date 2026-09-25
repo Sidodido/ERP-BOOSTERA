@@ -1927,7 +1927,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
               <Globe className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-semibold text-neutral-200">Recommandations HDZ SECURITY :</p>
+              <p className="font-semibold text-neutral-200">Recommandations de l'Agence BOOSTERA :</p>
               <p className="mt-0.5 leading-relaxed">
                 Le dossier <strong>Google Drive</strong> doit être paramétré en accès partagé avec l'équipe de production (graphistes, vidéastes, monteurs) et le client. Pour la <strong>Fiche d'Établissement</strong>, privilégiez le lien de géolocalisation Google Maps ou le gestionnaire de profil Google Business pour suivre les avis et le référencement local.
               </p>
@@ -3273,14 +3273,14 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                     <div className="flex items-center gap-3">
                       <img
                         src="/logo.png"
-                        alt="HDZ SECURITY"
+                        alt="BOOSTERA"
                         className="w-14 h-14 object-contain rounded-xl border border-neutral-200 p-1 shrink-0 bg-white"
                       />
                       <div>
                         <h2 className="text-xl font-black tracking-wider text-neutral-950 flex items-center gap-2">
-                          <span>HDZ SECURITY</span>
+                          <span>BOOSTERA</span>
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full border border-blue-200">
-                            SARL
+                            AGENCY
                           </span>
                         </h2>
                         <p className="text-[11px] font-semibold text-neutral-500">{AGENCY_DETAILS.activity}</p>
@@ -3495,7 +3495,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
 
                     {/* Rappel général coordonnées agence */}
                     <div className="text-[10px] text-neutral-500 space-y-0.5 pt-1 border-t border-neutral-200">
-                      <p>{AGENCY_DETAILS.legalName} • Tél : {AGENCY_DETAILS.phone} • Email : {AGENCY_DETAILS.email}</p>
+                      <p>Agence BOOSTERA SARL • Tél : {AGENCY_DETAILS.phone} • Email : {AGENCY_DETAILS.email}</p>
                       {parsedNotes.memo && (
                         <p className="italic text-neutral-600">Note : {parsedNotes.memo}</p>
                       )}
@@ -3559,7 +3559,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                       Cachet & Signature de l'Agence
                     </span>
                     <div className="text-[10px] text-neutral-400 italic">
-                      Pour HDZ SECURITY SARL
+                      Pour BOOSTERA SARL
                     </div>
                   </div>
                 </div>
@@ -3682,14 +3682,14 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                     <div className="flex items-center gap-3">
                       <img
                         src="/logo.png"
-                        alt="HDZ SECURITY"
+                        alt="BOOSTERA"
                         className="w-14 h-14 object-contain rounded-xl border border-neutral-200 p-1 shrink-0 bg-white"
                       />
                       <div>
                         <h2 className="text-xl font-black tracking-wider text-neutral-950 flex items-center gap-2">
-                          <span>HDZ SECURITY</span>
+                          <span>BOOSTERA</span>
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                            SARL
+                            AGENCY
                           </span>
                         </h2>
                         <p className="text-[11px] font-semibold text-neutral-500">{AGENCY_DETAILS.activity}</p>
@@ -3892,7 +3892,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                       Cachet & Signature de la Caisse / Direction
                     </span>
                     <div className="text-[10px] text-neutral-500 font-medium">
-                      HDZ SECURITY SARL — {viewPayment.recordedBy?.name || "Service Comptabilité"}
+                      BOOSTERA SARL — {viewPayment.recordedBy?.name || "Service Comptabilité"}
                     </div>
                   </div>
                 </div>

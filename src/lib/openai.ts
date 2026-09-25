@@ -85,7 +85,7 @@ export async function generateEditorialPlanWithOpenAi(
   const CANDIDATE_MODELS = [model, "gpt-4o-mini", "gpt-4o"];
 
   // Construction du prompt structuré
-  const systemPrompt = `Tu es le Directeur de Création et Stratège Social Media Senior de l'agence HDZ SECURITY.
+  const systemPrompt = `Tu es le Directeur de Création et Stratège Social Media Senior de l'agence digitale algérienne BOOSTERA.
 Ta mission est de concevoir un calendrier de contenu éditorial mensuel ultra-performant, percutant et réaliste pour le marché algérien (${wilaya || "Algérie"}).
 
 DONNÉES DU CLIENT & SES RÉSEAUX SOCIAUX (MÉDIAS DU CLIENT) :
@@ -307,7 +307,7 @@ Tu DOIS impérativement répondre UNIQUEMENT avec un objet JSON valide avec cett
           cta: pub.cta || "Contactez-nous en DM pour commander 📲",
           hashtags: Array.isArray(pub.hashtags)
             ? pub.hashtags.map((h: string) => h.replace(/^#/, ""))
-            : ["algerie", "hdz-security"],
+            : ["algerie", "boostera"],
           suggestedTaskTitle:
             pub.suggestedTaskTitle ||
             `${
@@ -369,7 +369,7 @@ Tu DOIS impérativement répondre UNIQUEMENT avec un objet JSON valide avec cett
       success: true,
       source: "LOCAL_ENGINE",
       plan: fallbackPlan,
-      notice: `Généré via la base sectorielle HDZ SECURITY (Basculement automatique : ${
+      notice: `Généré via la base sectorielle Boostera (Basculement automatique : ${
         openAiError?.message || "OpenAI indisponible"
       }).`,
       error: openAiError?.message,

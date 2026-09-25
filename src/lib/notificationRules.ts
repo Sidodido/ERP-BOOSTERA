@@ -94,7 +94,7 @@ export function detectTaskNotificationTarget(
   ) {
     return {
       type: "DIRECTION",
-      recipientName: "Direction HDZ SECURITY",
+      recipientName: "Direction BOOSTERA",
       badgeText: "💻 La Direction sera automatiquement notifiée",
       hint: "Cette tâche concerne la Partie 2 (Montage, Carrousel, Maquette, Web ou Ads) : la Direction recevra une alerte immédiate.",
       color: "border-purple-500/30 bg-purple-500/10 text-purple-400",
@@ -235,7 +235,7 @@ export function resolveTaskNotificationInfo(
     if (assignee && !isDir) {
       return {
         badgeText: `🔔 ${assignee.name} & la Direction seront notifiés`,
-        hint: `Notification directe pour ${assignee.name} (assigné à la tâche) avec copie à la Direction HDZ SECURITY.`,
+        hint: `Notification directe pour ${assignee.name} (assigné à la tâche) avec copie à la Direction BOOSTERA.`,
         theme: purpleTheme,
       };
     }

@@ -42,7 +42,7 @@ process.on("uncaughtException", (err) => {
   logDebug("[UNCAUGHT EXCEPTION] " + (err.stack || err.message));
 });
 
-logDebug("Starting HDZ SECURITY ERP server.js...");
+logDebug("Starting BOOSTERA ERP server.js...");
 
 // Auto-extract erp-deploy.zip if uploaded to root
 const deployZip = path.join(__dirname, "erp-deploy.zip");
@@ -334,7 +334,7 @@ async function bootstrap() {
   preparePromise = nextApp.prepare();
   await preparePromise;
   nextAppReady = true;
-  logDebug("> HDZ SECURITY ERP démarré à vitesse maximale !");
+  logDebug("> BOOSTERA ERP démarré à vitesse maximale !");
 }
 
 bootstrap().catch((err) => {
@@ -382,12 +382,12 @@ const server = http.createServer(async (req, res) => {
           status: "ACTIVE",
           emailVerified: true,
           passwordHash: hash,
-          name: "Direction HDZ SECURITY",
+          name: "Direction BOOSTERA",
         },
         create: {
           email: "zidanesidahmed18@gmail.com",
           passwordHash: hash,
-          name: "Direction HDZ SECURITY",
+          name: "Direction BOOSTERA",
           role: "ADMIN",
           phone: "0550 00 00 00",
           status: "ACTIVE",
@@ -396,7 +396,7 @@ const server = http.createServer(async (req, res) => {
       });
       return res.end(JSON.stringify({
         success: true,
-        message: "Compte Administrateur HDZ SECURITY configuré pour zidanesidahmed18@gmail.com",
+        message: "Compte Administrateur BOOSTERA ERP configuré pour zidanesidahmed18@gmail.com",
         email: user.email,
         role: user.role,
       }));
@@ -685,7 +685,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
       <head>
         <meta charset="utf-8">
-        <title>HDZ SECURITY ERP — Diagnostic & Configuration Base de données</title>
+        <title>BOOSTERA ERP — Diagnostic & Configuration Base de données</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; margin: 0; display: flex; justify-content: center; }
           .card { max-width: 800px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -703,7 +703,7 @@ const server = http.createServer(async (req, res) => {
       </head>
       <body>
         <div class="card">
-          <h1>🚀 HDZ SECURITY ERP — État de la Base de Données</h1>
+          <h1>🚀 BOOSTERA ERP — État de la Base de Données</h1>
           <p><strong>URL PostgreSQL :</strong> <code>${maskedUrl}</code></p>
           <p><strong>Statut :</strong> <span class="badge ${dbError ? 'badge-error' : 'badge-success'}">${dbStatus}</span></p>
           
@@ -744,7 +744,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
         <head>
           <meta charset="utf-8">
-          <title>HDZ SECURITY ERP — Initialisation</title>
+          <title>BOOSTERA ERP — Initialisation</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
             .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -754,7 +754,7 @@ const server = http.createServer(async (req, res) => {
         </head>
         <body>
           <div class="card">
-            <h1>⚠️ Diagnostic — HDZ SECURITY ERP</h1>
+            <h1>⚠️ Diagnostic — BOOSTERA ERP</h1>
             <p>Détail de l'erreur :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
           </div>
@@ -780,7 +780,7 @@ const server = http.createServer(async (req, res) => {
       <html>
         <head><meta charset="utf-8"><meta http-equiv="refresh" content="2"></head>
         <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;padding:40px;text-align:center;">
-          <h2>🚀 Démarrage de HDZ SECURITY ERP...</h2>
+          <h2>🚀 Démarrage de BOOSTERA ERP...</h2>
           <p>Chargement des modules. Actualisation automatique dans 2 secondes...</p>
         </body>
       </html>
@@ -807,5 +807,5 @@ server.listen(port, (err) => {
     logDebug("Server listen error: " + err.message);
     return;
   }
-  logDebug(`> HDZ SECURITY ERP listening on port ${port}`);
+  logDebug(`> BOOSTERA ERP listening on port ${port}`);
 });

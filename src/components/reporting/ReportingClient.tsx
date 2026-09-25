@@ -80,7 +80,7 @@ export function ReportingClient({ initialData }: ReportingClientProps) {
 
   const handleExportCSV = () => {
     const rows = [
-      ["RAPPORT D'ACTIVITE HDZ SECURITY", data.periodLabel],
+      ["RAPPORT D'ACTIVITE BOOSTERA", data.periodLabel],
       ["Periode", `${new Date(data.startDate).toLocaleDateString("fr-FR")} au ${new Date(data.endDate).toLocaleDateString("fr-FR")}`],
       [],
       ["INDICATEURS FINANCIERS", "MONTANT (DA)"],
@@ -118,7 +118,7 @@ export function ReportingClient({ initialData }: ReportingClientProps) {
     link.setAttribute("href", encodedUri);
     link.setAttribute(
       "download",
-      `Rapport_HDZ_Security_${data.period}_${new Date().toISOString().split("T")[0]}.csv`
+      `Rapport_BOOSTERA_${data.period}_${new Date().toISOString().split("T")[0]}.csv`
     );
     document.body.appendChild(link);
     link.click();
