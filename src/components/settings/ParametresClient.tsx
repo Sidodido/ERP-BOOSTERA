@@ -32,9 +32,6 @@ import {
   Database,
   KeyRound,
   Mail,
-  Copy,
-  Check,
-  ExternalLink,
 } from "lucide-react";
 import {
   createUserAction,
@@ -224,49 +221,6 @@ export function ParametresClient({
   const [newDirectPassword, setNewDirectPassword] = useState("");
   const [passwordActionLoading, setPasswordActionLoading] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [generatedResetUrl, setGeneratedResetUrl] = useState<string | null>(null);
-  const [copiedResetLink, setCopiedResetLink] = useState(false);
-
-  // Edit User State
-  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
-  const [editUserName, setEditUserName] = useState("");
-  const [editUserPhone, setEditUserPhone] = useState("");
-  const [editUserRole, setEditUserRole] = useState<Role>("SALES_REP");
-  const [editUserLoading, setEditUserLoading] = useState(false);
-  const [editUserError, setEditUserError] = useState<string | null>(null);
-
-  const handleOpenEditUser = (user: UserItem) => {
-    setEditingUser(user);
-    setEditUserName(user.name);
-    setEditUserPhone(user.phone || "");
-    setEditUserRole(user.role);
-    setEditUserError(null);
-  };
-
-  const handleSaveEditUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    if (!editUserName.trim() || editUserName.trim().length < 2) {
-      setEditUserError("Le nom d'utilisateur doit comporter au moins 2 caractères.");
-      return;
-    }
-
-    try {
-      setEditUserLoading(true);
-      setEditUserError(null);
-      await updateUserAction(editingUser.id, {
-        name: editUserName.trim(),
-        phone: editUserPhone.trim() || undefined,
-        role: editUserRole,
-      });
-      setEditingUser(null);
-      router.refresh();
-    } catch (err: any) {
-      setEditUserError(err.message || "Erreur lors de la mise à jour de l'utilisateur.");
-    } finally {
-      setEditUserLoading(false);
-    }
-  };
 
   const handleAdminDirectSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,7 +235,6 @@ export function ParametresClient({
       await adminDirectSetUserPasswordAction(passwordModalUser.id, newDirectPassword);
       setPasswordFeedback({ type: "success", message: `Nouveau mot de passe enregistré avec succès pour ${passwordModalUser.name} !` });
       setNewDirectPassword("");
-      router.refresh();
     } catch (err: any) {
       setPasswordFeedback({ type: "error", message: err.message || "Erreur lors de la mise à jour du mot de passe." });
     } finally {
@@ -294,17 +247,8 @@ export function ParametresClient({
     try {
       setPasswordActionLoading(true);
       setPasswordFeedback(null);
-      setGeneratedResetUrl(null);
-      setCopiedResetLink(false);
-      const res = await adminTriggerPasswordResetAction(passwordModalUser.id);
-      if (res?.resetUrl) {
-        setGeneratedResetUrl(res.resetUrl);
-      }
-      if (res?.emailSent) {
-        setPasswordFeedback({ type: "success", message: `Lien de réinitialisation sécurisé envoyé par e-mail à ${passwordModalUser.email} !` });
-      } else {
-        setPasswordFeedback({ type: "success", message: `Jeton généré avec succès ! Vous pouvez également copier le lien direct ci-dessous.` });
-      }
+      await adminTriggerPasswordResetAction(passwordModalUser.id);
+      setPasswordFeedback({ type: "success", message: `Lien de réinitialisation sécurisé envoyé à ${passwordModalUser.email} !` });
     } catch (err: any) {
       setPasswordFeedback({ type: "error", message: err.message || "Erreur lors de l'envoi de l'e-mail." });
     } finally {
@@ -1126,23 +1070,13 @@ export function ParametresClient({
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleOpenEditUser(u)}
-                            title="Modifier le nom, téléphone ou rôle de cet utilisateur"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 transition cursor-pointer"
-                          >
-                            <Edit2 className="w-3 h-3 text-neutral-400" />
-                            <span>Éditer</span>
-                          </button>
-
-                          <button
                             onClick={() => {
                               setPasswordModalUser(u);
                               setNewDirectPassword("");
                               setPasswordFeedback(null);
-                              setGeneratedResetUrl(null);
                             }}
                             title="Gérer le mot de passe de cet utilisateur"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/40 transition cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/40 transition"
                           >
                             <KeyRound className="w-3 h-3 text-indigo-400" />
                             <span>Mot de passe</span>
@@ -1477,116 +1411,6 @@ export function ParametresClient({
         </div>
       )}
 
-      {/* MODAL: MODIFIER UN UTILISATEUR (NOM D'UTILISATEUR, RÔLE, TÉLÉPHONE) */}
-      {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
-              <div className="flex items-center gap-2.5">
-                <Edit2 className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-lg font-bold text-neutral-100">
-                  Modifier l'Utilisateur
-                </h3>
-              </div>
-              <button
-                onClick={() => setEditingUser(null)}
-                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEditUser} className="p-6 space-y-4">
-              {editUserError && (
-                <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl font-medium">
-                  {editUserError}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Nom d'utilisateur / Nom complet *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editUserName}
-                  onChange={(e) => setEditUserName(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Adresse Email
-                </label>
-                <input
-                  type="email"
-                  disabled
-                  value={editingUser.email}
-                  className="w-full bg-neutral-950/60 border border-neutral-800/60 rounded-xl px-3.5 py-2 text-sm text-neutral-400 cursor-not-allowed"
-                />
-                <p className="text-[10px] text-neutral-500 mt-1">L'adresse email est le login unique du compte.</p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Rôle RBAC *
-                </label>
-                {editingUser.role === "ADMIN" || editingUser.email === "admin@boostera.dz" ? (
-                  <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-800/40 text-xs font-medium text-indigo-300 flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-indigo-400" />
-                    <span>Compte Administrateur (Rôle protégé)</span>
-                  </div>
-                ) : (
-                  <select
-                    value={editUserRole}
-                    onChange={(e) => setEditUserRole(e.target.value as Role)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r.key} value={r.key}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Téléphone
-                </label>
-                <input
-                  type="text"
-                  placeholder="05 / 06 / 07..."
-                  value={editUserPhone}
-                  onChange={(e) => setEditUserPhone(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={editUserLoading}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
-                >
-                  {editUserLoading ? "Enregistrement..." : "Enregistrer"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* MODAL: CREATE COMMISSION RULE */}
       {showRuleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1894,13 +1718,13 @@ export function ParametresClient({
               </div>
             </form>
 
-            {/* Option 2: Envoi de lien par e-mail ou copie directe */}
-            <div className="space-y-3 bg-neutral-950/60 border border-neutral-800/80 p-4 rounded-2xl">
+            {/* Option 2: Envoi de lien par e-mail */}
+            <div className="space-y-2 bg-neutral-950/60 border border-neutral-800/80 p-4 rounded-2xl">
               <label className="block text-xs font-semibold text-neutral-200">
-                2. Générer / Envoyer un lien de réinitialisation sécurisé
+                2. Envoyer un lien de réinitialisation sécurisé
               </label>
               <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Génère un jeton sécurisé valable 1 heure et l'envoie par e-mail à <b>{passwordModalUser.email}</b>.
+                Envoie un e-mail officiel à <b>{passwordModalUser.email}</b> contenant un lien à usage unique valable 1 heure.
               </p>
               <button
                 type="button"
@@ -1909,56 +1733,8 @@ export function ParametresClient({
                 className="w-full py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-semibold text-xs border border-neutral-700 flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
               >
                 <Mail className="w-3.5 h-3.5 text-neutral-400" />
-                <span>{passwordActionLoading ? "Génération en cours..." : "Générer & Envoyer le lien"}</span>
+                <span>Envoyer l'e-mail de réinitialisation</span>
               </button>
-
-              {generatedResetUrl && (
-                <div className="mt-3 p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2">
-                  <p className="text-[11px] font-semibold text-indigo-300">
-                    Lien direct de réinitialisation généré :
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={generatedResetUrl}
-                      className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-[11px] font-mono text-neutral-300 select-all"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(generatedResetUrl);
-                        setCopiedResetLink(true);
-                        setTimeout(() => setCopiedResetLink(false), 2500);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer shrink-0 transition"
-                    >
-                      {copiedResetLink ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-300" />
-                          <span>Copié !</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copier</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="pt-1">
-                    <a
-                      href={generatedResetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:underline"
-                    >
-                      <span>Ouvrir la page de réinitialisation</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex justify-end pt-2">

@@ -42,22 +42,7 @@ process.on("uncaughtException", (err) => {
   logDebug("[UNCAUGHT EXCEPTION] " + (err.stack || err.message));
 });
 
-logDebug("Starting BOOSTERA ERP server.js...");
-
-// Auto-extract erp-deploy.zip if uploaded to root
-const deployZip = path.join(__dirname, "erp-deploy.zip");
-if (fs.existsSync(deployZip)) {
-  logDebug("Found erp-deploy.zip, auto-extracting with unzip -o...");
-  try {
-    const { execSync } = require("child_process");
-    execSync('unzip -o "erp-deploy.zip"', { cwd: __dirname });
-    execSync("chmod -R 755 .next", { cwd: __dirname });
-    fs.unlinkSync(deployZip);
-    logDebug("erp-deploy.zip successfully extracted and permissions fixed!");
-  } catch (uzErr) {
-    logDebug("unzip notice: " + uzErr.message);
-  }
-}
+logDebug("Starting HDZ SECURITY ERP server.js...");
 
 const Module = require("module");
 
@@ -300,35 +285,6 @@ async function bootstrap() {
   }
 
 
-  // Auto-fix permissions on Linux (.next directories require +x to be readable by Next.js)
-  try {
-    const { execSync } = require("child_process");
-    execSync("chmod -R 755 .next", { cwd: __dirname });
-    logDebug("Permissions 755 applied to .next successfully via chmod.");
-  } catch (permErr) {
-    logDebug("chmod execSync notice: " + permErr.message);
-    try {
-      function fixPermissionsRecursive(dir) {
-        if (!fs.existsSync(dir)) return;
-        try { fs.chmodSync(dir, 0o755); } catch {}
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
-        for (const entry of entries) {
-          const fullPath = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            try { fs.chmodSync(fullPath, 0o755); } catch {}
-            fixPermissionsRecursive(fullPath);
-          } else {
-            try { fs.chmodSync(fullPath, 0o644); } catch {}
-          }
-        }
-      }
-      fixPermissionsRecursive(nextDir);
-      logDebug("Permissions 755 applied to .next recursively via fs.chmodSync.");
-    } catch (fsPermErr) {
-      logDebug("fs.chmodSync error: " + fsPermErr.message);
-    }
-  }
-
   const dev = false;
   nextApp = next({ dev, dir: __dirname, quiet: true });
   preparePromise = nextApp.prepare();
@@ -357,52 +313,6 @@ const server = http.createServer(async (req, res) => {
       res.end("Aucun log disponible");
     }
     return;
-  }
-
-  // === DIRECT ADMIN ACCOUNT INITIALIZATION ENDPOINT ===
-  if (parsedUrl.pathname === "/api/init-admin") {
-    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-    try {
-      const prisma = getPrisma();
-      if (!prisma) {
-        return res.end(JSON.stringify({ success: false, error: "Base de données non disponible." }));
-      }
-      let bcrypt = null;
-      try { bcrypt = require("bcryptjs"); } catch {
-        for (const p of possiblePaths) {
-          try { const c = path.join(p, "bcryptjs"); if (fs.existsSync(c)) { bcrypt = require(c); break; } } catch {}
-        }
-      }
-      const hash = bcrypt ? await bcrypt.hash("Boostera2026!", 10) : "$2b$10$txbFZDQr.6d2vt.3FrSDoe1963TpfE/ks8j3/IJiWKHDeaz";
-      const user = await prisma.user.upsert({
-        where: { email: "zidanesidahmed18@gmail.com" },
-        update: {
-          role: "ADMIN",
-          isActive: true,
-          status: "ACTIVE",
-          emailVerified: true,
-          passwordHash: hash,
-          name: "Direction BOOSTERA",
-        },
-        create: {
-          email: "zidanesidahmed18@gmail.com",
-          passwordHash: hash,
-          name: "Direction BOOSTERA",
-          role: "ADMIN",
-          phone: "0550 00 00 00",
-          status: "ACTIVE",
-          emailVerified: true,
-        },
-      });
-      return res.end(JSON.stringify({
-        success: true,
-        message: "Compte Administrateur BOOSTERA ERP configuré pour zidanesidahmed18@gmail.com",
-        email: user.email,
-        role: user.role,
-      }));
-    } catch (e) {
-      return res.end(JSON.stringify({ success: false, error: e.message }));
-    }
   }
 
   // === DIAGNOSTIC SSR & DATABASE ENDPOINT ===
@@ -744,7 +654,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
         <head>
           <meta charset="utf-8">
-          <title>BOOSTERA ERP — Initialisation</title>
+          <title>HDZ SECURITY ERP — Initialisation</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
             .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -754,7 +664,7 @@ const server = http.createServer(async (req, res) => {
         </head>
         <body>
           <div class="card">
-            <h1>⚠️ Diagnostic — BOOSTERA ERP</h1>
+            <h1>⚠️ Diagnostic — HDZ SECURITY ERP</h1>
             <p>Détail de l'erreur :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
           </div>
@@ -780,7 +690,7 @@ const server = http.createServer(async (req, res) => {
       <html>
         <head><meta charset="utf-8"><meta http-equiv="refresh" content="2"></head>
         <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;padding:40px;text-align:center;">
-          <h2>🚀 Démarrage de BOOSTERA ERP...</h2>
+          <h2>🚀 Démarrage de HDZ SECURITY ERP...</h2>
           <p>Chargement des modules. Actualisation automatique dans 2 secondes...</p>
         </body>
       </html>
@@ -807,5 +717,5 @@ server.listen(port, (err) => {
     logDebug("Server listen error: " + err.message);
     return;
   }
-  logDebug(`> BOOSTERA ERP listening on port ${port}`);
+  logDebug(`> HDZ SECURITY ERP listening on port ${port}`);
 });

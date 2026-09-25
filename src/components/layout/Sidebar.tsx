@@ -325,18 +325,18 @@ export function Sidebar({
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden md:flex h-screen sticky top-0 flex-col bg-[#090d18]/90 backdrop-blur-2xl border-r border-white/[0.08] transition-all duration-300 z-30 select-none shrink-0 shadow-2xl shadow-black/40",
+          "app-sidebar hidden md:flex h-screen sticky top-0 flex-col bg-neutral-950 border-r border-neutral-800/80 transition-all duration-300 z-30 select-none shrink-0",
           collapsed ? "w-18" : "w-64"
         )}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-3.5 border-b border-white/[0.06] bg-white/[0.01]">
+        <div className="sidebar-brand-header h-16 flex items-center justify-between px-3.5 border-b border-neutral-800/80">
           {!collapsed && (
             <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
+              <div className="sidebar-brand-logo-container w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
                 <Image
                   src="/logo.png"
-                  alt="BOOSTERA Logo"
+                  alt="HDZ SECURITY Logo"
                   width={34}
                   height={34}
                   className="w-full h-full object-contain"
@@ -344,22 +344,22 @@ export function Sidebar({
                 />
               </div>
               <div className="flex flex-col">
-                <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                  BOOSTERA
-                  <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+                <span className="sidebar-brand-title font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
+                  HDZ SECURITY
+                  <span className="sidebar-brand-badge text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                     ERP
                   </span>
                 </span>
-                <span className="text-[10px] text-neutral-500">SaaS Agence Digitale</span>
+                <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">Direction & Sécurité</span>
               </div>
             </Link>
           )}
 
           {collapsed && (
-            <div className="w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="BOOSTERA ERP">
+            <div className="sidebar-brand-logo-container w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="HDZ SECURITY ERP">
               <Image
                 src="/logo.png"
-                alt="BOOSTERA"
+                alt="HDZ SECURITY"
                 width={32}
                 height={32}
                 className="w-full h-full object-contain"
@@ -371,7 +371,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
+            className="sidebar-collapse-btn p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
             title={collapsed ? "Agrandir le menu" : "Réduire le menu"}
           >
             {collapsed ? (
@@ -387,7 +387,7 @@ export function Sidebar({
           ref={navRef}
           onScroll={handleNavScroll}
           style={{ overflowAnchor: "none" }}
-          className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
+          className="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
         >
           {visibleGroups.map((group) => {
             const hasActiveItem = group.items.some((item) => isItemActive(item.href));
@@ -399,13 +399,13 @@ export function Sidebar({
                   <button
                     type="button"
                     onClick={() => toggleGroup(group.groupTitle)}
-                    className="w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
+                    className="sidebar-group-btn w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
                     title={isGroupCollapsed ? "Déplier la section" : "Replier la section"}
                   >
                     <span>{group.groupTitle}</span>
                     <ChevronDown
                       className={cn(
-                        "w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
+                        "sidebar-group-chevron w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
                         isGroupCollapsed && "-rotate-90"
                       )}
                     />
@@ -431,29 +431,29 @@ export function Sidebar({
                           }
                         }}
                         className={cn(
-                          "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 group relative",
+                          "sidebar-nav-item flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
                           active
-                            ? "bg-gradient-to-r from-blue-600/20 via-blue-600/10 to-transparent text-white border border-blue-500/30 shadow-sm shadow-blue-500/10 font-semibold before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:shadow-[0_0_10px_rgba(59,130,246,0.9)]"
-                            : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05]"
+                            ? "sidebar-nav-item-active bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
+                            : "sidebar-nav-item-inactive text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
                         )}
                         title={collapsed ? item.label : undefined}
                       >
                         <Icon
                           className={cn(
-                            "w-4 h-4 shrink-0 transition-colors",
-                            active ? "text-blue-400" : "text-neutral-400 group-hover:text-neutral-200"
+                            "sidebar-nav-icon w-4 h-4 shrink-0 transition-colors",
+                            active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
                           )}
                         />
                         {!collapsed && (
-                          <span className="flex-1 truncate">{item.label}</span>
+                          <span className="sidebar-nav-label flex-1 truncate">{item.label}</span>
                         )}
                         {!collapsed && item.badge && (
                           <span
                             className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border backdrop-blur-sm",
+                              "sidebar-badge text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
                               active
-                                ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                                : "bg-white/[0.05] text-neutral-300 border-white/[0.08]"
+                                ? "sidebar-badge-active bg-white/20 text-white border-white/30"
+                                : "sidebar-badge-inactive bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                             )}
                           >
                             {item.badge}
@@ -469,22 +469,22 @@ export function Sidebar({
         </div>
 
         {/* Footer: User Identity Card */}
-        <div className="p-3 border-t border-neutral-800/80">
+        <div className="sidebar-footer p-3 border-t border-neutral-800/80">
           <Link
             href="/parametres?tab=USERS"
-            className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60 hover:border-neutral-700 transition-colors group"
+            className="sidebar-user-card flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60 hover:border-neutral-700 transition-colors group"
           >
-            <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
+            <div className="sidebar-user-avatar w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0 group-hover:scale-105 transition-transform">
               {userName ? userName.charAt(0).toUpperCase() : "A"}
             </div>
             {!collapsed && (
               <div className="flex-1 truncate">
-                <p className="text-xs font-semibold text-neutral-200 truncate group-hover:text-white">
+                <p className="sidebar-user-name text-xs font-semibold text-neutral-200 truncate group-hover:text-white">
                   {userName || "Administrateur"}
                 </p>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <ShieldCheck className="w-3 h-3 text-blue-400 shrink-0" />
-                  <p className="text-[10px] text-neutral-400 truncate">
+                  <ShieldCheck className="sidebar-user-shield w-3 h-3 text-blue-400 shrink-0" />
+                  <p className="sidebar-user-role text-[10px] text-neutral-400 truncate">
                     {userRole || "Administrateur"}
                   </p>
                 </div>
@@ -504,18 +504,18 @@ export function Sidebar({
           />
 
           {/* Off-canvas Drawer Panel */}
-          <aside className="relative flex flex-col w-72 max-w-[85vw] h-full bg-neutral-950 border-r border-neutral-800 shadow-2xl z-50 animate-in slide-in-from-left duration-200">
+          <aside className="app-sidebar relative flex flex-col w-72 max-w-[85vw] h-full bg-neutral-950 border-r border-neutral-800 shadow-2xl z-50 animate-in slide-in-from-left duration-200">
             {/* Brand Header with Close Button */}
-            <div className="h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
+            <div className="sidebar-brand-header h-16 flex items-center justify-between px-4 border-b border-neutral-800/80">
               <Link
                 href="/dashboard"
                 onClick={() => setMobileOpen(false)}
                 className="flex items-center gap-2.5"
               >
-                <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0">
+                <div className="sidebar-brand-logo-container w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0">
                   <Image
                     src="/logo.png"
-                    alt="BOOSTERA Logo"
+                    alt="HDZ SECURITY Logo"
                     width={34}
                     height={34}
                     className="w-full h-full object-contain"
@@ -523,20 +523,20 @@ export function Sidebar({
                   />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                    BOOSTERA
-                    <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
+                  <span className="sidebar-brand-title font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
+                    HDZ SECURITY
+                    <span className="sidebar-brand-badge text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                       ERP
                     </span>
                   </span>
-                  <span className="text-[10px] text-neutral-500">SaaS Agence Digitale</span>
+                  <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">Direction & Sécurité</span>
                 </div>
               </Link>
 
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
+                className="sidebar-collapse-btn p-2 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer"
                 title="Fermer le menu"
               >
                 <X className="w-5 h-5" />
@@ -546,7 +546,7 @@ export function Sidebar({
             {/* Navigation Groups for Mobile */}
             <div
               ref={mobileNavRef}
-              className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
+              className="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-thin scrollbar-thumb-neutral-800"
             >
               {visibleGroups.map((group) => {
                 const hasActiveItem = group.items.some((item) => isItemActive(item.href));
@@ -557,12 +557,12 @@ export function Sidebar({
                     <button
                       type="button"
                       onClick={() => toggleGroup(group.groupTitle)}
-                      className="w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
+                      className="sidebar-group-btn w-full flex items-center justify-between px-2.5 py-1 text-[10px] font-bold text-neutral-500 hover:text-neutral-300 tracking-wider transition-colors cursor-pointer group select-none"
                     >
                       <span>{group.groupTitle}</span>
                       <ChevronDown
                         className={cn(
-                          "w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
+                          "sidebar-group-chevron w-3 h-3 text-neutral-600 group-hover:text-neutral-400 transition-transform duration-200",
                           isGroupCollapsed && "-rotate-90"
                         )}
                       />
@@ -579,26 +579,26 @@ export function Sidebar({
                             href={item.href}
                             onClick={() => setMobileOpen(false)}
                             className={cn(
-                              "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 group relative",
+                              "sidebar-nav-item flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
                               active
-                                ? "bg-gradient-to-r from-blue-600/20 via-blue-600/10 to-transparent text-white border border-blue-500/30 shadow-sm shadow-blue-500/10 font-semibold before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:shadow-[0_0_10px_rgba(59,130,246,0.9)]"
-                                : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05]"
+                                ? "sidebar-nav-item-active bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
+                                : "sidebar-nav-item-inactive text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
                             )}
                           >
                             <Icon
                               className={cn(
-                                "w-4 h-4 shrink-0 transition-colors",
-                                active ? "text-blue-400" : "text-neutral-400 group-hover:text-neutral-200"
+                                "sidebar-nav-icon w-4 h-4 shrink-0 transition-colors",
+                                active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
                               )}
                             />
-                            <span className="flex-1 truncate">{item.label}</span>
+                            <span className="sidebar-nav-label flex-1 truncate">{item.label}</span>
                             {item.badge && (
                               <span
                                 className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border backdrop-blur-sm",
+                                  "sidebar-badge text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
                                   active
-                                    ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
-                                    : "bg-white/[0.05] text-neutral-300 border-white/[0.08]"
+                                    ? "sidebar-badge-active bg-white/20 text-white border-white/30"
+                                    : "sidebar-badge-inactive bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                                 )}
                               >
                                 {item.badge}
@@ -614,16 +614,16 @@ export function Sidebar({
             </div>
 
             {/* Footer User Info Mobile */}
-            <div className="p-3 border-t border-neutral-800/80">
-              <div className="flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
-                <div className="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+            <div className="sidebar-footer p-3 border-t border-neutral-800/80">
+              <div className="sidebar-user-card flex items-center gap-3 p-2 rounded-xl bg-neutral-900/60 border border-neutral-800/60">
+                <div className="sidebar-user-avatar w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center font-bold text-xs shrink-0">
                   {userName ? userName.charAt(0).toUpperCase() : "A"}
                 </div>
                 <div className="flex-1 truncate">
-                  <p className="text-xs font-semibold text-neutral-200 truncate">
+                  <p className="sidebar-user-name text-xs font-semibold text-neutral-200 truncate">
                     {userName || "Administrateur"}
                   </p>
-                  <p className="text-[10px] text-neutral-400 truncate">
+                  <p className="sidebar-user-role text-[10px] text-neutral-400 truncate">
                     {userRole || "Administrateur"}
                   </p>
                 </div>

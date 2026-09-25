@@ -455,21 +455,16 @@ export async function adminTriggerPasswordResetAction(userId: string) {
   const appUrl = await getAppUrl();
   const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
 
-  const emailRes = await sendPasswordResetEmail(target.email, target.name, resetUrl);
+  await sendPasswordResetEmail(target.email, target.name, resetUrl);
 
   await createAuditLog({
     userId: admin.id,
     action: "ADMIN_TRIGGER_PASSWORD_RESET",
     module: "AUTH",
-    details: { targetUserId: userId, userEmail: target.email, resetUrl },
+    details: { targetUserId: userId, userEmail: target.email },
   });
 
-  return {
-    success: true,
-    resetUrl,
-    emailSent: emailRes?.success && !emailRes?.simulated,
-    simulated: !!emailRes?.simulated,
-  };
+  return { success: true };
 }
 
 export async function adminDirectSetUserPasswordAction(userId: string, newPassword: string) {

@@ -29,39 +29,7 @@ async function main() {
     },
   });
 
-  const userZidane = await prisma.user.upsert({
-    where: { email: "zidanesidahmed18@gmail.com" },
-    update: {
-      role: "ADMIN",
-      isActive: true,
-      status: "ACTIVE",
-      emailVerified: true,
-      name: "Direction BOOSTERA",
-    },
-    create: {
-      email: "zidanesidahmed18@gmail.com",
-      passwordHash: hash,
-      name: "Direction BOOSTERA",
-      role: "ADMIN",
-      phone: "0550 00 00 00",
-      status: "ACTIVE",
-      emailVerified: true,
-    },
-  });
-
-  await prisma.employee.upsert({
-    where: { userId: userZidane.id },
-    update: {},
-    create: {
-      userId: userZidane.id,
-      firstName: "Direction",
-      lastName: "BOOSTERA",
-      position: "Directeur Général",
-      department: "ADMINISTRATION",
-    },
-  });
-
-  console.log("Admin accounts ready: admin@boostera.dz and zidanesidahmed18@gmail.com / Boostera2026!");
+  console.log("Admin account ready: admin@boostera.dz / Boostera2026!");
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());

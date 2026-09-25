@@ -23,15 +23,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ) => {
     const variantStyles = {
       primary:
-        "bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 bg-[length:200%_auto] hover:bg-[position:right_center] text-white shadow-md shadow-blue-500/25 hover:shadow-lg hover:shadow-blue-500/35 border border-white/15 focus-visible:ring-blue-500",
+        "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 border-transparent focus-visible:ring-blue-500",
       secondary:
-        "bg-neutral-900/80 hover:bg-neutral-800/90 text-neutral-200 border border-white/[0.08] hover:border-white/[0.16] backdrop-blur-md shadow-xs focus-visible:ring-neutral-400",
+        "bg-neutral-800/90 hover:bg-neutral-700/90 text-neutral-200 border-neutral-700/80 hover:border-neutral-600 focus-visible:ring-neutral-400",
       outline:
-        "bg-transparent hover:bg-white/[0.05] text-neutral-300 border border-white/[0.1] hover:border-white/[0.2] focus-visible:ring-neutral-400",
+        "bg-transparent hover:bg-neutral-800/60 text-neutral-300 border-neutral-700 hover:border-neutral-500 focus-visible:ring-neutral-400",
       danger:
-        "bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 shadow-xs shadow-rose-500/10 focus-visible:ring-rose-500",
+        "bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border-rose-500/30 hover:border-rose-500/50 focus-visible:ring-rose-500",
       ghost:
-        "bg-transparent hover:bg-white/[0.06] text-neutral-400 hover:text-white border-transparent focus-visible:ring-neutral-400",
+        "bg-transparent hover:bg-neutral-800/60 text-neutral-400 hover:text-neutral-100 border-transparent focus-visible:ring-neutral-400",
     };
 
     const sizeStyles = {

@@ -126,7 +126,7 @@ function LoginForm() {
     <div className="w-full max-w-md space-y-6 relative z-10">
       {/* Brand Header */}
       <div className="text-center space-y-3">
-        <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/30 mb-1 border border-white/20 ring-4 ring-blue-500/10">
+        <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/25 mb-1 border border-neutral-800">
           <Image
             src="/logo.png"
             alt="BOOSTERA Logo"
@@ -136,9 +136,9 @@ function LoginForm() {
             priority
           />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
-          BOOSTERA
-          <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/35 font-bold shadow-xs shadow-blue-500/20">
+        <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center justify-center gap-2">
+          HDZ SECURITY
+          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold">
             ERP v1.0
           </span>
         </h1>
@@ -148,9 +148,7 @@ function LoginForm() {
       </div>
 
       {/* Login Card */}
-      <div className="bg-[#0c1222]/80 backdrop-blur-2xl border border-white/[0.1] rounded-3xl p-6 md:p-8 shadow-2xl [box-shadow:inset_0_1px_0_0_rgba(255,255,255,0.08),0_20px_50px_-10px_rgba(0,0,0,0.7)] space-y-5 relative overflow-hidden">
-        {/* Top ambient highlight */}
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-24 bg-gradient-to-b from-blue-500/20 to-transparent blur-xl pointer-events-none" />
+      <div className="bg-neutral-900/80 backdrop-blur-md border border-neutral-800/80 rounded-3xl p-6 md:p-8 shadow-2xl space-y-5">
         {verifiedParam && (
           <div className="p-3 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-medium flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -270,11 +268,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#070b13] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
+    <div className="min-h-screen bg-neutral-950 flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
       {/* Background glow accents */}
-      <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-blue-600/[0.18] via-indigo-600/[0.08] to-transparent rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute top-[40%] -right-40 w-96 h-96 bg-purple-600/[0.08] rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-600/[0.08] rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <Suspense fallback={<div className="text-neutral-400 text-xs">Chargement...</div>}>
         <LoginForm />
