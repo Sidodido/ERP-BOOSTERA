@@ -40,6 +40,7 @@ import { Input } from "@/components/ui/Input";
 import {
   EditorialPlanResult,
   PublicationProposal,
+  EditorialTheme,
   WEEKLY_QUOTAS_BY_OFFER,
   STRATEGIC_GOALS,
 } from "@/lib/aiContentGenerator";
@@ -55,6 +56,8 @@ import {
   regenerateSinglePublicationAction,
   updatePublicationThemeAction,
   updatePublicationDetailsAction,
+  updateEditorialThemesAction,
+  generateThemesWithAiAction,
 } from "@/actions/contentAi";
 import { useRouter } from "next/navigation";
 import { OfferType } from "@prisma/client";
@@ -84,7 +87,40 @@ export function AiEditorialPlanner({
   const [plan, setPlan] = useState<EditorialPlanResult | null>(null);
   const [seed, setSeed] = useState<number>(0);
   const [regenerationNotice, setRegenerationNotice] = useState<string | null>(null);
-  const [showThemes, setShowThemes] = useState<boolean>(false);
+  const [showThemes, setShowThemes] = useState<boolean>(true);
+  const [editableThemes, setEditableThemes] = useState<EditorialTheme[]>([
+    {
+      id: "th-1",
+      pillar: "Semaine 1 : Notoriété & Savoir-faire",
+      title: "",
+      description: "",
+      color: "purple",
+    },
+    {
+      id: "th-2",
+      pillar: "Semaine 2 : Éducation & Conseils",
+      title: "",
+      description: "",
+      color: "blue",
+    },
+    {
+      id: "th-3",
+      pillar: "Semaine 3 : Preuve Sociale & Confiance",
+      title: "",
+      description: "",
+      color: "emerald",
+    },
+    {
+      id: "th-4",
+      pillar: "Semaine 4 : Offre Spéciale & Conversion",
+      title: "",
+      description: "",
+      color: "amber",
+    },
+  ]);
+  const [isSavingThemes, setIsSavingThemes] = useState<boolean>(false);
+  const [isGeneratingThemesAi, setIsGeneratingThemesAi] = useState<boolean>(false);
+  const [themeNotice, setThemeNotice] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showPackDetails, setShowPackDetails] = useState<boolean>(true);
   const [selectedGoal, setSelectedGoal] = useState<string>("ALL_ROUND");
   const [selectedWeek, setSelectedWeek] = useState<number | "ALL">("ALL");
@@ -227,6 +263,116 @@ export function AiEditorialPlanner({
     initKeyAndPlan();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, client?.id]);
+
+  // Synchroniser les thèmes lorsque le plan est chargé ou modifié
+  useEffect(() => {
+    if (plan?.themes && plan.themes.length > 0) {
+      setEditableThemes(plan.themes);
+    }
+  }, [plan?.themes]);
+
+  const handleUpdateSingleTheme = (index: number, field: "pillar" | "title" | "description", value: string) => {
+    setEditableThemes((prev) => {
+      const copy = [...prev];
+      if (!copy[index]) {
+        copy[index] = {
+          id: `th-${index + 1}`,
+          pillar: `Semaine ${index + 1}`,
+          title: "",
+          description: "",
+          color: index === 0 ? "purple" : index === 1 ? "blue" : index === 2 ? "emerald" : "amber",
+        };
+      }
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleSaveThemesManual = async (applyToPubs: boolean = false) => {
+    setIsSavingThemes(true);
+    setThemeNotice(null);
+    try {
+      const res = await updateEditorialThemesAction({
+        projectId: project?.id,
+        clientId: client?.id,
+        themes: editableThemes,
+        applyToPublications: applyToPubs,
+      });
+
+      if (res.success && res.updatedPlan) {
+        setPlan(res.updatedPlan);
+        setThemeNotice({
+          type: "success",
+          message: applyToPubs
+            ? "✅ Thèmes enregistrés et appliqués aux publications du mois avec succès !"
+            : "✅ Thèmes enregistrés avec succès !",
+        });
+        setTimeout(() => setThemeNotice(null), 5000);
+      } else {
+        setThemeNotice({
+          type: "error",
+          message: res.error || "Erreur lors de l'enregistrement des thèmes.",
+        });
+      }
+    } catch (err: any) {
+      setThemeNotice({
+        type: "error",
+        message: err?.message || "Erreur serveur.",
+      });
+    } finally {
+      setIsSavingThemes(false);
+    }
+  };
+
+  const handleGenerateThemesAi = async () => {
+    setIsGeneratingThemesAi(true);
+    setThemeNotice(null);
+    try {
+      const res = await generateThemesWithAiAction({
+        projectId: project?.id,
+        clientId: client?.id,
+        goal: selectedGoal,
+        provider: selectedProvider,
+        apiKey: geminiApiKey || undefined,
+        openAiApiKey: openAiApiKey || undefined,
+      });
+
+      if (res.success && res.themes && res.themes.length > 0) {
+        setEditableThemes(res.themes);
+        setPlan((prevPlan) => {
+          if (!prevPlan) return prevPlan;
+          return {
+            ...prevPlan,
+            themes: res.themes!,
+          };
+        });
+        // Sauvegarde automatique des thèmes générés
+        await updateEditorialThemesAction({
+          projectId: project?.id,
+          clientId: client?.id,
+          themes: res.themes,
+          applyToPublications: false,
+        });
+        setThemeNotice({
+          type: "success",
+          message: "✨ 4 thèmes stratégiques générés par IA ! Vous pouvez les modifier ou les conserver.",
+        });
+        setTimeout(() => setThemeNotice(null), 6000);
+      } else {
+        setThemeNotice({
+          type: "error",
+          message: res.error || "Impossible de générer les thèmes par IA.",
+        });
+      }
+    } catch (err: any) {
+      setThemeNotice({
+        type: "error",
+        message: err?.message || "Erreur lors de la génération IA.",
+      });
+    } finally {
+      setIsGeneratingThemesAi(false);
+    }
+  };
 
   const handleGeneratePlan = (
     goalOverride?: string,
@@ -1027,49 +1173,206 @@ export function AiEditorialPlanner({
         </div>
       )}
 
-      {/* PILIERS ÉDITORIAUX MENSUELS (ACCORDÉON COMPACT) */}
-      {plan && plan.themes.length > 0 && (
-        <div className="rounded-2xl bg-neutral-900/40 border border-neutral-800/80 p-4 space-y-3">
-          <div
-            onClick={() => setShowThemes(!showThemes)}
-            className="flex items-center justify-between cursor-pointer select-none group"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-neutral-200 group-hover:text-purple-300 transition-colors">
-                🏛️ Les 4 Piliers Stratégiques du Mois
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 font-mono">
-                {plan.themes.length} thèmes
-              </span>
-            </div>
-            <span className="text-xs text-neutral-500 group-hover:text-neutral-300 flex items-center gap-1">
-              {showThemes ? "Réduire" : "Afficher"}
-              {showThemes ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+      {/* THÈMES & PILIERS ÉDITORIAUX MENSUELS : SAISIE MANUELLE PAR DÉFAUT + BOUTON IA */}
+      <div className="rounded-2xl bg-neutral-900/60 border border-neutral-800/80 p-4 space-y-4 shadow-sm">
+        {/* Header avec Titre, Badge, et Bouton Générer par IA à côté */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-neutral-800/60">
+          <div className="flex items-center gap-2.5">
+            <span className="text-sm font-bold text-neutral-100 flex items-center gap-2">
+              <span className="text-base">🏛️</span>
+              <span>Les 4 Thèmes & Piliers Stratégiques du Mois</span>
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 font-semibold flex items-center gap-1">
+              <Edit3 className="w-3 h-3" />
+              Saisie Manuelle par Défaut
             </span>
           </div>
 
-          {showThemes && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {plan.themes.map((th) => (
-                <div
-                  key={th.id}
-                  className="p-3.5 rounded-xl bg-neutral-900/60 border border-neutral-800/80 hover:border-neutral-700 transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 border border-purple-500/20 font-semibold">
-                      {th.pillar}
-                    </span>
-                    <h5 className="text-xs font-bold text-neutral-200 mt-2 line-clamp-1">{th.title}</h5>
-                    <p className="text-[11px] text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
-                      {th.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Bouton Générer par IA à côté */}
+            <button
+              type="button"
+              onClick={handleGenerateThemesAi}
+              disabled={isGeneratingThemesAi}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Générer automatiquement les 4 thèmes par IA adaptés au secteur du client"
+            >
+              {isGeneratingThemesAi ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Génération IA...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-purple-200" />
+                  <span>Générer par IA</span>
+                </>
+              )}
+            </button>
+
+            {/* Bouton Enregistrer les thèmes */}
+            <button
+              type="button"
+              onClick={() => handleSaveThemesManual(false)}
+              disabled={isSavingThemes}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+              title="Enregistrer les thèmes saisis manuellement"
+            >
+              {isSavingThemes ? (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Enregistrement...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Enregistrer les Thèmes</span>
+                </>
+              )}
+            </button>
+
+            {/* Bouton Appliquer aux publications */}
+            {plan?.publications && plan.publications.length > 0 && (
+              <button
+                type="button"
+                onClick={() => handleSaveThemesManual(true)}
+                disabled={isSavingThemes}
+                className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-medium transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                title="Met à jour le thème de chaque publication de la semaine correspondante"
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden md:inline">Appliquer au planning</span>
+              </button>
+            )}
+
+            {/* Toggle show/hide */}
+            <button
+              type="button"
+              onClick={() => setShowThemes(!showThemes)}
+              className="p-1.5 text-neutral-400 hover:text-neutral-200 rounded-lg hover:bg-neutral-800 transition cursor-pointer"
+              title={showThemes ? "Réduire" : "Afficher"}
+            >
+              {showThemes ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Feedback notification toast / alert */}
+        {themeNotice && (
+          <div
+            className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+              themeNotice.type === "success"
+                ? "bg-emerald-950/60 border border-emerald-500/40 text-emerald-300"
+                : "bg-rose-950/60 border border-rose-500/40 text-rose-300"
+            }`}
+          >
+            {themeNotice.type === "success" ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <X className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{themeNotice.message}</span>
+          </div>
+        )}
+
+        {/* Cartes éditables pour chaque thème */}
+        {showThemes && (
+          <div className="space-y-3">
+            <div className="text-[11px] text-neutral-400 flex items-center justify-between">
+              <span>
+                ✍️ <strong className="text-neutral-300">Saisie manuelle :</strong> Définissez vos 4 thèmes pour le mois (un thème par semaine). Vous pouvez saisir vos propres textes ou cliquer sur <strong className="text-purple-300">&quot;Générer par IA&quot;</strong> si vous souhaitez des suggestions automatiques.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map((idx) => {
+                const currentTheme = editableThemes[idx] || {
+                  id: `th-${idx + 1}`,
+                  pillar: `Semaine ${idx + 1}`,
+                  title: "",
+                  description: "",
+                  color: idx === 0 ? "purple" : idx === 1 ? "blue" : idx === 2 ? "emerald" : "amber",
+                };
+
+                const weekNum = idx + 1;
+                const pillarColor =
+                  idx === 0
+                    ? "border-purple-500/40 focus-within:border-purple-500"
+                    : idx === 1
+                    ? "border-blue-500/40 focus-within:border-blue-500"
+                    : idx === 2
+                    ? "border-emerald-500/40 focus-within:border-emerald-500"
+                    : "border-amber-500/40 focus-within:border-amber-500";
+
+                const badgeBg =
+                  idx === 0
+                    ? "bg-purple-500/15 text-purple-300 border-purple-500/30"
+                    : idx === 1
+                    ? "bg-blue-500/15 text-blue-300 border-blue-500/30"
+                    : idx === 2
+                    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                    : "bg-amber-500/15 text-amber-300 border-amber-500/30";
+
+                return (
+                  <div
+                    key={idx}
+                    className={`p-3.5 rounded-xl bg-neutral-950/70 border ${pillarColor} transition-all space-y-2.5 shadow-sm`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${badgeBg}`}>
+                        Semaine {weekNum} / 4
+                      </span>
+                      <span className="text-[10px] text-neutral-500 font-medium">Thème #{weekNum}</span>
+                    </div>
+
+                    {/* Axe / Pilier */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block mb-1">
+                        Axe / Pilier :
+                      </label>
+                      <input
+                        type="text"
+                        value={currentTheme.pillar}
+                        onChange={(e) => handleUpdateSingleTheme(idx, "pillar", e.target.value)}
+                        placeholder={`Ex: Notoriété & Savoir-faire`}
+                        className="w-full px-2.5 py-1.5 text-xs bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-purple-500 font-medium transition"
+                      />
+                    </div>
+
+                    {/* Titre du thème */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block mb-1">
+                        Titre du Thème :
+                      </label>
+                      <input
+                        type="text"
+                        value={currentTheme.title}
+                        onChange={(e) => handleUpdateSingleTheme(idx, "title", e.target.value)}
+                        placeholder={`Ex: L'Exigence et le Savoir-faire`}
+                        className="w-full px-2.5 py-1.5 text-xs bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-100 placeholder-neutral-600 focus:outline-none focus:border-purple-500 font-bold transition"
+                      />
+                    </div>
+
+                    {/* Description / Objectif */}
+                    <div>
+                      <label className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block mb-1">
+                        Angle & Objectif :
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={currentTheme.description}
+                        onChange={(e) => handleUpdateSingleTheme(idx, "description", e.target.value)}
+                        placeholder={`Ex: Mettre en valeur nos solutions phares`}
+                        className="w-full px-2.5 py-1.5 text-[11px] bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-300 placeholder-neutral-600 focus:outline-none focus:border-purple-500 resize-none transition leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* SÉLECTEUR D'ONGLETS PAR SEMAINE */}
       <div className="flex items-center gap-2 border-b border-neutral-800 pb-2 overflow-x-auto">

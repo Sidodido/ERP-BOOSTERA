@@ -12,6 +12,7 @@ import {
   generateAiEditorialPlan,
   EditorialPlanResult,
   PublicationProposal,
+  EditorialTheme,
   WEEKLY_QUOTAS_BY_OFFER,
 } from "@/lib/aiContentGenerator";
 import { generateEditorialPlanWithGemini } from "@/lib/gemini";
@@ -1195,6 +1196,312 @@ export async function updatePublicationDetailsAction(params: {
     return { success: false, error: error.message || "Erreur lors de la mise à jour" };
   }
 }
+
+/**
+ * Met à jour manuellement la liste des thèmes du plan éditorial
+ * et propage optionnellement les thèmes aux publications de chaque semaine
+ */
+export async function updateEditorialThemesAction(params: {
+  clientId?: string;
+  projectId?: string;
+  themes: EditorialTheme[];
+  applyToPublications?: boolean;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  updatedPlan?: EditorialPlanResult;
+}> {
+  try {
+    await requireAuth();
+    let client: any = null;
+    if (params.clientId) {
+      client = await prisma.client.findUnique({ where: { id: params.clientId } });
+    } else if (params.projectId) {
+      const p = await prisma.project.findUnique({
+        where: { id: params.projectId },
+        include: { client: true },
+      });
+      client = p?.client;
+    }
+
+    if (!client) {
+      return { success: false, error: "Client introuvable" };
+    }
+
+    const monthKey = getMonthKey();
+    let currentPlan = getStoredEditorialPlan(client.notes, monthKey);
+
+    if (!currentPlan) {
+      const quota = WEEKLY_QUOTAS_BY_OFFER[(client.offerType as OfferType) || "STARTER"];
+      currentPlan = {
+        clientName: client.companyName,
+        brandName: client.brandName,
+        sector: client.sector,
+        wilaya: client.wilaya,
+        offerType: client.offerType || "STARTER",
+        weeklyQuota: quota?.weekly || 1,
+        monthlyTotal: quota?.monthly || 4,
+        monthName: new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date()),
+        goal: "ALL_ROUND",
+        goalLabel: "Stratégie Complète (Notoriété & Ventes)",
+        strategicSummary: "Plan éditorial personnalisé selon vos thèmes",
+        packSummary: quota?.tagline || "",
+        themes: params.themes,
+        publications: [],
+      };
+    } else {
+      currentPlan = {
+        ...currentPlan,
+        themes: params.themes,
+      };
+
+      if (params.applyToPublications && Array.isArray(currentPlan.publications)) {
+        currentPlan.publications = currentPlan.publications.map((pub: PublicationProposal) => {
+          const themeForWeek = params.themes[pub.week - 1] || params.themes[0];
+          if (themeForWeek && themeForWeek.title) {
+            return {
+              ...pub,
+              theme: `${themeForWeek.pillar ? themeForWeek.pillar + " : " : ""}${themeForWeek.title}`,
+            };
+          }
+          return pub;
+        });
+      }
+    }
+
+    const updatedNotes = saveEditorialPlanToNotes(client.notes, currentPlan, monthKey);
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { notes: updatedNotes },
+    });
+
+    revalidatePath("/abonnements");
+    revalidatePath(`/abonnements/${client.id}`);
+    if (params.projectId) {
+      revalidatePath(`/projets/${params.projectId}`);
+    }
+
+    return { success: true, updatedPlan: currentPlan };
+  } catch (error: any) {
+    console.error("Erreur updateEditorialThemesAction:", error);
+    return { success: false, error: error.message || "Erreur lors de l'enregistrement des thèmes" };
+  }
+}
+
+/**
+ * Génère automatiquement 4 thèmes stratégiques pertinents par IA selon le client et son secteur
+ */
+export async function generateThemesWithAiAction(params: {
+  clientId?: string;
+  projectId?: string;
+  goal?: string;
+  apiKey?: string;
+  openAiApiKey?: string;
+  provider?: "AUTO" | "GEMINI" | "OPENAI";
+}): Promise<{
+  success: boolean;
+  themes?: EditorialTheme[];
+  source?: string;
+  error?: string;
+}> {
+  try {
+    await requireAuth();
+    let client: any = null;
+    if (params.clientId) {
+      client = await prisma.client.findUnique({ where: { id: params.clientId } });
+    } else if (params.projectId) {
+      const p = await prisma.project.findUnique({
+        where: { id: params.projectId },
+        include: { client: true },
+      });
+      client = p?.client;
+    }
+
+    if (!client) {
+      return { success: false, error: "Client introuvable" };
+    }
+
+    const displayName = client.brandName?.trim() || client.companyName.trim();
+    const sector = client.sector || "Entreprise";
+    const wilaya = client.wilaya || "Alger";
+
+    const promptText = `Tu es Directeur de Création Social Media chez l'agence BOOSTERA.
+Pour l'entreprise "${displayName}" active dans le secteur "${sector}" à ${wilaya} (Algérie).
+Génère EXACTEMENT 4 thèmes / piliers éditoriaux stratégiques pour les 4 semaines du mois (Semaine 1, Semaine 2, Semaine 3, Semaine 4).
+Chaque thème doit être percutant, commercialement attractif et parfaitement adapté au marché algérien.
+
+Réponds STRICTEMENT sous ce format JSON :
+{
+  "themes": [
+    {
+      "id": "th-1",
+      "pillar": "Semaine 1 : Notoriété & Savoir-faire",
+      "title": "Titre du thème 1 accrocheur",
+      "description": "Angle d'attaque précis pour la première semaine",
+      "color": "purple"
+    },
+    {
+      "id": "th-2",
+      "pillar": "Semaine 2 : Éducation & Valeur Ajoutée",
+      "title": "Titre du thème 2 pédagogique",
+      "description": "Angle d'attaque précis pour la deuxième semaine",
+      "color": "blue"
+    },
+    {
+      "id": "th-3",
+      "pillar": "Semaine 3 : Preuve Sociale & Confiance",
+      "title": "Titre du thème 3 rassurant",
+      "description": "Angle d'attaque axé témoignages et résultats",
+      "color": "emerald"
+    },
+    {
+      "id": "th-4",
+      "pillar": "Semaine 4 : Offre Spéciale & Conversion",
+      "title": "Titre du thème 4 orienté vente",
+      "description": "Angle d'attaque axé passage à l'action et contact",
+      "color": "amber"
+    }
+  ]
+}`;
+
+    const geminiKey = getResolvedGeminiApiKey(params.apiKey);
+    const openAiKey = getResolvedOpenAiApiKey(params.openAiApiKey);
+    const providerChoice = params.provider || "AUTO";
+
+    let generatedThemes: EditorialTheme[] | null = null;
+    let sourceUsed = "LOCAL_ENGINE";
+
+    // 1. Gemini
+    if ((providerChoice === "GEMINI" || providerChoice === "AUTO") && geminiKey) {
+      try {
+        const CANDIDATE_MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest", "gemini-pro-latest"];
+        for (const model of CANDIDATE_MODELS) {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }],
+              generationConfig: {
+                temperature: 0.9,
+                topP: 0.95,
+                maxOutputTokens: 1024,
+                responseMimeType: "application/json",
+              },
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              let clean = text.trim();
+              if (clean.startsWith("```json")) clean = clean.substring(7);
+              if (clean.startsWith("```")) clean = clean.substring(3);
+              if (clean.endsWith("```")) clean = clean.substring(0, clean.length - 3);
+              const parsed = JSON.parse(clean.trim());
+              if (Array.isArray(parsed.themes) && parsed.themes.length > 0) {
+                generatedThemes = parsed.themes;
+                sourceUsed = "GEMINI_AI";
+                break;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur generateThemesWithAiAction Gemini:", err);
+      }
+    }
+
+    // 2. OpenAI ChatGPT
+    if (!generatedThemes && (providerChoice === "OPENAI" || providerChoice === "AUTO") && openAiKey) {
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openAiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: "Tu es un stratège éditorial social media. Réponds en JSON strict." },
+              { role: "user", content: promptText },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.85,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const content = data?.choices?.[0]?.message?.content;
+          if (content) {
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed.themes) && parsed.themes.length > 0) {
+              generatedThemes = parsed.themes;
+              sourceUsed = "OPENAI_CHATGPT";
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur generateThemesWithAiAction OpenAI:", err);
+      }
+    }
+
+    // 3. Fallback Algorithmique Haute Qualité
+    if (!generatedThemes || generatedThemes.length === 0) {
+      const fallbackPlan = generateAiEditorialPlan({
+        clientName: client.companyName,
+        brandName: client.brandName,
+        sector: client.sector,
+        wilaya: client.wilaya,
+        offerType: client.offerType,
+        seed: Math.floor(Math.random() * 100) + 1,
+      });
+      generatedThemes = fallbackPlan.themes && fallbackPlan.themes.length >= 4
+        ? fallbackPlan.themes.slice(0, 4)
+        : [
+            {
+              id: "th-1",
+              pillar: "Semaine 1 : Notoriété & Savoir-faire",
+              title: `L'Exigence et le Savoir-faire ${displayName}`,
+              description: `Affirmer la position de référence de ${displayName} à ${wilaya}`,
+              color: "purple",
+            },
+            {
+              id: "th-2",
+              pillar: "Semaine 2 : Éducation & Conseils",
+              title: `Les Bonnes Pratiques & Astuces ${sector}`,
+              description: `Partager des conseils à forte valeur pour éduquer et intéresser l'audience`,
+              color: "blue",
+            },
+            {
+              id: "th-3",
+              pillar: "Semaine 3 : Preuve Sociale & Témoignages",
+              title: "La Satisfaction de Nos Clients en Chiffres",
+              description: "Mettre en avant les avis positifs, réalisations concrètes et retours d'expérience",
+              color: "emerald",
+            },
+            {
+              id: "th-4",
+              pillar: "Semaine 4 : Offre Spéciale & Conversion",
+              title: `Nos Formules Phares & Prise de Rendez-vous`,
+              description: `Inciter au contact direct via WhatsApp et appels avec une offre attractive`,
+              color: "amber",
+            },
+          ];
+    }
+
+    return {
+      success: true,
+      themes: generatedThemes,
+      source: sourceUsed,
+    };
+  } catch (error: any) {
+    console.error("Erreur generateThemesWithAiAction:", error);
+    return { success: false, error: error.message || "Erreur lors de la génération des thèmes" };
+  }
+}
+
 
 
 
