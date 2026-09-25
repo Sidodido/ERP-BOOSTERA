@@ -48,33 +48,53 @@ export function Modal({
     "5xl": "max-w-5xl",
   };
 
+  const titleId = `modal-title-${title.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
+  const descId = description ? `modal-desc-${title.toLowerCase().replace(/[^a-z0-9]/g, "-")}` : undefined;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      aria-describedby={descId}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+    >
       <div
         className={cn(
-          "w-full bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150",
+          "w-full bg-neutral-900/95 border border-neutral-800/90 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150 relative",
           maxWidthStyles[maxWidth]
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-neutral-800 shrink-0">
-          <div className="min-w-0 pr-2">
-            <h3 className="text-sm sm:text-base font-semibold text-neutral-100 truncate">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3.5 sm:px-6 sm:py-4 border-b border-neutral-800/80 shrink-0 bg-neutral-900/60 backdrop-blur-sm">
+          <div className="min-w-0 pr-3">
+            <h3 id={titleId} className="text-sm sm:text-base font-bold text-neutral-100 tracking-tight truncate">
+              {title}
+            </h3>
             {description && (
-              <p className="text-[11px] sm:text-xs text-neutral-400 mt-0.5 line-clamp-1">{description}</p>
+              <p id={descId} className="text-[11px] sm:text-xs text-neutral-400 mt-0.5 line-clamp-1">
+                {description}
+              </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer shrink-0"
+            aria-label="Fermer la boîte de dialogue"
+            className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800/80 rounded-xl transition-all duration-150 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-3.5 sm:p-6 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar min-w-0">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-3 sm:space-y-4 custom-scrollbar min-w-0">
+          {children}
+        </div>
       </div>
     </div>
   );
 }
+
