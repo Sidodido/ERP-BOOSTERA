@@ -23,6 +23,17 @@ console.error = function (...args) {
   origConsoleError.apply(console, args);
 };
 
+const origStderrWrite = process.stderr.write;
+process.stderr.write = function (chunk, ...args) {
+  try {
+    const s = String(chunk);
+    if (!s.includes("Fast Refresh") && !s.includes("webpack")) {
+      fs.appendFileSync(debugLogFile, "[STDERR] " + s);
+    }
+  } catch {}
+  return origStderrWrite.apply(process.stderr, [chunk, ...args]);
+};
+
 process.on("unhandledRejection", (reason) => {
   logDebug("[UNHANDLED REJECTION] " + ((reason && reason.stack) ? reason.stack : String(reason)));
 });
@@ -31,7 +42,7 @@ process.on("uncaughtException", (err) => {
   logDebug("[UNCAUGHT EXCEPTION] " + (err.stack || err.message));
 });
 
-logDebug("Starting BOOSTERA ERP server.js...");
+logDebug("Starting HDZ SECURITY ERP server.js...");
 
 const Module = require("module");
 
@@ -296,11 +307,68 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
     if (fs.existsSync(debugLogFile)) {
       const content = fs.readFileSync(debugLogFile, "utf-8");
-      res.end(content.split("\n").slice(-150).join("\n"));
+      const lines = content.split("\n").filter((l) => !l.startsWith("Notice SQL:"));
+      res.end(lines.slice(-500).join("\n"));
     } else {
       res.end("Aucun log disponible");
     }
     return;
+  }
+
+  // === DIAGNOSTIC SSR & DATABASE ENDPOINT ===
+  if (parsedUrl.pathname === "/api/diag") {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    const steps = [];
+    const prisma = getPrisma();
+    if (!prisma) {
+      return res.end("<h1 style='color:#f43f5e'>Prisma non disponible</h1>");
+    }
+    async function testStep(name, fn) {
+      try {
+        const out = await fn();
+        const preview = typeof out === "object" ? JSON.stringify(out).slice(0, 120) : String(out);
+        steps.push(`<div style="color:#34d399;margin-bottom:8px;">✅ <strong>${name}</strong>: OK &rarr; <code>${preview}</code></div>`);
+      } catch (err) {
+        steps.push(`<div style="color:#f43f5e;margin-bottom:8px;">❌ <strong>${name}</strong>: ERREUR<br><pre style="background:#18181b;padding:8px;border-radius:6px;color:#fb7185;overflow:auto;">${err.stack || err.message}</pre></div>`);
+      }
+    }
+
+    try {
+      await testStep("1. Session DB & Current Schema", () => prisma.$queryRawUnsafe("SELECT current_user, current_database(), current_schema()"));
+      await testStep("2. User count", () => prisma.user.count());
+      await testStep("3. User findFirst ADMIN", () => prisma.user.findFirst({ where: { role: "ADMIN" } }));
+      await testStep("4. User columns (getCurrentUser)", async () => {
+        const u = await prisma.user.findFirst({ where: { role: "ADMIN" } });
+        if (!u) throw new Error("Aucun administrateur trouvé.");
+        return prisma.user.findUnique({
+          where: { id: u.id },
+          select: { id: true, name: true, email: true, role: true, avatarUrl: true, phone: true, isActive: true, createdAt: true },
+        });
+      });
+      await testStep("5. Client count (ClientStatus.ACTIVE)", () => prisma.client.count({ where: { status: "ACTIVE" } }));
+      await testStep("6. Prospect count", () => prisma.prospect.count());
+      await testStep("7. Invoice overdue", () => prisma.invoice.findMany({ where: { balanceDue: { gt: 0 } }, take: 1 }));
+      await testStep("8. Attendance count", () => prisma.attendance.count());
+      await testStep("9. ProjectTask count", () => prisma.projectTask.count());
+      await testStep("10. Employee count", () => prisma.employee.count());
+      await testStep("11. AuditLog count", () => prisma.auditLog.count());
+    } catch (gErr) {
+      steps.push(`<div style="color:#f43f5e">Erreur globale diag: ${gErr.message}</div>`);
+    }
+
+    return res.end(`
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="utf-8"><title>Diagnostic ERP</title></head>
+        <body style="background:#09090b;color:#f4f4f5;font-family:monospace;padding:24px;line-height:1.5;">
+          <h2 style="color:#38bdf8;">🛡️ Diagnostic Intégrité BD & Requêtes SSR</h2>
+          <hr style="border-color:#27272a;margin-bottom:16px;">
+          ${steps.join("")}
+          <hr style="border-color:#27272a;margin-top:16px;">
+          <p><a href="/dashboard" style="color:#60a5fa;">👉 Retour au Tableau de bord</a></p>
+        </body>
+      </html>
+    `);
   }
 
   // === NATIVE HIGH-SPEED AUTH LOGIN HANDLER (Intercepts both /api/auth/login AND Next.js Server Action POST /login) ===
@@ -342,8 +410,21 @@ const server = http.createServer(async (req, res) => {
       logDebug(`[AUTH] Intercepted login attempt for: '${email}' on path '${parsedUrl.pathname}'`);
 
       if (!email) {
-        logDebug("[AUTH] No email found in request, delegating to Next.js handler");
-        return nextApp.getRequestHandler()(req, res, parsedUrl);
+        logDebug("[AUTH] No email found in request, replaying body stream to Next.js handler");
+        const { Readable } = require("stream");
+        const replayStream = new Readable();
+        replayStream._read = () => {};
+        for (const chunk of bodyChunks) replayStream.push(chunk);
+        replayStream.push(null);
+        Object.assign(replayStream, {
+          headers: req.headers,
+          method: req.method,
+          url: req.url,
+          httpVersion: req.httpVersion,
+          socket: req.socket,
+          connection: req.connection,
+        });
+        return nextApp.getRequestHandler()(replayStream, res, parsedUrl);
       }
 
       try {
@@ -573,7 +654,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
         <head>
           <meta charset="utf-8">
-          <title>BOOSTERA ERP — Initialisation</title>
+          <title>HDZ SECURITY ERP — Initialisation</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
             .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -583,7 +664,7 @@ const server = http.createServer(async (req, res) => {
         </head>
         <body>
           <div class="card">
-            <h1>⚠️ Diagnostic — BOOSTERA ERP</h1>
+            <h1>⚠️ Diagnostic — HDZ SECURITY ERP</h1>
             <p>Détail de l'erreur :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
           </div>
@@ -609,7 +690,7 @@ const server = http.createServer(async (req, res) => {
       <html>
         <head><meta charset="utf-8"><meta http-equiv="refresh" content="2"></head>
         <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;padding:40px;text-align:center;">
-          <h2>🚀 Démarrage de BOOSTERA ERP...</h2>
+          <h2>🚀 Démarrage de HDZ SECURITY ERP...</h2>
           <p>Chargement des modules. Actualisation automatique dans 2 secondes...</p>
         </body>
       </html>
@@ -621,8 +702,13 @@ const server = http.createServer(async (req, res) => {
     await nextApp.getRequestHandler()(req, res, parsedUrl);
   } catch (err) {
     logDebug("Request handling error: " + (err.stack || err.message));
-    res.writeHead(500, { "Content-Type": "text/plain" });
-    res.end("Internal Server Error");
+    res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(`
+      <body style="background:#09090b;color:#f4f4f5;font-family:monospace;padding:32px;">
+        <h2 style="color:#f43f5e">⚠️ Erreur Interne du Serveur (Next.js)</h2>
+        <pre style="background:#18181b;padding:16px;border-radius:8px;border:1px solid #27272a;color:#fb7185;overflow:auto;">${err.stack || err.message}</pre>
+      </body>
+    `);
   }
 });
 
@@ -631,5 +717,5 @@ server.listen(port, (err) => {
     logDebug("Server listen error: " + err.message);
     return;
   }
-  logDebug(`> BOOSTERA ERP listening on port ${port}`);
+  logDebug(`> HDZ SECURITY ERP listening on port ${port}`);
 });

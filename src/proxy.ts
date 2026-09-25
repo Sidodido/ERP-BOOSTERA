@@ -10,10 +10,20 @@ const COOKIE_NAME = "boostera_session";
 // Public route prefixes that do not require an active user session
 const PUBLIC_PREFIXES = [
   "/login",
+  "/register",
+  "/forgot-password",
+  "/reset-password",
+  "/verify-email",
+  "/api/auth",
   "/api/cron",
+  "/api/setup-",
+  "/api/debug-log",
   "/_next",
   "/favicon.ico",
   "/robots.txt",
+  "/manifest.webmanifest",
+  "/apple-icon",
+  "/icon",
 ];
 
 export async function proxy(request: NextRequest) {
