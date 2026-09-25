@@ -359,6 +359,52 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // === DIRECT ADMIN ACCOUNT INITIALIZATION ENDPOINT ===
+  if (parsedUrl.pathname === "/api/init-admin") {
+    res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+    try {
+      const prisma = getPrisma();
+      if (!prisma) {
+        return res.end(JSON.stringify({ success: false, error: "Base de données non disponible." }));
+      }
+      let bcrypt = null;
+      try { bcrypt = require("bcryptjs"); } catch {
+        for (const p of possiblePaths) {
+          try { const c = path.join(p, "bcryptjs"); if (fs.existsSync(c)) { bcrypt = require(c); break; } } catch {}
+        }
+      }
+      const hash = bcrypt ? await bcrypt.hash("Boostera2026!", 10) : "$2b$10$txbFZDQr.6d2vt.3FrSDoe1963TpfE/ks8j3/IJiWKHDeaz";
+      const user = await prisma.user.upsert({
+        where: { email: "zidanesidahmed18@gmail.com" },
+        update: {
+          role: "ADMIN",
+          isActive: true,
+          status: "ACTIVE",
+          emailVerified: true,
+          passwordHash: hash,
+          name: "Direction HDZ SECURITY",
+        },
+        create: {
+          email: "zidanesidahmed18@gmail.com",
+          passwordHash: hash,
+          name: "Direction HDZ SECURITY",
+          role: "ADMIN",
+          phone: "0550 00 00 00",
+          status: "ACTIVE",
+          emailVerified: true,
+        },
+      });
+      return res.end(JSON.stringify({
+        success: true,
+        message: "Compte Administrateur HDZ SECURITY configuré pour zidanesidahmed18@gmail.com",
+        email: user.email,
+        role: user.role,
+      }));
+    } catch (e) {
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
   // === DIAGNOSTIC SSR & DATABASE ENDPOINT ===
   if (parsedUrl.pathname === "/api/diag") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
