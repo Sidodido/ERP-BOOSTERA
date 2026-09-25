@@ -175,7 +175,7 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
       totalEmployees: employees.length,
       activeEmployees: employees.filter((e) => e.isActive).length,
       presentToday: attendances.filter((a) => (a.status === "PRESENT" || a.status === "LATE") && a.clockIn !== null).length,
-      absentToday: attendances.filter((a) => a.status === "ABSENT").length,
+      absentToday: [5, 6].includes(new Date().getDay()) ? 0 : attendances.filter((a) => a.status === "ABSENT").length,
       pendingLeaves: leaveRequests.filter((l) => l.status === "PENDING").length,
       totalBaseSalaries,
       totalCommissions,
@@ -425,10 +425,11 @@ export async function getTodayAttendancesAction() {
     orderBy: { createdAt: "desc" },
   });
 
+  const isWeekendToday = [5, 6].includes(now.getDay());
   const presentToday = attendances.filter(
     (a) => (a.status === "PRESENT" || a.status === "LATE") && a.clockIn !== null
   ).length;
-  const absentToday = attendances.filter((a) => a.status === "ABSENT").length;
+  const absentToday = isWeekendToday ? 0 : attendances.filter((a) => a.status === "ABSENT").length;
 
   return {
     success: true,

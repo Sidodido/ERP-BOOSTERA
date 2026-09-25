@@ -212,13 +212,13 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
       const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), startDate.getTime()));
       const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), endDate.getTime() - 1));
 
-      // Compte des jours ouvrables dans le cycle (en excluant le vendredi qui est chômé)
+      // Compte des jours ouvrables dans le cycle (en excluant vendredi et samedi qui sont chômés et payés)
       let count = 0;
       const cur = new Date(leaveStart.getFullYear(), leaveStart.getMonth(), leaveStart.getDate());
       const last = new Date(leaveEnd.getFullYear(), leaveEnd.getMonth(), leaveEnd.getDate());
 
       while (cur <= last) {
-        if (cur.getDay() !== 5) { // 5 = Vendredi (repos hebdomadaire)
+        if (cur.getDay() !== 5 && cur.getDay() !== 6) { // 5 = Vendredi, 6 = Samedi (repos hebdomadaire chômé & payé)
           count++;
         }
         cur.setDate(cur.getDate() + 1);
@@ -253,9 +253,15 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
     });
 
     // Évite le double comptage si une fiche d'absence coïncide avec un congé approuvé
+    // Ne compte jamais les vendredis et samedis (journées chômées et payées)
     let unexcusedAbsences = 0;
     for (const att of absentAttendances) {
-      const attTime = new Date(att.date).getTime();
+      const attDate = new Date(att.date);
+      // Les vendredis (5) et samedis (6) sont chômés et payés : aucune retenue
+      if (attDate.getDay() === 5 || attDate.getDay() === 6) {
+        continue;
+      }
+      const attTime = attDate.getTime();
       const hasOverlap = approvedLeaves.some((l) => {
         const lStart = new Date(l.startDate).getTime();
         const lEnd = new Date(l.endDate).getTime();

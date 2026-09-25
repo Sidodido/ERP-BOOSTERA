@@ -363,9 +363,10 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
       0
     );
 
+    const isTodayWeekend = [5, 6].includes(new Date().getDay());
     const presentCount = todayAttendances.filter((a) => a.status === "PRESENT").length;
     const lateCount = todayAttendances.filter((a) => a.status === "LATE").length;
-    const absentCount = todayAttendances.filter((a) => a.status === "ABSENT").length;
+    const absentCount = isTodayWeekend ? 0 : todayAttendances.filter((a) => a.status === "ABSENT").length;
 
     const criticalAlerts: NonNullable<DashboardMetricsResult["adminData"]>["criticalAlerts"] = [];
 

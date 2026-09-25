@@ -606,19 +606,45 @@ export async function syncDailyAbsences(options: {
     return { createdCount: 0, updatedCount: 0, totalEvaluated: 0 };
   }
 
-  // 2. Build array of dates to evaluate (excluding Fridays which are the official weekly rest day in Algeria)
+  // 2. Build array of dates to evaluate (excluding Fridays and Saturdays which are weekly rest days - chômés et payés)
   const datesToEvaluate: Date[] = [];
   for (let i = daysBack; i >= 1; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    // Friday = 5
-    if (d.getDay() !== 5) {
+    // Friday = 5, Saturday = 6 (Week-end chômé et payé)
+    if (d.getDay() !== 5 && d.getDay() !== 6) {
       datesToEvaluate.push(getCalendarDateOnly(d));
     }
   }
 
-  if (includeToday && today.getDay() !== 5) {
+  if (includeToday && today.getDay() !== 5 && today.getDay() !== 6) {
     datesToEvaluate.push(today);
+  }
+
+  // 2b. Nettoyage proactif : supprimer toute absence automatique créée un vendredi ou un samedi
+  try {
+    const weekendAbsences = await prisma.attendance.findMany({
+      where: {
+        status: "ABSENT",
+        clockIn: null,
+        clockOut: null,
+      },
+      select: { id: true, date: true },
+    });
+    const weekendIdsToDelete = weekendAbsences
+      .filter((a) => {
+        const day = new Date(a.date).getDay();
+        return day === 5 || day === 6;
+      })
+      .map((a) => a.id);
+
+    if (weekendIdsToDelete.length > 0) {
+      await prisma.attendance.deleteMany({
+        where: { id: { in: weekendIdsToDelete } },
+      });
+    }
+  } catch (cleanErr) {
+    console.error("Erreur nettoyage absences weekend:", cleanErr);
   }
 
   let createdCount = 0;

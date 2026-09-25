@@ -93,7 +93,8 @@ export async function getSettingsDataAction() {
   ).length;
   const todayCompleted = todayAttendances.filter((a) => a.clockOut !== null).length;
   const todayLates = todayAttendances.filter((a) => a.status === "LATE").length;
-  const todayAbsents = todayAttendances.filter((a) => a.status === "ABSENT").length;
+  const isTodayWeekend = [5, 6].includes(now.getDay());
+  const todayAbsents = isTodayWeekend ? 0 : todayAttendances.filter((a) => a.status === "ABSENT").length;
 
   return {
     users,

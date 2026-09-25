@@ -813,11 +813,15 @@ export function ParametresClient({
                         label: att.employee.department,
                         color: "bg-neutral-800 text-neutral-300 border-neutral-700",
                       };
-                      const statusInfo = STATUS_BADGES[att.status] || {
-                        label: att.status,
-                        bg: "bg-neutral-800 border-neutral-700",
-                        text: "text-neutral-300",
-                      };
+                      const isWeekendDay = [5, 6].includes(new Date(att.date).getDay());
+                      const isWeekend = isWeekendDay && att.status === "ABSENT" && !att.clockIn && !att.clockOut;
+                      const statusInfo = isWeekend
+                        ? { label: "Week-end (Chômé & payé)", bg: "bg-blue-500/10 border-blue-500/30", text: "text-blue-400" }
+                        : STATUS_BADGES[att.status] || {
+                            label: att.status,
+                            bg: "bg-neutral-800 border-neutral-700",
+                            text: "text-neutral-300",
+                          };
                       const clockInDate = att.clockIn ? new Date(att.clockIn) : null;
                       const clockOutDate = att.clockOut ? new Date(att.clockOut) : null;
                       const isToday =
@@ -865,6 +869,8 @@ export function ParametresClient({
                                 <Clock className="w-3 h-3" />
                                 {clockInDate.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                               </span>
+                            ) : isWeekend ? (
+                              <span className="text-xs text-neutral-500 italic">Repos</span>
                             ) : att.status === "ABSENT" ? (
                               <span className="text-xs text-rose-400/80 font-medium italic">Non pointé</span>
                             ) : (
@@ -883,6 +889,8 @@ export function ParametresClient({
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-medium animate-pulse">
                                 En poste...
                               </span>
+                            ) : isWeekend ? (
+                              <span className="text-xs text-neutral-500 italic">Repos</span>
                             ) : att.status === "ABSENT" ? (
                               <span className="text-xs text-rose-400/80 font-medium italic">Non pointé</span>
                             ) : (
@@ -894,10 +902,10 @@ export function ParametresClient({
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <span
                               className={`font-mono text-xs font-bold ${
-                                att.status === "ABSENT" ? "text-rose-400/60" : "text-neutral-300"
+                                isWeekend ? "text-neutral-500" : att.status === "ABSENT" ? "text-rose-400/60" : "text-neutral-300"
                               }`}
                             >
-                              {att.status === "ABSENT" ? "0 min" : formatDuration(att.durationMinutes)}
+                              {isWeekend ? "Repos" : att.status === "ABSENT" ? "0 min" : formatDuration(att.durationMinutes)}
                             </span>
                           </td>
 

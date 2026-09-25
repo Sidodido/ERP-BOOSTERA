@@ -615,9 +615,13 @@ export function RhClient({
             {kpisState.presentToday} / {kpisState.activeEmployees}
           </div>
           <p className="text-xs text-neutral-400 mt-1">
-            {kpisState.activeEmployees > 0
-              ? Math.round((kpisState.presentToday / kpisState.activeEmployees) * 100)
-              : 0}% de présence au poste
+            {[5, 6].includes(new Date().getDay())
+              ? "Week-end (Vendredi & Samedi chômés & payés)"
+              : `${
+                  kpisState.activeEmployees > 0
+                    ? Math.round((kpisState.presentToday / kpisState.activeEmployees) * 100)
+                    : 0
+                }% de présence au poste`}
           </p>
         </div>
 
@@ -800,6 +804,15 @@ export function RhClient({
             </div>
           </div>
 
+          {[5, 6].includes(new Date().getDay()) && (
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs">
+              <Calendar className="w-4 h-4 shrink-0 text-blue-400" />
+              <div>
+                <span className="font-bold text-blue-200">Vendredi & Samedi (Week-end chômé et payé) :</span> Les collaborateurs sont au repos. Aucun pointage n&apos;est requis et aucune retenue d&apos;absence n&apos;est décomptée du salaire.
+              </div>
+            </div>
+          )}
+
           <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
@@ -817,7 +830,13 @@ export function RhClient({
                     .filter((e) => e.isActive)
                     .map((emp) => {
                       const att = attendancesList.find((a) => a.employeeId === emp.id);
-                      const status = att ? att.status : "ABSENT";
+                      const isTodayWeekend = [5, 6].includes(new Date().getDay()); // Vendredi (5) et Samedi (6)
+                      const isPresent = att && (att.status === "PRESENT" || Boolean(att.clockIn));
+                      const isLate = att && att.status === "LATE";
+                      const isOnLeave = att && att.status === "ON_LEAVE";
+                      const isWeekend = isTodayWeekend && !isPresent && !isLate && !isOnLeave;
+                      const status = isWeekend ? "WEEKEND" : (att ? att.status : "ABSENT");
+
                       return (
                         <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
                           <td className="py-3 px-4 font-semibold text-neutral-200">
@@ -829,39 +848,51 @@ export function RhClient({
                           <td className="py-3 px-4">
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                status === "PRESENT"
+                                isPresent
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
-                                  : status === "LATE"
+                                  : isLate
                                   ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
-                                  : status === "ON_LEAVE"
+                                  : isOnLeave
                                   ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                  : isWeekend
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
                                   : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
                               }`}
                             >
-                              {status === "PRESENT"
+                              {isPresent
                                 ? "Présent"
-                                : status === "LATE"
+                                : isLate
                                 ? "En retard"
-                                : status === "ON_LEAVE"
+                                : isOnLeave
                                 ? "En congé"
+                                : isWeekend
+                                ? "Week-end (Chômé & payé)"
                                 : "Absent (-1j paye)"}
                             </span>
                           </td>
                           <td className="py-3 px-4 font-mono text-xs text-neutral-400">
-                            {att?.clockIn
-                              ? new Date(att.clockIn).toLocaleTimeString("fr-FR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "—"}
+                            {att?.clockIn ? (
+                              new Date(att.clockIn).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            ) : isWeekend ? (
+                              <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="py-3 px-4 font-mono text-xs text-amber-400">
-                            {att?.clockOut
-                              ? new Date(att.clockOut).toLocaleTimeString("fr-FR", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "—"}
+                            {att?.clockOut ? (
+                              new Date(att.clockOut).toLocaleTimeString("fr-FR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            ) : isWeekend ? (
+                              <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                         </tr>
                       );
