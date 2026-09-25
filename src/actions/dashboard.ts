@@ -370,6 +370,19 @@ export async function getDashboardMetrics(): Promise<DashboardMetricsResult> {
 
     const criticalAlerts: NonNullable<DashboardMetricsResult["adminData"]>["criticalAlerts"] = [];
 
+    // Alerte Début de semaine pour remplir manuellement les thèmes et sujets clients
+    const isBeginningOfWeek = [0, 1].includes(new Date().getDay());
+    if (isBeginningOfWeek && activeClientsCount > 0) {
+      criticalAlerts.push({
+        id: "alert-weekly-themes-reminder",
+        type: "TASK",
+        title: "🔔 Début de semaine : Saisie des Thèmes & Sujets",
+        subtitle: `Pensez à remplir manuellement les thèmes et publications pour vos ${activeClientsCount} clients sous contrat`,
+        severity: "INFO",
+        link: "/calendrier-technicien",
+      });
+    }
+
     if (pendingRegistrationsCount > 0) {
       criticalAlerts.push({
         id: "alert-pending-registrations",

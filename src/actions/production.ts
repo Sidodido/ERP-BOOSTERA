@@ -5,7 +5,9 @@ import { requireAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { TaskStatus, TaskPriority } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { dispatchTaskNotifications } from "@/actions/notifications";
+import { dispatchTaskNotifications, dispatchWeeklyThemesReminderNotifications } from "@/actions/notifications";
+import { getStoredEditorialPlan, saveEditorialPlanToNotes, getMonthKey } from "@/lib/utils";
+import { WEEKLY_QUOTAS_BY_OFFER } from "@/lib/aiContentGenerator";
 
 export async function getProductionKanban(params: {
   assigneeId?: string;
@@ -665,48 +667,16 @@ export async function syncSubscriptionTasksForClients(clientId?: string) {
         });
       }
 
-      // 2. Publications chaque début de semaine (Lundi)
-      const now = new Date();
-      const sixMonthsAhead = new Date(now.getFullYear(), now.getMonth() + 6, 1);
-      const horizonEnd = new Date(Math.min(contractEndDate.getTime(), sixMonthsAhead.getTime()));
-
-      const currentMonday = new Date(signatureDate);
-      const dayOfWeek = currentMonday.getDay();
-      const diffToMonday = dayOfWeek === 1 ? 0 : (8 - dayOfWeek) % 7;
-      currentMonday.setDate(currentMonday.getDate() + diffToMonday);
-      currentMonday.setHours(9, 0, 0, 0);
-
-      const newPublicationTasks = [];
-
-      while (currentMonday <= horizonEnd) {
-        const mondayDateStr = currentMonday.toISOString().split("T")[0];
-
-        const alreadyExists = existingTasks.some((t) => {
-          if (!t.dueDate) return false;
-          const tDateStr = t.dueDate.toISOString().split("T")[0];
-          return tDateStr === mondayDateStr && t.title.toLowerCase().includes("publication");
-        });
-
-        if (!alreadyExists) {
-          newPublicationTasks.push({
-            projectId: project.id,
-            title: `📱 Publication Réseaux Sociaux (Début de semaine) — ${client.companyName}`,
-            description: `Publication et diffusion du contenu hebdomadaire (Post / Reel / Carrousel). Client : ${client.companyName} (${client.offerType}).`,
-            dueDate: new Date(currentMonday),
-            priority: TaskPriority.MEDIUM,
-            status: TaskStatus.TODO,
-            timeSpentHours: 1,
-          });
-        }
-
-        currentMonday.setDate(currentMonday.getDate() + 7);
-      }
-
-      if (newPublicationTasks.length > 0) {
-        await prisma.projectTask.createMany({
-          data: newPublicationTasks,
-        });
-      }
+      // 2. Nettoyage des anciennes publications automatiques génériques
+      // Les thèmes et sujets sont désormais saisis MANUELLEMENT depuis le Calendrier des Tâches
+      await prisma.projectTask.deleteMany({
+        where: {
+          projectId: project.id,
+          title: { contains: "📱 Publication Réseaux Sociaux (Début de semaine)" },
+          status: TaskStatus.TODO,
+          timeSpentHours: { lte: 1 },
+        },
+      });
     }
 
     return { success: true };
@@ -727,14 +697,23 @@ export async function getTechnicianCalendarData(params?: {
 }) {
   const user = await requireAuth();
 
-  // Auto-synchronisation des tâches d'abonnements (Publications hebdo le lundi + Shooting M+2)
+  // Auto-synchronisation des jalons de contrat (ex: Shooting M+2)
   try {
     await syncSubscriptionTasksForClients();
   } catch (syncErr) {
     console.error("Auto-sync subscription tasks error:", syncErr);
   }
 
+  // Notification hebdomadaire automatique : en début de semaine (Dimanche ou Lundi),
+  // rappeler à l'équipe de remplir manuellement les thèmes et sujets de chaque client
   const now = new Date();
+  if ([0, 1].includes(now.getDay())) {
+    try {
+      await dispatchWeeklyThemesReminderNotifications();
+    } catch (notifErr) {
+      console.warn("Erreur notification début de semaine:", notifErr);
+    }
+  }
   const targetYear = params?.year || now.getFullYear();
   const targetMonth = params?.month || now.getMonth() + 1;
 
@@ -847,8 +826,9 @@ export async function getTechnicianCalendarData(params?: {
     orderBy: { name: "asc" },
   });
 
-  // Liste des clients actifs & en préparation avec leurs projets pour création rapide
-  const activeClients = await prisma.client.findMany({
+  // Liste des clients actifs & en préparation avec leurs projets et thèmes éditoriaux
+  const monthKey = getMonthKey(new Date(targetYear, targetMonth - 1, 15));
+  const rawActiveClients = await prisma.client.findMany({
     where: {
       status: { in: ["ACTIVE", "IN_PREPARATION"] },
     },
@@ -858,6 +838,7 @@ export async function getTechnicianCalendarData(params?: {
       brandName: true,
       offerType: true,
       status: true,
+      notes: true,
       projects: {
         select: {
           id: true,
@@ -867,6 +848,20 @@ export async function getTechnicianCalendarData(params?: {
       },
     },
     orderBy: { companyName: "asc" },
+  });
+
+  const activeClients = rawActiveClients.map((client) => {
+    const plan = getStoredEditorialPlan(client.notes, monthKey);
+    return {
+      id: client.id,
+      companyName: client.companyName,
+      brandName: client.brandName,
+      offerType: client.offerType,
+      status: client.status,
+      projects: client.projects,
+      themes: plan?.themes || [],
+      publications: plan?.publications || [],
+    };
   });
 
   return {
@@ -912,5 +907,294 @@ export async function updateTaskAssigneeAction(taskId: string, assigneeId: strin
   revalidatePath("/dashboard");
 
   return { success: true, task };
+}
+
+/**
+ * Enregistre ou met à jour manuellement un thème hebdomadaire pour un client donné
+ */
+export async function saveClientEditorialThemeAction(params: {
+  clientId: string;
+  weekNumber: number; // 1 à 5
+  pillar: string;
+  title: string;
+  description?: string;
+  color?: string;
+  month?: number;
+  year?: number;
+}) {
+  const user = await requireAuth();
+  const client = await prisma.client.findUnique({
+    where: { id: params.clientId },
+  });
+
+  if (!client) {
+    return { success: false, error: "Client introuvable" };
+  }
+
+  const targetDate = params.year && params.month 
+    ? new Date(params.year, params.month - 1, 15)
+    : new Date();
+  const monthKey = getMonthKey(targetDate);
+
+  let currentPlan = getStoredEditorialPlan(client.notes, monthKey);
+  const defaultColors = ["purple", "blue", "emerald", "amber", "rose"];
+  const themeIndex = Math.max(0, params.weekNumber - 1);
+
+  if (!currentPlan) {
+    const quota = WEEKLY_QUOTAS_BY_OFFER[client.offerType] || WEEKLY_QUOTAS_BY_OFFER.STARTER;
+    currentPlan = {
+      clientName: client.companyName,
+      brandName: client.brandName,
+      sector: client.sector,
+      wilaya: client.wilaya,
+      offerType: client.offerType,
+      weeklyQuota: quota.weekly,
+      monthlyTotal: quota.monthly,
+      monthName: new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(targetDate),
+      goal: "MANUAL",
+      goalLabel: "Stratégie Manuelle Personnalisée",
+      strategicSummary: "Planification manuelle des thèmes & sujets",
+      packSummary: quota.tagline || "",
+      themes: [
+        { id: "th-1", pillar: "Semaine 1 : Notoriété & Savoir-faire", title: "", description: "", color: "purple" },
+        { id: "th-2", pillar: "Semaine 2 : Éducation & Conseils", title: "", description: "", color: "blue" },
+        { id: "th-3", pillar: "Semaine 3 : Preuve Sociale & Confiance", title: "", description: "", color: "emerald" },
+        { id: "th-4", pillar: "Semaine 4 : Offre Spéciale & Conversion", title: "", description: "", color: "amber" },
+      ],
+      publications: [],
+    };
+  }
+
+  if (!Array.isArray(currentPlan.themes)) {
+    currentPlan.themes = [];
+  }
+
+  // Assurer que le tableau de thèmes a au moins params.weekNumber éléments
+  while (currentPlan.themes.length < params.weekNumber) {
+    const nextIdx = currentPlan.themes.length;
+    currentPlan.themes.push({
+      id: `th-${nextIdx + 1}`,
+      pillar: `Semaine ${nextIdx + 1}`,
+      title: "",
+      description: "",
+      color: defaultColors[nextIdx % defaultColors.length],
+    });
+  }
+
+  currentPlan.themes[themeIndex] = {
+    id: currentPlan.themes[themeIndex]?.id || `th-${params.weekNumber}`,
+    pillar: params.pillar?.trim() || `Semaine ${params.weekNumber}`,
+    title: params.title.trim(),
+    description: params.description?.trim() || "",
+    color: params.color || currentPlan.themes[themeIndex]?.color || defaultColors[themeIndex % defaultColors.length],
+  };
+
+  const updatedNotes = saveEditorialPlanToNotes(client.notes, currentPlan, monthKey);
+  await prisma.client.update({
+    where: { id: client.id },
+    data: { notes: updatedNotes },
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "UPDATE_EDITORIAL_THEME",
+    module: "PRODUCTION",
+    entityId: client.id,
+    details: {
+      week: params.weekNumber,
+      title: params.title,
+      pillar: params.pillar,
+    },
+  });
+
+  revalidatePath("/calendrier-technicien");
+  revalidatePath(`/abonnements/${client.id}`);
+  return { success: true, theme: currentPlan.themes[themeIndex], updatedPlan: currentPlan };
+}
+
+/**
+ * Crée manuellement un nouveau sujet sous forme de tâche dans le calendrier
+ * et l'enregistre également dans le plan éditorial du client
+ */
+export async function createManualSubjectTaskAction(data: {
+  clientId: string;
+  themeTitle?: string;
+  weekNumber: number;
+  title: string;
+  format: "REEL_9_16" | "CAROUSEL" | "STATIC_POST" | "STORY_INTERACTIVE" | "OTHER";
+  dueDate: string;
+  hook?: string;
+  scriptOrDescription?: string;
+  assigneeId?: string;
+  priority?: TaskPriority;
+}) {
+  const user = await requireAuth();
+
+  const client = await prisma.client.findUnique({
+    where: { id: data.clientId },
+    include: {
+      projects: {
+        select: { id: true, name: true, code: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (!client) {
+    return { success: false, error: "Client introuvable" };
+  }
+
+  let projectId = client.projects[0]?.id;
+  if (!projectId) {
+    const newProj = await prisma.project.create({
+      data: {
+        clientId: client.id,
+        name: `Production ${client.companyName}`,
+        code: `PRJ-${Date.now().toString().slice(-6)}`,
+        status: "IN_PRODUCTION",
+      },
+    });
+    projectId = newProj.id;
+  }
+
+  const formatLabels: Record<string, string> = {
+    REEL_9_16: "🎬 Reel (9:16)",
+    CAROUSEL: "📑 Carrousel",
+    STATIC_POST: "🖼️ Post Image",
+    STORY_INTERACTIVE: "📱 Story",
+    OTHER: "📄 Contenu",
+  };
+  const formatTag = formatLabels[data.format] || "📱 Publication";
+
+  const parts: string[] = [];
+  if (data.themeTitle) {
+    parts.push(`🎯 Thème / Axe : ${data.themeTitle}`);
+  }
+  parts.push(`📅 Semaine ${data.weekNumber} • Format : ${formatTag}`);
+  if (data.hook?.trim()) {
+    parts.push(`\n⚡ Accroche (Hook) :\n"${data.hook.trim()}"`);
+  }
+  if (data.scriptOrDescription?.trim()) {
+    parts.push(`\n📝 Script & Consignes de Production :\n${data.scriptOrDescription.trim()}`);
+  }
+
+  const finalTitle = `${formatTag} - ${data.title.trim()}`;
+  const fullDescription = parts.join("\n");
+
+  // 1. Créer la tâche de production
+  const task = await prisma.projectTask.create({
+    data: {
+      projectId,
+      assigneeId: data.assigneeId || null,
+      title: finalTitle,
+      description: fullDescription,
+      status: TaskStatus.TODO,
+      priority: data.priority || TaskPriority.MEDIUM,
+      dueDate: new Date(data.dueDate),
+      timeSpentHours: data.format === "REEL_9_16" ? 3 : 2,
+    },
+    include: {
+      assignee: true,
+      project: { include: { client: true } },
+    },
+  });
+
+  // 2. Synchroniser dans le plan éditorial du client
+  try {
+    const targetDate = new Date(data.dueDate);
+    const monthKey = getMonthKey(targetDate);
+    let currentPlan = getStoredEditorialPlan(client.notes, monthKey);
+
+    if (!currentPlan) {
+      const quota = WEEKLY_QUOTAS_BY_OFFER[client.offerType] || WEEKLY_QUOTAS_BY_OFFER.STARTER;
+      currentPlan = {
+        clientName: client.companyName,
+        brandName: client.brandName,
+        sector: client.sector,
+        wilaya: client.wilaya,
+        offerType: client.offerType,
+        weeklyQuota: quota.weekly,
+        monthlyTotal: quota.monthly,
+        monthName: new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(targetDate),
+        goal: "MANUAL",
+        goalLabel: "Stratégie Manuelle",
+        strategicSummary: "Planification manuelle",
+        packSummary: quota.tagline || "",
+        themes: [],
+        publications: [],
+      };
+    }
+
+    const newPublication = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      week: data.weekNumber,
+      weekLabel: `Semaine ${data.weekNumber}`,
+      daySuggestion: new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(targetDate),
+      theme: data.themeTitle || `Semaine ${data.weekNumber}`,
+      title: data.title.trim(),
+      format: (data.format === "OTHER" ? "STATIC_POST" : data.format) as any,
+      formatLabel: formatTag,
+      hook: data.hook?.trim() || "",
+      scriptOrSlides: [
+        {
+          step: "Consigne",
+          description: data.scriptOrDescription?.trim() || "Création de contenu",
+        },
+      ],
+      caption: "",
+      cta: "",
+      hashtags: [],
+      suggestedTaskTitle: finalTitle,
+      isCreatedAsTask: true,
+    };
+
+    currentPlan.publications = [...(currentPlan.publications || []), newPublication];
+    const updatedNotes = saveEditorialPlanToNotes(client.notes, currentPlan, monthKey);
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { notes: updatedNotes },
+    });
+  } catch (notesErr) {
+    console.warn("Erreur synchronisation notes plan éditorial:", notesErr);
+  }
+
+  // 3. Notifier l'équipe
+  await dispatchTaskNotifications({
+    taskId: task.id,
+    taskTitle: task.title,
+    taskDescription: task.description,
+    projectId: task.projectId,
+    projectName: task.project.name,
+    projectCode: task.project.code,
+    assigneeId: task.assigneeId,
+  });
+
+  await createAuditLog({
+    userId: user.id,
+    action: "CREATE_MANUAL_EDITORIAL_SUBJECT",
+    module: "PRODUCTION",
+    entityId: task.id,
+    details: {
+      clientId: client.id,
+      title: task.title,
+      format: data.format,
+      theme: data.themeTitle,
+    },
+  });
+
+  revalidatePath("/production");
+  revalidatePath("/projets");
+  revalidatePath("/calendrier-technicien");
+  revalidatePath(`/abonnements/${client.id}`);
+
+  return { success: true, task };
+}
+
+/**
+ * Déclenche manuellement la notification de début de semaine à toute l'équipe
+ */
+export async function triggerWeeklyReminderAction() {
+  await requireAuth();
+  return await dispatchWeeklyThemesReminderNotifications();
 }
 

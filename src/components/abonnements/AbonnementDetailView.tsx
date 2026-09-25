@@ -406,8 +406,8 @@ export function AbonnementDetailView({ client, users }: AbonnementDetailViewProp
               : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
           }`}
         >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Studio Éditorial IA (Gemini & ChatGPT)</span>
+          <CalendarDays className="w-3.5 h-3.5" />
+          <span>Planning Éditorial (Thèmes & Sujets)</span>
         </button>
 
         <button
@@ -447,7 +447,7 @@ export function AbonnementDetailView({ client, users }: AbonnementDetailViewProp
             <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-neutral-800 text-neutral-400 text-xs space-y-2">
               <p>Aucune tâche créée pour le moment.</p>
               <p className="text-[11px] text-neutral-500">
-                Générez des idées dans l'onglet "Studio Éditorial IA" et cliquez sur "+ Créer la tâche".
+                Planifiez vos thèmes et sujets dans l'onglet &quot;Planning Éditorial&quot; et cliquez sur &quot;+ Créer la tâche&quot;.
               </p>
             </div>
           ) : (

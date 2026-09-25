@@ -324,53 +324,57 @@ export function AiEditorialPlanner({
     }
   };
 
-  const handleGenerateThemesAi = async () => {
-    setIsGeneratingThemesAi(true);
-    setThemeNotice(null);
-    try {
-      const res = await generateThemesWithAiAction({
-        projectId: project?.id,
-        clientId: client?.id,
-        goal: selectedGoal,
-        provider: selectedProvider,
-        apiKey: geminiApiKey || undefined,
-        openAiApiKey: openAiApiKey || undefined,
-      });
+  // Création manuelle d'une nouvelle publication
+  const handleOpenCreateModal = (weekNum?: number) => {
+    const selectedWk = typeof weekNum === "number" ? weekNum : selectedWeek === "ALL" ? 1 : selectedWeek;
+    const defaultTheme = editableThemes[selectedWk - 1]?.title || editableThemes[0]?.title || "Axe éditorial";
+    const newPub: PublicationProposal = {
+      id: `manual-pub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      week: selectedWk,
+      weekLabel: `Semaine ${selectedWk}/4`,
+      daySuggestion: "Lundi",
+      theme: defaultTheme,
+      title: "",
+      format: "REEL_9_16",
+      formatLabel: "Reel Vidéo",
+      hook: "",
+      scriptOrSlides: [
+        { step: "Scène 1", description: "Accroche visuelle et sonore" },
+        { step: "Scène 2", description: "Développement du sujet" },
+        { step: "Scène 3", description: "Appel à l'action final" },
+      ],
+      caption: "",
+      cta: "Contactez-nous en DM pour en savoir plus !",
+      hashtags: [],
+      suggestedTaskTitle: "",
+      isCreatedAsTask: false,
+    };
+    setEditingPub(newPub);
+    setIsEditModalOpen(true);
+  };
 
-      if (res.success && res.themes && res.themes.length > 0) {
-        setEditableThemes(res.themes);
-        setPlan((prevPlan) => {
-          if (!prevPlan) return prevPlan;
-          return {
-            ...prevPlan,
-            themes: res.themes!,
-          };
-        });
-        // Sauvegarde automatique des thèmes générés
-        await updateEditorialThemesAction({
-          projectId: project?.id,
-          clientId: client?.id,
-          themes: res.themes,
-          applyToPublications: false,
-        });
-        setThemeNotice({
-          type: "success",
-          message: "✨ 4 thèmes stratégiques générés par IA ! Vous pouvez les modifier ou les conserver.",
-        });
-        setTimeout(() => setThemeNotice(null), 6000);
-      } else {
-        setThemeNotice({
-          type: "error",
-          message: res.error || "Impossible de générer les thèmes par IA.",
-        });
-      }
-    } catch (err: any) {
-      setThemeNotice({
-        type: "error",
-        message: err?.message || "Erreur lors de la génération IA.",
+  // Suppression d'une publication du plan
+  const handleDeletePublication = async (pubId: string) => {
+    if (!confirm("Voulez-vous vraiment supprimer ce sujet du planning ?")) return;
+    setPlan((prevPlan) => {
+      if (!prevPlan) return prevPlan;
+      return {
+        ...prevPlan,
+        publications: prevPlan.publications.filter((p) => p.id !== pubId),
+      };
+    });
+
+    try {
+      await updatePublicationDetailsAction({
+        clientId: client?.id,
+        projectId: project?.id,
+        publicationId: pubId,
+        updatedPublication: { _delete: true } as any,
       });
-    } finally {
-      setIsGeneratingThemesAi(false);
+      setRegenerationNotice("Sujet supprimé du planning avec succès.");
+      setTimeout(() => setRegenerationNotice(null), 3000);
+    } catch (err: any) {
+      console.warn("Erreur suppression publication:", err);
     }
   };
 
@@ -596,11 +600,13 @@ export function AiEditorialPlanner({
       // 1. Mise à jour instantanée du state UI local
       setPlan((prevPlan) => {
         if (!prevPlan) return prevPlan;
+        const exists = prevPlan.publications.some((p) => p.id === cleanedPub.id);
+        const newPubs = exists
+          ? prevPlan.publications.map((p) => (p.id === cleanedPub.id ? cleanedPub : p))
+          : [...prevPlan.publications, cleanedPub];
         return {
           ...prevPlan,
-          publications: prevPlan.publications.map((p) =>
-            p.id === cleanedPub.id ? cleanedPub : p
-          ),
+          publications: newPubs,
         };
       });
 
@@ -757,96 +763,24 @@ export function AiEditorialPlanner({
 
   return (
     <div className="space-y-5">
-      {/* HEADER IA & BADGES QUOTAS */}
+      {/* HEADER PLANNING & BADGES QUOTAS */}
       <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-950/40 via-neutral-900 to-blue-950/30 border border-purple-500/20 shadow-xl space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center justify-center shrink-0 shadow-inner">
-              <Sparkles className="w-5 h-5 text-purple-400 animate-pulse" />
+              <Calendar className="w-5 h-5 text-purple-400" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
                 <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
-                  Studio Éditorial IA
+                  Planning Éditorial (Thèmes & Sujets)
                   <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                    Abonnement & Marketing
+                    Saisie Manuelle
                   </span>
                 </h3>
-
-                {/* Badges IA Connection Permanente */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Badge Google Gemini */}
-                  {(hasServerGeminiKey || !!geminiApiKey) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveKeyTab("GEMINI");
-                        setIsKeyModalOpen(true);
-                      }}
-                      className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
-                        aiSource === "GEMINI_AI"
-                          ? "bg-emerald-500/25 border border-emerald-400/60 text-emerald-200 ring-1 ring-emerald-400/40 shadow-sm"
-                          : "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/25"
-                      }`}
-                      title="Google Gemini connecté en permanence à l'ERP (Cliquez pour configurer)"
-                    >
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
-                      <span>Gemini Connecté</span>
-                      {aiSource === "GEMINI_AI" && modelUsed && (
-                        <span className="text-[10px] text-emerald-300/90 font-mono bg-emerald-950/70 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                          {modelUsed.replace("gemini-", "")}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Badge OpenAI ChatGPT */}
-                  {(hasServerOpenAiKey || !!openAiApiKey) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveKeyTab("OPENAI");
-                        setIsKeyModalOpen(true);
-                      }}
-                      className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
-                        aiSource === "OPENAI_CHATGPT"
-                          ? "bg-teal-500/25 border border-teal-400/60 text-teal-200 ring-1 ring-teal-400/40 shadow-sm"
-                          : "bg-teal-500/15 border border-teal-500/30 text-teal-300 hover:bg-teal-500/25"
-                      }`}
-                      title="OpenAI ChatGPT connecté en permanence à l'ERP (Cliquez pour configurer)"
-                    >
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
-                      </span>
-                      <span>ChatGPT Connecté</span>
-                      {aiSource === "OPENAI_CHATGPT" && modelUsed && (
-                        <span className="text-[10px] text-teal-300/90 font-mono bg-teal-950/70 px-1.5 py-0.2 rounded border border-teal-500/30">
-                          {modelUsed}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Bouton de secours si aucune clé n'est encore configurée */}
-                  {!hasServerGeminiKey && !geminiApiKey && !hasServerOpenAiKey && !openAiApiKey && (
-                    <button
-                      type="button"
-                      onClick={() => setIsKeyModalOpen(true)}
-                      className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-semibold hover:bg-amber-500/25 transition-colors cursor-pointer"
-                      title="Cliquez pour configurer vos clés Google Gemini ou OpenAI ChatGPT"
-                    >
-                      <Key className="w-3 h-3 text-amber-400" />
-                      <span>Relier Gemini / ChatGPT</span>
-                    </button>
-                  )}
-                </div>
               </div>
               <p className="text-xs text-neutral-400 mt-1">
-                Génération automatique des thèmes, sujets percutants, hooks et scripts de tournage/montage selon le contrat officiel de votre client.
+                Planification manuelle des thèmes hebdomadaires, des sujets de publications, des accroches (hooks) et des scripts selon le contrat officiel de votre client.
               </p>
             </div>
           </div>
@@ -954,18 +888,14 @@ export function AiEditorialPlanner({
           </button>
         </div>
 
-        {/* Action Controls : Objectif, Moteur IA & Boutons */}
+        {/* Action Controls : Objectif stratégique & Bouton Ajouter Sujet */}
         <div className="pt-3 border-t border-neutral-800/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5 flex-1">
-            <div className="flex items-center gap-2 min-w-[200px] flex-1">
+            <div className="flex items-center gap-2 min-w-[240px]">
               <Target className="w-4 h-4 text-purple-400 shrink-0" />
               <select
                 value={selectedGoal}
-                onChange={(e) => {
-                  const newGoal = e.target.value;
-                  setSelectedGoal(newGoal);
-                  handleGeneratePlan(newGoal);
-                }}
+                onChange={(e) => setSelectedGoal(e.target.value)}
                 className="w-full text-xs bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-neutral-200 focus:outline-none focus:border-purple-500 cursor-pointer"
               >
                 {Object.entries(STRATEGIC_GOALS).map(([key, val]) => (
@@ -975,36 +905,16 @@ export function AiEditorialPlanner({
                 ))}
               </select>
             </div>
-
-            {/* Choix du fournisseur IA */}
-            <div className="flex items-center gap-2 min-w-[175px]">
-              <Cpu className="w-4 h-4 text-blue-400 shrink-0" />
-              <select
-                value={selectedProvider}
-                onChange={(e) => {
-                  const newProvider = e.target.value as "AUTO" | "GEMINI" | "OPENAI";
-                  setSelectedProvider(newProvider);
-                  handleGeneratePlan(selectedGoal, seed, undefined, newProvider, true);
-                }}
-                className="text-xs bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-neutral-200 focus:outline-none focus:border-purple-500 cursor-pointer"
-              >
-                <option value="AUTO">✨ Moteur Auto (Gemini / GPT)</option>
-                <option value="GEMINI">Google Gemini</option>
-                <option value="OPENAI">OpenAI ChatGPT</option>
-              </select>
-            </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <Button
               size="sm"
-              variant="outline"
-              onClick={handleRegenerate}
-              disabled={isPending}
-              className="gap-1.5 text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
+              onClick={() => handleOpenCreateModal()}
+              className="gap-1.5 text-xs bg-purple-600 hover:bg-purple-500 text-white shadow-md shadow-purple-600/25 cursor-pointer"
             >
-              <RotateCcw className={`w-3.5 h-3.5 ${isPending ? "animate-spin" : ""}`} />
-              <span>{isPending ? "Génération en cours..." : "Régénérer les Sujets IA"}</span>
+              <Plus className="w-4 h-4" />
+              <span>+ Ajouter un Sujet</span>
             </Button>
           </div>
         </div>
@@ -1189,27 +1099,6 @@ export function AiEditorialPlanner({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Bouton Générer par IA à côté */}
-            <button
-              type="button"
-              onClick={handleGenerateThemesAi}
-              disabled={isGeneratingThemesAi}
-              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-purple-600/20 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              title="Générer automatiquement les 4 thèmes par IA adaptés au secteur du client"
-            >
-              {isGeneratingThemesAi ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Génération IA...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-purple-200" />
-                  <span>Générer par IA</span>
-                </>
-              )}
-            </button>
-
             {/* Bouton Enregistrer les thèmes */}
             <button
               type="button"
@@ -1625,22 +1514,16 @@ export function AiEditorialPlanner({
                       <span>Modifier détails</span>
                     </Button>
 
-                    {/* Bouton Régénérer le sujet ou le thème */}
+                    {/* Bouton Supprimer le sujet */}
                     {!isCreated && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleRegenerateSinglePublication(pub)}
-                        disabled={regeneratingPubId === pub.id || isPending}
-                        className="gap-1.5 text-xs border-purple-500/30 hover:border-purple-500 text-purple-300 hover:bg-purple-500/10 cursor-pointer"
-                        title="Régénérer uniquement ce sujet ou ce thème avec l'IA"
+                        onClick={() => handleDeletePublication(pub.id)}
+                        className="gap-1 text-xs border-rose-500/30 hover:border-rose-500 text-rose-400 hover:bg-rose-500/10 cursor-pointer p-1.5"
+                        title="Supprimer ce sujet du planning"
                       >
-                        <RotateCcw
-                          className={`w-3.5 h-3.5 ${
-                            regeneratingPubId === pub.id ? "animate-spin text-purple-400" : "text-purple-400"
-                          }`}
-                        />
-                        <span>{regeneratingPubId === pub.id ? "Régénération..." : "Régénérer le sujet"}</span>
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                       </Button>
                     )}
 

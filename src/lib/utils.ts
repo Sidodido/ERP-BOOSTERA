@@ -249,16 +249,29 @@ export function updateStoredPublicationInNotes(
 ): { updatedNotes: string; updatedPlan: any | null } {
   const currentMonthKey = monthKey || getMonthKey();
   const plan = getStoredEditorialPlan(existingNotes, currentMonthKey);
-  if (!plan || !Array.isArray(plan.publications)) {
+  if (!plan) {
     return { updatedNotes: existingNotes || "", updatedPlan: null };
   }
+  if (!Array.isArray(plan.publications)) {
+    plan.publications = [];
+  }
 
-  const updatedPublications = plan.publications.map((p: any) => {
-    if (p.id === publicationId) {
-      return { ...p, ...updatedFields };
+  let updatedPublications: any[];
+  if (updatedFields._delete) {
+    updatedPublications = plan.publications.filter((p: any) => p.id !== publicationId);
+  } else {
+    const exists = plan.publications.some((p: any) => p.id === publicationId);
+    if (exists) {
+      updatedPublications = plan.publications.map((p: any) => {
+        if (p.id === publicationId) {
+          return { ...p, ...updatedFields };
+        }
+        return p;
+      });
+    } else {
+      updatedPublications = [...plan.publications, { id: publicationId, ...updatedFields }];
     }
-    return p;
-  });
+  }
 
   const newPlan = { ...plan, publications: updatedPublications };
   const updatedNotes = saveEditorialPlanToNotes(existingNotes, newPlan, currentMonthKey);

@@ -3,9 +3,18 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { Role } from "@prisma/client";
 
 export async function getUserNotificationsAction() {
   const user = await requireAuth();
+
+  // Déclenchement automatique chaque début de semaine (Dimanche [0] ou Lundi [1])
+  const currentDay = new Date().getDay();
+  if ([0, 1].includes(currentDay)) {
+    dispatchWeeklyThemesReminderNotifications().catch((err) => {
+      console.warn("Auto dispatchWeeklyThemesReminderNotifications error:", err);
+    });
+  }
 
   const isCommercial = user.role === "SALES_REP" || user.role === "SALES_DIRECTOR";
 
@@ -229,5 +238,84 @@ export async function dispatchClientCreatedNotifications(params: {
     });
   } catch (err) {
     console.warn("Erreur notification client:", err);
+  }
+}
+
+/**
+ * Notifie chaque début de semaine l'équipe (technique / admin / production)
+ * pour remplir manuellement les thèmes et les sujets de publications pour chaque client actif.
+ */
+export async function dispatchWeeklyThemesReminderNotifications() {
+  try {
+    // 1. Récupérer tous les clients sous contrat actif ou en préparation
+    const activeClients = await prisma.client.findMany({
+      where: {
+        status: { in: ["ACTIVE", "IN_PREPARATION"] },
+      },
+      select: {
+        id: true,
+        companyName: true,
+        brandName: true,
+        offerType: true,
+      },
+    });
+
+    if (activeClients.length === 0) return { success: true, count: 0 };
+
+    // 2. Destinataires : Admins, Tech Leads, Designers, Monteurs, Développeurs (hors commerciaux)
+    const teamMembers = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: {
+          in: [Role.ADMIN, Role.TECH_LEAD, Role.DESIGNER, Role.VIDEO_EDITOR, Role.DEVELOPER],
+        },
+      },
+      select: { id: true },
+    });
+
+    if (teamMembers.length === 0) return { success: true, count: 0 };
+
+    // Clé de semaine (ex: 2026-S39)
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const pastDaysOfYear = (now.getTime() - startOfYear.getTime()) / 86400000;
+    const weekNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+    const weekKey = `${now.getFullYear()}-S${weekNum}`;
+
+    // Vérifier si la notification a déjà été envoyée ces 5 derniers jours
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+    const existingNotification = await prisma.notification.findFirst({
+      where: {
+        type: "WEEKLY_THEMES_REMINDER",
+        createdAt: { gte: fiveDaysAgo },
+      },
+    });
+
+    if (existingNotification) {
+      return { success: true, alreadySent: true, count: 0 };
+    }
+
+    const clientNames = activeClients.map((c) => c.companyName).slice(0, 5).join(", ");
+    const moreCount = activeClients.length > 5 ? ` et ${activeClients.length - 5} autre(s)` : "";
+
+    const title = `🔔 Début de semaine (${weekKey}) : Thèmes & Sujets à planifier`;
+    const message = `Pensez à remplir manuellement les thèmes et sujets de publications pour vos ${activeClients.length} client(s) sous contrat (${clientNames}${moreCount}) depuis le Calendrier des Tâches.`;
+
+    const notificationsData = teamMembers.map((u) => ({
+      userId: u.id,
+      title,
+      message,
+      type: "WEEKLY_THEMES_REMINDER",
+      link: "/calendrier-technicien",
+    }));
+
+    await prisma.notification.createMany({
+      data: notificationsData,
+    });
+
+    return { success: true, count: notificationsData.length };
+  } catch (err) {
+    console.error("Erreur dispatchWeeklyThemesReminderNotifications:", err);
+    return { success: false, error: err };
   }
 }

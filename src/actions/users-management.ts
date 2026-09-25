@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, hashPassword } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import {
   sendAccountApprovedEmail,
@@ -11,9 +11,34 @@ import {
 } from "@/lib/email";
 import crypto from "crypto";
 import { Role, UserStatus, DepartmentType } from "@prisma/client";
+import { headers } from "next/headers";
 
-function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+export async function getAppUrl(): Promise<string> {
+  try {
+    const headersList = await headers();
+    const host = headersList.get("x-forwarded-host") || headersList.get("host");
+    const proto = headersList.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+    if (host && !host.includes("localhost")) {
+      return `${proto}://${host}`;
+    }
+  } catch {
+    // headers() might not be available in cron or background jobs
+  }
+
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.replace(/\/$/, "")}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL.replace(/\/$/, "")}`;
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  }
+
+  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 async function requireAdminUser() {
@@ -91,7 +116,7 @@ export async function approveRegistrationRequestAction(userId: string) {
   }
 
   // Envoi de l'e-mail d'approbation
-  const appUrl = getAppUrl();
+  const appUrl = await getAppUrl();
   await sendAccountApprovedEmail(target.email, target.name, `${appUrl}/login`);
 
   await createAuditLog({
@@ -346,7 +371,7 @@ export async function initiateEmailChangeAction(userId: string, newEmail: string
     },
   });
 
-  const appUrl = getAppUrl();
+  const appUrl = await getAppUrl();
   const verifyChangeUrl = `${appUrl}/verify-email-change?token=${changeToken}`;
 
   await sendEmailChangeVerificationEmail({
@@ -427,7 +452,7 @@ export async function adminTriggerPasswordResetAction(userId: string) {
     },
   });
 
-  const appUrl = getAppUrl();
+  const appUrl = await getAppUrl();
   const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
 
   await sendPasswordResetEmail(target.email, target.name, resetUrl);
@@ -435,6 +460,43 @@ export async function adminTriggerPasswordResetAction(userId: string) {
   await createAuditLog({
     userId: admin.id,
     action: "ADMIN_TRIGGER_PASSWORD_RESET",
+    module: "AUTH",
+    details: { targetUserId: userId, userEmail: target.email },
+  });
+
+  return { success: true };
+}
+
+export async function adminDirectSetUserPasswordAction(userId: string, newPassword: string) {
+  const admin = await requireAdminUser();
+
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("Le mot de passe doit comporter au moins 6 caractères.");
+  }
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!target) {
+    throw new Error("Utilisateur introuvable.");
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      passwordChangedAt: new Date(),
+      resetPasswordToken: null,
+      resetPasswordTokenExpiresAt: null,
+    },
+  });
+
+  await createAuditLog({
+    userId: admin.id,
+    action: "ADMIN_DIRECT_PASSWORD_SET",
     module: "AUTH",
     details: { targetUserId: userId, userEmail: target.email },
   });

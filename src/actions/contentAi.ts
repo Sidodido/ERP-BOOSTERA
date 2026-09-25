@@ -7,7 +7,7 @@ import { requireAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { TaskStatus, TaskPriority, OfferType, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { dispatchTaskNotifications } from "@/actions/notifications";
+import { dispatchTaskNotifications, dispatchWeeklyThemesReminderNotifications } from "@/actions/notifications";
 import {
   generateAiEditorialPlan,
   EditorialPlanResult,
@@ -45,6 +45,7 @@ export async function generateEditorialPlanAction(params: {
   openAiApiKey?: string;
   provider?: "AUTO" | "GEMINI" | "OPENAI";
   forceRegenerate?: boolean;
+  onlyStored?: boolean;
 }): Promise<{
   success: boolean;
   plan?: EditorialPlanResult;
@@ -119,6 +120,15 @@ export async function generateEditorialPlanAction(params: {
         source: (storedPlan as any)._source || "GEMINI_AI",
         modelUsed: (storedPlan as any)._modelUsed,
         notice: `Plan éditorial enregistré du mois (${storedPlan.monthName || monthKey}) chargé selon le contrat.`,
+      };
+    }
+
+    // Si on demande seulement le plan stocké et qu'aucun plan n'est enregistré, ne pas générer automatiquement par IA
+    if (params.onlyStored && !params.forceRegenerate) {
+      return {
+        success: true,
+        plan: undefined,
+        notice: "Aucun plan stocké. Saisie manuelle des thèmes et sujets disponible.",
       };
     }
 
@@ -597,41 +607,15 @@ export async function triggerWeeklyCronForAllActiveClientsAction(): Promise<{
 
     // Calcul de la semaine du mois courante (1 à 4)
     const dayOfMonth = new Date().getDate();
-    const currentWeekNumber = Math.min(4, Math.max(1, Math.ceil(dayOfMonth / 7)));
-
-    let totalNotifications = 0;
-    const details: string[] = [];
-
-    for (const project of activeProjects) {
-      const client = project.client;
-      const plan = generateAiEditorialPlan({
-        clientName: client.companyName,
-        brandName: client.brandName,
-        sector: client.sector,
-        wilaya: client.wilaya,
-        offerType: client.offerType,
-      });
-
-      const res = await sendWeeklyContentNotificationAction({
-        projectId: project.id,
-        weekNumber: currentWeekNumber,
-        posts: plan.publications,
-        skipAuth: true,
-      });
-
-      if (res.success) {
-        totalNotifications += res.count;
-        details.push(
-          `${client.companyName} (${client.offerType}) : ${plan.weeklyQuota} pub(s) / sem -> ${res.count} notifs envoyées`
-        );
-      }
-    }
+    const reminderRes = await dispatchWeeklyThemesReminderNotifications();
 
     return {
       success: true,
       notifiedProjects: activeProjects.length,
-      totalNotifications,
-      details,
+      totalNotifications: reminderRes.count || 0,
+      details: [
+        `Rappel hebdomadaire envoyé à l'équipe technique pour ${activeProjects.length} projets sous contrat.`,
+      ],
     };
   } catch (error: any) {
     console.error("Erreur lors du cron hebdomadaire de contenu:", error);

@@ -30,6 +30,8 @@ import {
   CalendarDays,
   FileSpreadsheet,
   Database,
+  KeyRound,
+  Mail,
 } from "lucide-react";
 import {
   createUserAction,
@@ -39,6 +41,10 @@ import {
   adminSaveAttendanceAction,
   adminDeleteAttendanceAction,
 } from "@/actions/settings";
+import {
+  adminDirectSetUserPasswordAction,
+  adminTriggerPasswordResetAction,
+} from "@/actions/users-management";
 import { autoSyncDailyAbsencesAction } from "@/actions/attendance";
 import { Role, CommissionRuleType, AttendanceStatus, DepartmentType } from "@prisma/client";
 import { SystemUpdatesTab } from "./SystemUpdatesTab";
@@ -211,6 +217,44 @@ export function ParametresClient({
   // Modals
   const [showUserModal, setShowUserModal] = useState(false);
   const [showRuleModal, setShowRuleModal] = useState(false);
+  const [passwordModalUser, setPasswordModalUser] = useState<UserItem | null>(null);
+  const [newDirectPassword, setNewDirectPassword] = useState("");
+  const [passwordActionLoading, setPasswordActionLoading] = useState(false);
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  const handleAdminDirectSetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordModalUser || !newDirectPassword) return;
+    if (newDirectPassword.length < 6) {
+      setPasswordFeedback({ type: "error", message: "Le mot de passe doit comporter au moins 6 caractères." });
+      return;
+    }
+    try {
+      setPasswordActionLoading(true);
+      setPasswordFeedback(null);
+      await adminDirectSetUserPasswordAction(passwordModalUser.id, newDirectPassword);
+      setPasswordFeedback({ type: "success", message: `Nouveau mot de passe enregistré avec succès pour ${passwordModalUser.name} !` });
+      setNewDirectPassword("");
+    } catch (err: any) {
+      setPasswordFeedback({ type: "error", message: err.message || "Erreur lors de la mise à jour du mot de passe." });
+    } finally {
+      setPasswordActionLoading(false);
+    }
+  };
+
+  const handleAdminSendResetEmail = async () => {
+    if (!passwordModalUser) return;
+    try {
+      setPasswordActionLoading(true);
+      setPasswordFeedback(null);
+      await adminTriggerPasswordResetAction(passwordModalUser.id);
+      setPasswordFeedback({ type: "success", message: `Lien de réinitialisation sécurisé envoyé à ${passwordModalUser.email} !` });
+    } catch (err: any) {
+      setPasswordFeedback({ type: "error", message: err.message || "Erreur lors de l'envoi de l'e-mail." });
+    } finally {
+      setPasswordActionLoading(false);
+    }
+  };
 
   // New User Form
   const [newUserName, setNewUserName] = useState("");
@@ -1024,26 +1068,41 @@ export function ParametresClient({
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-neutral-400 bg-neutral-800/60 border border-neutral-700/40"
-                            title="Compte administrateur protégé : impossible à désactiver"
-                          >
-                            <Lock className="w-3 h-3 text-amber-400" />
-                            Protégé
-                          </span>
-                        ) : (
+                        <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => handleToggleUserActive(u.id, u.isActive)}
-                            className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                              u.isActive
-                                ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
-                                : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
-                            }`}
+                            onClick={() => {
+                              setPasswordModalUser(u);
+                              setNewDirectPassword("");
+                              setPasswordFeedback(null);
+                            }}
+                            title="Gérer le mot de passe de cet utilisateur"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/40 transition"
                           >
-                            {u.isActive ? "Désactiver" : "Réactiver"}
+                            <KeyRound className="w-3 h-3 text-indigo-400" />
+                            <span>Mot de passe</span>
                           </button>
-                        )}
+
+                          {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-neutral-400 bg-neutral-800/60 border border-neutral-700/40"
+                              title="Compte administrateur protégé : impossible à désactiver"
+                            >
+                              <Lock className="w-3 h-3 text-amber-400" />
+                              Protégé
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleToggleUserActive(u.id, u.isActive)}
+                              className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                                u.isActive
+                                  ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
+                                  : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
+                              }`}
+                            >
+                              {u.isActive ? "Désactiver" : "Réactiver"}
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1583,6 +1642,114 @@ export function ParametresClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GESTION DU MOT DE PASSE UTILISATEUR */}
+      {passwordModalUser && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setPasswordModalUser(null);
+                setPasswordFeedback(null);
+                setNewDirectPassword("");
+              }}
+              className="absolute top-5 right-5 text-neutral-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Gérer le mot de passe</h3>
+                <p className="text-xs text-neutral-400">
+                  {passwordModalUser.name} ({passwordModalUser.email})
+                </p>
+              </div>
+            </div>
+
+            {passwordFeedback && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  passwordFeedback.type === "success"
+                    ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
+                    : "bg-rose-500/10 border border-rose-500/30 text-rose-300"
+                }`}
+              >
+                {passwordFeedback.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                )}
+                <span>{passwordFeedback.message}</span>
+              </div>
+            )}
+
+            {/* Option 1: Définition directe */}
+            <form onSubmit={handleAdminDirectSetPassword} className="space-y-3 bg-neutral-950/60 border border-neutral-800/80 p-4 rounded-2xl">
+              <label className="block text-xs font-semibold text-neutral-200">
+                1. Définir un nouveau mot de passe directement
+              </label>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                Applique immédiatement le nouveau mot de passe sans nécessiter d'accès aux e-mails.
+              </p>
+              <div className="space-y-2">
+                <input
+                  type="password"
+                  value={newDirectPassword}
+                  onChange={(e) => setNewDirectPassword(e.target.value)}
+                  placeholder="Nouveau mot de passe (min. 6 caract.)"
+                  minLength={6}
+                  required
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3.5 py-2 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  type="submit"
+                  disabled={passwordActionLoading || !newDirectPassword}
+                  className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition disabled:opacity-50 cursor-pointer"
+                >
+                  {passwordActionLoading ? "Enregistrement..." : "Appliquer ce mot de passe"}
+                </button>
+              </div>
+            </form>
+
+            {/* Option 2: Envoi de lien par e-mail */}
+            <div className="space-y-2 bg-neutral-950/60 border border-neutral-800/80 p-4 rounded-2xl">
+              <label className="block text-xs font-semibold text-neutral-200">
+                2. Envoyer un lien de réinitialisation sécurisé
+              </label>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                Envoie un e-mail officiel à <b>{passwordModalUser.email}</b> contenant un lien à usage unique valable 1 heure.
+              </p>
+              <button
+                type="button"
+                onClick={handleAdminSendResetEmail}
+                disabled={passwordActionLoading}
+                className="w-full py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-semibold text-xs border border-neutral-700 flex items-center justify-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+              >
+                <Mail className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Envoyer l'e-mail de réinitialisation</span>
+              </button>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordModalUser(null);
+                  setPasswordFeedback(null);
+                  setNewDirectPassword("");
+                }}
+                className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -32,12 +32,24 @@ import {
   Kanban,
   ListFilter,
   Eye,
+  Target,
+  Bookmark,
+  Bell,
+  Send,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { TaskStatus, TaskPriority, OfferType } from "@prisma/client";
-import { updateTaskStatusAction, updateTaskAssigneeAction, createTaskAction } from "@/actions/production";
+import {
+  updateTaskStatusAction,
+  updateTaskAssigneeAction,
+  createTaskAction,
+  saveClientEditorialThemeAction,
+  createManualSubjectTaskAction,
+  triggerWeeklyReminderAction,
+} from "@/actions/production";
 import { toLocalDateString, formatDate, formatDateTime } from "@/lib/utils";
 
 const MONTH_NAMES = [
@@ -161,6 +173,8 @@ interface Props {
     offerType: string;
     status: string;
     projects: { id: string; name: string; code: string }[];
+    themes?: { id: string; pillar: string; title: string; description: string; color: string }[];
+    publications?: any[];
   }[];
   currentUserId?: string;
   initialMonth?: number;
@@ -185,7 +199,7 @@ export function TechnicianCalendarClient({
   ); // 0-indexed for Date math
 
   // View modes
-  const [viewMode, setViewMode] = useState<"calendar" | "agenda" | "by_client">("calendar");
+  const [viewMode, setViewMode] = useState<"calendar" | "agenda" | "by_client" | "themes">("calendar");
 
   // Filters
   const [search, setSearch] = useState("");
@@ -209,6 +223,33 @@ export function TechnicianCalendarClient({
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState(currentUserId || "");
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+
+  // New Theme modal state (Saisie manuelle des thèmes)
+  const [isNewThemeModalOpen, setIsNewThemeModalOpen] = useState(false);
+  const [themeClientId, setThemeClientId] = useState("");
+  const [themeWeekNumber, setThemeWeekNumber] = useState<number>(1);
+  const [themePillar, setThemePillar] = useState("Semaine 1 : Notoriété & Savoir-faire");
+  const [themeTitle, setThemeTitle] = useState("");
+  const [themeDescription, setThemeDescription] = useState("");
+  const [themeColor, setThemeColor] = useState("purple");
+  const [isSavingTheme, setIsSavingTheme] = useState(false);
+
+  // New Subject modal state (Saisie manuelle des sujets de publication)
+  const [isNewSubjectModalOpen, setIsNewSubjectModalOpen] = useState(false);
+  const [subjectClientId, setSubjectClientId] = useState("");
+  const [subjectThemeTitle, setSubjectThemeTitle] = useState("");
+  const [subjectWeekNumber, setSubjectWeekNumber] = useState<number>(1);
+  const [subjectTitle, setSubjectTitle] = useState("");
+  const [subjectFormat, setSubjectFormat] = useState<"REEL_9_16" | "CAROUSEL" | "STATIC_POST" | "STORY_INTERACTIVE" | "OTHER">("REEL_9_16");
+  const [subjectDueDate, setSubjectDueDate] = useState(toLocalDateString(new Date()));
+  const [subjectHook, setSubjectHook] = useState("");
+  const [subjectScript, setSubjectScript] = useState("");
+  const [subjectAssigneeId, setSubjectAssigneeId] = useState(currentUserId || "");
+  const [subjectPriority, setSubjectPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
+  const [isCreatingSubject, setIsCreatingSubject] = useState(false);
+
+  // Weekly reminder state
+  const [isSendingReminder, setIsSendingReminder] = useState(false);
 
   // Month navigation — navigate via URL so the server reloads data for the correct month
   const handlePrevMonth = () => {
@@ -554,6 +595,161 @@ export function TechnicianCalendarClient({
     }
   };
 
+  // Helper pour ouvrir le modal de thème pré-rempli pour un client
+  const handleOpenThemeForClient = (clientId: string, weekNum: number = 1) => {
+    setThemeClientId(clientId);
+    setThemeWeekNumber(weekNum);
+    const defaultPillars = [
+      "Semaine 1 : Notoriété & Savoir-faire",
+      "Semaine 2 : Éducation & Conseils",
+      "Semaine 3 : Preuve Sociale & Avis",
+      "Semaine 4 : Offre Spéciale & Conversion",
+      "Semaine 5 : Coulisses & Présentation",
+    ];
+    setThemePillar(defaultPillars[weekNum - 1] || `Semaine ${weekNum}`);
+
+    const targetClient = activeClients.find((c) => c.id === clientId);
+    const existingTheme = targetClient?.themes?.[weekNum - 1];
+    if (existingTheme) {
+      setThemeTitle(existingTheme.title || "");
+      setThemeDescription(existingTheme.description || "");
+      setThemeColor(existingTheme.color || (weekNum === 1 ? "purple" : weekNum === 2 ? "blue" : weekNum === 3 ? "emerald" : "amber"));
+    } else {
+      setThemeTitle("");
+      setThemeDescription("");
+      setThemeColor(weekNum === 1 ? "purple" : weekNum === 2 ? "blue" : weekNum === 3 ? "emerald" : "amber");
+    }
+    setIsNewThemeModalOpen(true);
+  };
+
+  // Enregistrement manuel d'un thème
+  const handleSaveTheme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!themeClientId) {
+      setFeedback({ type: "error", text: "Veuillez sélectionner un client." });
+      return;
+    }
+    if (!themeTitle.trim()) {
+      setFeedback({ type: "error", text: "Veuillez saisir le titre du thème." });
+      return;
+    }
+
+    setIsSavingTheme(true);
+    setFeedback(null);
+    try {
+      const res = await saveClientEditorialThemeAction({
+        clientId: themeClientId,
+        weekNumber: themeWeekNumber,
+        pillar: themePillar,
+        title: themeTitle.trim(),
+        description: themeDescription.trim() || undefined,
+        color: themeColor,
+        month: currentMonth + 1,
+        year: currentYear,
+      });
+
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          text: `Thème Semaine ${themeWeekNumber} enregistré avec succès !`,
+        });
+        setIsNewThemeModalOpen(false);
+        setThemeTitle("");
+        setThemeDescription("");
+        router.refresh();
+      } else {
+        setFeedback({ type: "error", text: res.error || "Erreur enregistrement thème." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err?.message || "Erreur serveur." });
+    } finally {
+      setIsSavingTheme(false);
+    }
+  };
+
+  // Helper pour ouvrir le modal de sujet pré-rempli
+  const handleOpenSubjectForClient = (clientId: string, weekNum: number = 1, themeTitleVal?: string) => {
+    setSubjectClientId(clientId);
+    setSubjectWeekNumber(weekNum);
+    const targetClient = activeClients.find((c) => c.id === clientId);
+    const defaultTheme = themeTitleVal || targetClient?.themes?.[weekNum - 1]?.title || "";
+    setSubjectThemeTitle(defaultTheme);
+    setSubjectTitle("");
+    setSubjectHook("");
+    setSubjectScript("");
+    setIsNewSubjectModalOpen(true);
+  };
+
+  // Création manuelle d'un sujet (tâche de production)
+  const handleCreateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!subjectClientId) {
+      setFeedback({ type: "error", text: "Veuillez sélectionner un client." });
+      return;
+    }
+    if (!subjectTitle.trim()) {
+      setFeedback({ type: "error", text: "Veuillez saisir le titre du sujet." });
+      return;
+    }
+
+    setIsCreatingSubject(true);
+    setFeedback(null);
+    try {
+      const res = await createManualSubjectTaskAction({
+        clientId: subjectClientId,
+        themeTitle: subjectThemeTitle.trim() || undefined,
+        weekNumber: subjectWeekNumber,
+        title: subjectTitle.trim(),
+        format: subjectFormat,
+        dueDate: subjectDueDate,
+        hook: subjectHook.trim() || undefined,
+        scriptOrDescription: subjectScript.trim() || undefined,
+        assigneeId: subjectAssigneeId || undefined,
+        priority: subjectPriority,
+      });
+
+      if (res.success && res.task) {
+        setFeedback({
+          type: "success",
+          text: `Sujet "${subjectTitle}" planifié avec succès dans le calendrier !`,
+        });
+        setIsNewSubjectModalOpen(false);
+        setSubjectTitle("");
+        setSubjectHook("");
+        setSubjectScript("");
+        router.refresh();
+      } else {
+        setFeedback({ type: "error", text: res.error || "Erreur création sujet." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err?.message || "Erreur serveur." });
+    } finally {
+      setIsCreatingSubject(false);
+    }
+  };
+
+  // Déclenchement manuel du rappel début de semaine
+  const handleTriggerWeeklyReminder = async () => {
+    setIsSendingReminder(true);
+    try {
+      const res = await triggerWeeklyReminderAction();
+      if (res.success) {
+        setFeedback({
+          type: "success",
+          text: (res as any).alreadySent
+            ? "Le rappel hebdomadaire a déjà été envoyé cette semaine."
+            : `Notification de début de semaine envoyée avec succès à ${(res as any).count || "l'"}équipe !`,
+        });
+      } else {
+        setFeedback({ type: "error", text: "Erreur lors de l'envoi du rappel." });
+      }
+    } catch (err: any) {
+      setFeedback({ type: "error", text: err?.message || "Erreur lors de l'envoi." });
+    } finally {
+      setIsSendingReminder(false);
+    }
+  };
+
   // Group by client for "by_client" view
   const tasksByClient = useMemo(() => {
     const map = new Map<
@@ -633,6 +829,37 @@ export function TechnicianCalendarClient({
             Aujourd'hui
           </button>
 
+          {/* Bouton Nouveau Sujet */}
+          <Button
+            size="sm"
+            onClick={() => {
+              if (activeClients.length > 0 && !subjectClientId) {
+                setSubjectClientId(activeClients[0].id);
+              }
+              setIsNewSubjectModalOpen(true);
+            }}
+            className="gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/25 cursor-pointer"
+          >
+            <Film className="w-4 h-4" />
+            <span>+ Nouveau Sujet</span>
+          </Button>
+
+          {/* Bouton Nouveau Thème */}
+          <Button
+            size="sm"
+            onClick={() => {
+              if (activeClients.length > 0 && !themeClientId) {
+                setThemeClientId(activeClients[0].id);
+              }
+              setIsNewThemeModalOpen(true);
+            }}
+            className="gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-600/25 cursor-pointer"
+          >
+            <Target className="w-4 h-4" />
+            <span>+ Nouveau Thème</span>
+          </Button>
+
+          {/* Bouton Nouvelle Tâche Générale */}
           <Button
             size="sm"
             onClick={() => setIsNewTaskModalOpen(true)}
@@ -641,6 +868,76 @@ export function TechnicianCalendarClient({
             <Plus className="w-4 h-4" />
             <span>Nouvelle Tâche</span>
           </Button>
+        </div>
+      </div>
+
+      {/* BANDEAU RAPPEL DÉBUT DE SEMAINE : Remplissage des Thèmes & Sujets */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-neutral-900 to-indigo-950/50 border border-purple-500/30 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center shrink-0 shadow-inner">
+            <Bell className="w-5 h-5 text-purple-400 animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                🔔 Rappel Début de Semaine
+              </span>
+              <span className="text-xs text-neutral-400 font-medium">
+                {activeClients.length} clients sous contrat
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-neutral-100 mt-0.5">
+              Remplissez manuellement les thèmes et sujets de publications pour la semaine
+            </h3>
+            <p className="text-xs text-neutral-400">
+              Définissez les axes stratégiques et les livrables (Reels, Carrousels, Maquettes) pour chaque client sous contrat.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode("themes")}
+            className="px-3 py-1.5 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/40 text-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Bookmark className="w-3.5 h-3.5 text-purple-300" />
+            <span>Vue Thèmes & Sujets</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (activeClients.length > 0 && !themeClientId) setThemeClientId(activeClients[0].id);
+              setIsNewThemeModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-amber-600/25 hover:bg-amber-600/40 border border-amber-500/40 text-amber-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5 text-amber-300" />
+            <span>+ Thème</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (activeClients.length > 0 && !subjectClientId) setSubjectClientId(activeClients[0].id);
+              setIsNewSubjectModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-md shadow-purple-600/25 flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Sujet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleTriggerWeeklyReminder}
+            disabled={isSendingReminder}
+            className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition cursor-pointer disabled:opacity-50"
+            title="Envoyer la notification de début de semaine à toute l'équipe"
+          >
+            <Send className={`w-3.5 h-3.5 ${isSendingReminder ? "animate-spin text-purple-400" : ""}`} />
+          </button>
         </div>
       </div>
 
@@ -808,6 +1105,18 @@ export function TechnicianCalendarClient({
             >
               <Building2 className="w-3.5 h-3.5" />
               <span>Par Client & Pack ({tasksByClient.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("themes")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 font-semibold rounded-lg transition-colors cursor-pointer ${
+                viewMode === "themes"
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "text-neutral-400 hover:text-neutral-200"
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5 text-purple-300" />
+              <span>Thèmes & Sujets Semaine ({activeClients.length})</span>
             </button>
           </div>
 
@@ -1210,6 +1519,264 @@ export function TechnicianCalendarClient({
         </div>
       )}
 
+      {/* 4. VUE THÈMES & SUJETS DE LA SEMAINE PAR CLIENT */}
+      {viewMode === "themes" && (
+        <div className="space-y-4">
+          <div className="p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+            <div>
+              <h2 className="text-base font-bold text-neutral-100 flex items-center gap-2">
+                <Bookmark className="w-4 h-4 text-purple-400" />
+                <span>Planification Manuelle des Thèmes & Sujets Hebdomadaires</span>
+              </h2>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Vue récapitulative des 4 semaines du mois pour chaque client sous contrat. Remplissez les thèmes et ajoutez directement vos sujets.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (activeClients.length > 0 && !themeClientId) setThemeClientId(activeClients[0].id);
+                  setIsNewThemeModalOpen(true);
+                }}
+                className="gap-1 text-xs bg-amber-600 hover:bg-amber-500 text-white cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Définir un Thème</span>
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (activeClients.length > 0 && !subjectClientId) setSubjectClientId(activeClients[0].id);
+                  setIsNewSubjectModalOpen(true);
+                }}
+                className="gap-1 text-xs bg-purple-600 hover:bg-purple-500 text-white cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Planifier un Sujet</span>
+              </Button>
+            </div>
+          </div>
+
+          {activeClients.length === 0 ? (
+            <div className="p-12 text-center rounded-2xl bg-neutral-900/50 border border-neutral-800 text-neutral-400 text-xs">
+              Aucun client actif ou en préparation pour le moment.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {activeClients.map((client) => {
+                const packBadge = PACK_BADGES[client.offerType] || PACK_BADGES.CUSTOM;
+                const clientTasks = tasks.filter((t) => t.project.client.id === client.id);
+
+                return (
+                  <div
+                    key={client.id}
+                    className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800 shadow-lg space-y-4"
+                  >
+                    {/* Header Client */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 flex items-center justify-center font-bold text-sm shrink-0">
+                          {client.companyName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-bold text-neutral-100">
+                              {client.companyName}
+                            </h3>
+                            {client.brandName && (
+                              <span className="text-xs text-neutral-400">
+                                ({client.brandName})
+                              </span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${packBadge.bg} ${packBadge.text} ${packBadge.border}`}
+                            >
+                              {packBadge.label}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                client.status === "IN_PREPARATION"
+                                  ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
+                                  : "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                              }`}
+                            >
+                              {client.status === "IN_PREPARATION" ? "En préparation" : "Actif"}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-neutral-400">
+                            {clientTasks.length} publication(s)/tâche(s) planifiée(s) pour ce mois
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenSubjectForClient(client.id, 1)}
+                          className="text-xs border-purple-500/40 text-purple-300 hover:bg-purple-500/10 gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Nouveau Sujet</span>
+                        </Button>
+                        <Link
+                          href={`/abonnements?clientId=${client.id}`}
+                          className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition"
+                        >
+                          <span>Voir Abonnement</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Grille des 4 Semaines pour ce client */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {[1, 2, 3, 4].map((weekNum) => {
+                        const theme = client.themes?.[weekNum - 1];
+                        const hasTheme = Boolean(theme && theme.title);
+
+                        // Trouver les tâches qui correspondent à cette semaine
+                        const weekTasks = clientTasks.filter((t) => {
+                          const desc = `${t.title} ${t.description || ""}`.toLowerCase();
+                          if (desc.includes(`semaine ${weekNum}`) || desc.includes(`s${weekNum}`)) {
+                            return true;
+                          }
+                          if (t.dueDate) {
+                            const d = new Date(t.dueDate);
+                            const day = d.getDate();
+                            if (weekNum === 1 && day <= 7) return true;
+                            if (weekNum === 2 && day > 7 && day <= 14) return true;
+                            if (weekNum === 3 && day > 14 && day <= 21) return true;
+                            if (weekNum === 4 && day > 21) return true;
+                          }
+                          return false;
+                        });
+
+                        return (
+                          <div
+                            key={weekNum}
+                            className={`p-3.5 rounded-2xl border flex flex-col justify-between transition-all ${
+                              hasTheme
+                                ? "bg-neutral-950/60 border-neutral-800 hover:border-neutral-700"
+                                : "bg-neutral-950/30 border-dashed border-neutral-800 hover:border-neutral-700"
+                            }`}
+                          >
+                            <div className="space-y-2">
+                              {/* En-tête Semaine */}
+                              <div className="flex items-center justify-between">
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-neutral-900 border border-neutral-800 text-neutral-300">
+                                  Semaine {weekNum}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenThemeForClient(client.id, weekNum)}
+                                  className="text-[11px] text-neutral-400 hover:text-purple-300 font-medium transition cursor-pointer"
+                                  title="Modifier ou définir le thème"
+                                >
+                                  {hasTheme ? "Modifier" : "+ Thème"}
+                                </button>
+                              </div>
+
+                              {/* Affichage du Thème */}
+                              {hasTheme ? (
+                                <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/25 space-y-1">
+                                  <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider truncate">
+                                    {theme?.pillar || `Semaine ${weekNum}`}
+                                  </div>
+                                  <div className="text-xs font-bold text-neutral-100 line-clamp-2">
+                                    {theme?.title}
+                                  </div>
+                                  {theme?.description && (
+                                    <p className="text-[10px] text-neutral-400 line-clamp-2">
+                                      {theme.description}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenThemeForClient(client.id, weekNum)}
+                                  className="w-full py-3 px-2 rounded-xl border border-dashed border-neutral-800 hover:border-purple-500/40 text-center text-xs text-neutral-500 hover:text-purple-300 transition cursor-pointer block"
+                                >
+                                  + Définir le thème de la semaine
+                                </button>
+                              )}
+
+                              {/* Sujets planifiés pour cette semaine */}
+                              <div className="space-y-1.5 pt-1">
+                                <div className="flex items-center justify-between text-[10px] text-neutral-400 font-semibold">
+                                  <span>Sujets ({weekTasks.length}) :</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenSubjectForClient(client.id, weekNum, theme?.title)}
+                                    className="text-purple-400 hover:text-purple-300 transition cursor-pointer"
+                                  >
+                                    + Ajouter
+                                  </button>
+                                </div>
+
+                                {weekTasks.length === 0 ? (
+                                  <div className="text-[10px] text-neutral-600 italic py-1">
+                                    Aucun sujet planifié
+                                  </div>
+                                ) : (
+                                  weekTasks.map((t) => (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => setSelectedTask(t)}
+                                      className="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition cursor-pointer space-y-1"
+                                    >
+                                      <div className="flex items-start gap-1.5">
+                                        <div className="mt-0.5">{getDeliverableIcon(t.title, t.description)}</div>
+                                        <span className="text-[11px] font-semibold text-neutral-200 line-clamp-1">
+                                          {t.title}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between text-[9px] text-neutral-400">
+                                        <span>{t.dueDate ? formatDate(t.dueDate) : "Sans date"}</span>
+                                        <span
+                                          className={`px-1.5 py-0.2 rounded font-bold ${
+                                            t.status === "VALIDATED" || t.status === "COMPLETED"
+                                              ? "text-emerald-400 bg-emerald-500/10"
+                                              : t.status === "IN_PROGRESS"
+                                              ? "text-blue-400 bg-blue-500/10"
+                                              : "text-neutral-400 bg-neutral-800"
+                                          }`}
+                                        >
+                                          {TASK_STATUS_CONFIG[t.status].label}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Footer de carte Semaine */}
+                            <div className="pt-2 mt-2 border-t border-neutral-800/60">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenSubjectForClient(client.id, weekNum, theme?.title)}
+                                className="w-full text-[10px] h-7 border-neutral-800 hover:border-purple-500/50 text-neutral-300 hover:text-purple-300 cursor-pointer"
+                              >
+                                + Nouveau Sujet S{weekNum}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TASK DETAIL & FAST UPDATE MODAL */}
       {selectedTask && (
         <Modal
@@ -1487,6 +2054,358 @@ export function TechnicianCalendarClient({
                 className="bg-emerald-600 hover:bg-emerald-500 text-white"
               >
                 {isCreatingTask ? "Enregistrement..." : "Planifier la Tâche"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* MODAL 3: NOUVEAU THÈME HEBDOMADAIRE (SAISIE MANUELLE) */}
+      {isNewThemeModalOpen && (
+        <Modal
+          isOpen={isNewThemeModalOpen}
+          onClose={() => setIsNewThemeModalOpen(false)}
+          title="Définir un Thème de la Semaine (Saisie Manuelle)"
+        >
+          <form onSubmit={handleSaveTheme} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Client sous contrat *
+              </label>
+              <select
+                value={themeClientId}
+                onChange={(e) => {
+                  setThemeClientId(e.target.value);
+                  const found = activeClients.find((c) => c.id === e.target.value);
+                  const ex = found?.themes?.[themeWeekNumber - 1];
+                  if (ex) {
+                    setThemeTitle(ex.title || "");
+                    setThemeDescription(ex.description || "");
+                  }
+                }}
+                required
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
+              >
+                <option value="">Sélectionnez un client...</option>
+                {activeClients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    🏢 {c.companyName} ({c.offerType})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Semaine du mois *
+                </label>
+                <select
+                  value={themeWeekNumber}
+                  onChange={(e) => {
+                    const wk = parseInt(e.target.value, 10);
+                    setThemeWeekNumber(wk);
+                    const defaultPillars = [
+                      "Semaine 1 : Notoriété & Savoir-faire",
+                      "Semaine 2 : Éducation & Conseils",
+                      "Semaine 3 : Preuve Sociale & Avis",
+                      "Semaine 4 : Offre Spéciale & Conversion",
+                      "Semaine 5 : Coulisses & Présentation",
+                    ];
+                    setThemePillar(defaultPillars[wk - 1] || `Semaine ${wk}`);
+                    const found = activeClients.find((c) => c.id === themeClientId);
+                    const ex = found?.themes?.[wk - 1];
+                    if (ex) {
+                      setThemeTitle(ex.title || "");
+                      setThemeDescription(ex.description || "");
+                    }
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
+                >
+                  <option value={1}>Semaine 1</option>
+                  <option value={2}>Semaine 2</option>
+                  <option value={3}>Semaine 3</option>
+                  <option value={4}>Semaine 4</option>
+                  <option value={5}>Semaine 5</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Couleur du badge
+                </label>
+                <select
+                  value={themeColor}
+                  onChange={(e) => setThemeColor(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
+                >
+                  <option value="purple">🟣 Violet (Notoriété)</option>
+                  <option value="blue">🔵 Bleu (Éducation)</option>
+                  <option value="emerald">🟢 Vert Émeraude (Preuve sociale)</option>
+                  <option value="amber">🟠 Ambre / Or (Offre commerciale)</option>
+                  <option value="rose">🔴 Rose / Rouge (Événement)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Axe / Pilier Stratégique
+              </label>
+              <input
+                type="text"
+                value={themePillar}
+                onChange={(e) => setThemePillar(e.target.value)}
+                placeholder="Ex: Notoriété & Savoir-faire"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Titre du Thème de la semaine *
+              </label>
+              <input
+                type="text"
+                value={themeTitle}
+                onChange={(e) => setThemeTitle(e.target.value)}
+                placeholder="Ex: Les 3 erreurs courantes lors d'un achat immobilier"
+                required
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 font-bold focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Description / Objectif du thème (facultatif)
+              </label>
+              <textarea
+                value={themeDescription}
+                onChange={(e) => setThemeDescription(e.target.value)}
+                placeholder="Angle spécifique, cible visée ou message clé..."
+                rows={2}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-amber-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsNewThemeModalOpen(false)}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isSavingTheme}
+                className="bg-amber-600 hover:bg-amber-500 text-white font-bold"
+              >
+                {isSavingTheme ? "Enregistrement..." : "Enregistrer le Thème"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* MODAL 4: NOUVEAU SUJET DE PUBLICATION (SAISIE MANUELLE) */}
+      {isNewSubjectModalOpen && (
+        <Modal
+          isOpen={isNewSubjectModalOpen}
+          onClose={() => setIsNewSubjectModalOpen(false)}
+          title="Planifier un Nouveau Sujet de Publication"
+        >
+          <form onSubmit={handleCreateSubject} className="space-y-4 text-xs">
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Client sous contrat *
+              </label>
+              <select
+                value={subjectClientId}
+                onChange={(e) => {
+                  setSubjectClientId(e.target.value);
+                  const found = activeClients.find((c) => c.id === e.target.value);
+                  const themeForWeek = found?.themes?.[subjectWeekNumber - 1];
+                  if (themeForWeek?.title) {
+                    setSubjectThemeTitle(themeForWeek.title);
+                  }
+                }}
+                required
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+              >
+                <option value="">Sélectionnez un client...</option>
+                {activeClients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    🏢 {c.companyName} ({c.offerType})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Semaine
+                </label>
+                <select
+                  value={subjectWeekNumber}
+                  onChange={(e) => {
+                    const wk = parseInt(e.target.value, 10);
+                    setSubjectWeekNumber(wk);
+                    const found = activeClients.find((c) => c.id === subjectClientId);
+                    const themeForWeek = found?.themes?.[wk - 1];
+                    if (themeForWeek?.title) {
+                      setSubjectThemeTitle(themeForWeek.title);
+                    }
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+                >
+                  <option value={1}>Semaine 1</option>
+                  <option value={2}>Semaine 2</option>
+                  <option value={3}>Semaine 3</option>
+                  <option value={4}>Semaine 4</option>
+                  <option value={5}>Semaine 5</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Format de publication *
+                </label>
+                <select
+                  value={subjectFormat}
+                  onChange={(e) => setSubjectFormat(e.target.value as any)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+                >
+                  <option value="REEL_9_16">🎬 Reel / Vidéo courte (9:16)</option>
+                  <option value="CAROUSEL">📑 Carrousel multi-pages</option>
+                  <option value="STATIC_POST">🖼️ Post Visuel Graphique</option>
+                  <option value="STORY_INTERACTIVE">📱 Story Interactive</option>
+                  <option value="OTHER">📄 Autre livrable</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Thème de rattachement
+              </label>
+              <input
+                type="text"
+                value={subjectThemeTitle}
+                onChange={(e) => setSubjectThemeTitle(e.target.value)}
+                placeholder="Ex: Conseils & Éducation, ou Notoriété..."
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Titre du Sujet de publication *
+              </label>
+              <input
+                type="text"
+                value={subjectTitle}
+                onChange={(e) => setSubjectTitle(e.target.value)}
+                placeholder="Ex: Comment négocier le prix de son appartement sans stress"
+                required
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 font-bold focus:outline-hidden focus:border-purple-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Date de publication / Échéance *
+                </label>
+                <input
+                  type="date"
+                  value={subjectDueDate}
+                  onChange={(e) => setSubjectDueDate(e.target.value)}
+                  required
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-neutral-300 font-semibold mb-1">
+                  Priorité
+                </label>
+                <select
+                  value={subjectPriority}
+                  onChange={(e) => setSubjectPriority(e.target.value as any)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+                >
+                  <option value={TaskPriority.LOW}>Basse</option>
+                  <option value={TaskPriority.MEDIUM}>Moyenne</option>
+                  <option value={TaskPriority.HIGH}>Haute</option>
+                  <option value={TaskPriority.URGENT}>Urgente</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Accroche / Hook (les 3 premières secondes)
+              </label>
+              <input
+                type="text"
+                value={subjectHook}
+                onChange={(e) => setSubjectHook(e.target.value)}
+                placeholder="Ex: Ne signez jamais un compromis avant d'avoir vérifié ceci !"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Briefing, Script ou Consignes de tournage / montage
+              </label>
+              <textarea
+                value={subjectScript}
+                onChange={(e) => setSubjectScript(e.target.value)}
+                placeholder="Décrivez les étapes de la vidéo, les visuels souhaités ou le texte pour le carrousel..."
+                rows={3}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-neutral-300 font-semibold mb-1">
+                Technicien responsable (Monteur / Graphiste)
+              </label>
+              <select
+                value={subjectAssigneeId}
+                onChange={(e) => setSubjectAssigneeId(e.target.value)}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
+              >
+                <option value="">Non assigné</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    👤 {u.name} ({u.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setIsNewSubjectModalOpen(false)}
+              >
+                Annuler
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={isCreatingSubject}
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold"
+              >
+                {isCreatingSubject ? "Enregistrement..." : "Planifier le Sujet"}
               </Button>
             </div>
           </form>

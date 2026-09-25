@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { triggerWeeklyCronForAllActiveClientsAction } from "@/actions/contentAi";
+import { dispatchWeeklyThemesReminderNotifications } from "@/actions/notifications";
 
 /**
  * Route API Cron pour le déclenchement hebdomadaire des notifications de contenu
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await triggerWeeklyCronForAllActiveClientsAction();
+    const result = await dispatchWeeklyThemesReminderNotifications();
     return NextResponse.json(result);
   } catch (error: any) {
     return NextResponse.json(
