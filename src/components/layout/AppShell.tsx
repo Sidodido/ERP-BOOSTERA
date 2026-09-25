@@ -24,7 +24,7 @@ export async function AppShell({ children }: AppShellProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-neutral-950 text-neutral-100 flex overflow-x-hidden w-full max-w-[100vw]">
+      <div className="h-screen bg-neutral-950 text-neutral-100 flex overflow-hidden w-full max-w-[100vw]">
         {/* Fixed Sidebar */}
         <Sidebar
           userRole={roleLabel}
@@ -34,9 +34,9 @@ export async function AppShell({ children }: AppShellProps) {
         />
 
         {/* Main Content Viewport */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-x-hidden w-full">
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden w-full">
           <Header userName={user.name} userRole={roleLabel} />
-          <main className="flex-1 p-3 sm:p-6 md:p-8 overflow-y-auto min-w-0 w-full">
+          <main className="flex-1 p-3 sm:p-6 md:p-8 overflow-y-auto min-w-0 w-full custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 min-w-0 w-full">{children}</div>
           </main>
         </div>
