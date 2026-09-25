@@ -537,6 +537,18 @@ export function BaseProspectsClient({
     setEditModalOpen(true);
   };
 
+  // Open Call Modal
+  const handleOpenCallModal = (prospect: ProspectItem) => {
+    setActiveProspect(prospect);
+    setCallForm({
+      result: CallResult.INTERESTED,
+      comment: "",
+      durationSeconds: 180,
+      autoScheduleFollowUp: true,
+    });
+    setCallModalOpen(true);
+  };
+
   // Save Edit Prospect
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1264,7 +1276,7 @@ export function BaseProspectsClient({
                 <th className="py-3 px-3">Statut Appel</th>
                 <th className="py-3 px-3">Résultat Appel</th>
                 <th className="py-3 px-3">Commercial</th>
-                <th className="py-3 px-3 text-right">Actions</th>
+                <th className="py-3 px-3 text-right whitespace-nowrap min-w-[180px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/60">
@@ -1476,8 +1488,19 @@ export function BaseProspectsClient({
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+
+                          {/* Bouton + Appel */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCallModal(prospect)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] shadow-sm transition-all hover:scale-102 cursor-pointer shrink-0"
+                            title={`Enregistrer un appel pour ${prospect.companyName}`}
+                          >
+                            <PhoneCall className="w-3.5 h-3.5" />
+                            <span>+ Appel</span>
+                          </button>
 
                           {/* Plan RDV */}
                           <button
@@ -1661,15 +1684,39 @@ export function BaseProspectsClient({
       {/* MODAL APPEL */}
       <Modal isOpen={callModalOpen} onClose={() => setCallModalOpen(false)} title="Enregistrer un Appel">
         <form onSubmit={handleCallSubmit} className="space-y-4">
-          <p className="text-xs text-neutral-400">
-            Appel avec <strong className="text-neutral-200">{activeProspect?.companyName}</strong> ({activeProspect?.phone})
-          </p>
+          <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-neutral-200">{activeProspect?.companyName}</p>
+              <p className="text-[11px] text-neutral-400 font-mono mt-0.5">{activeProspect?.phone || "Numéro non renseigné"}</p>
+            </div>
+            {activeProspect?.phone && (
+              <div className="flex items-center gap-2">
+                <a
+                  href={`tel:${activeProspect.phone}`}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Appeler</span>
+                </a>
+                <a
+                  href={buildWhatsAppUrl(activeProspect.phone, activeProspect.contactName || activeProspect.companyName)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-colors"
+                  title="WhatsApp"
+                >
+                  <WhatsAppIcon className="w-4 h-4" />
+                </a>
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-neutral-300 mb-1">Résultat de l&apos;appel</label>
             <select
               value={callForm.result}
               onChange={(e) => setCallForm({ ...callForm, result: e.target.value as CallResult })}
-              className="w-full h-10 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200"
+              className="w-full h-10 px-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
             >
               {Object.entries(CALL_RESULTS).map(([key, val]) => (
                 <option key={key} value={key}>
@@ -1678,21 +1725,58 @@ export function BaseProspectsClient({
               ))}
             </select>
           </div>
+
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1">Notes / Commentaires</label>
+            <label className="block text-xs font-medium text-neutral-300 mb-1">Durée approximative</label>
+            <div className="flex gap-2">
+              {[
+                { label: "1 min", sec: 60 },
+                { label: "3 min", sec: 180 },
+                { label: "5 min", sec: 300 },
+                { label: "10 min", sec: 600 },
+              ].map((d) => (
+                <button
+                  key={d.sec}
+                  type="button"
+                  onClick={() => setCallForm({ ...callForm, durationSeconds: d.sec })}
+                  className={`flex-1 py-1.5 px-2 text-xs rounded-lg border font-medium transition-colors cursor-pointer ${
+                    callForm.durationSeconds === d.sec
+                      ? "bg-blue-600 text-white border-blue-500"
+                      : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-700"
+                  }`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-neutral-300 mb-1">Notes / Compte-rendu de l&apos;appel</label>
             <textarea
               rows={3}
               value={callForm.comment}
               onChange={(e) => setCallForm({ ...callForm, comment: e.target.value })}
-              className="w-full p-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none"
-              placeholder="Détails de la conversation..."
+              className="w-full p-3 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500"
+              placeholder="Résumé des échanges, objections, offres discutées..."
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+
+          <label className="flex items-center gap-2 text-xs text-neutral-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={callForm.autoScheduleFollowUp}
+              onChange={(e) => setCallForm({ ...callForm, autoScheduleFollowUp: e.target.checked })}
+              className="rounded border-neutral-700 text-blue-600 focus:ring-0 bg-neutral-900"
+            />
+            <span>Créer automatiquement un rappel / relance si non converti</span>
+          </label>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
             <Button type="button" variant="outline" onClick={() => setCallModalOpen(false)}>
               Annuler
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button type="submit" isLoading={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-white">
               Enregistrer l&apos;appel
             </Button>
           </div>
