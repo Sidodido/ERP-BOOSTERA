@@ -137,7 +137,7 @@ function LoginForm() {
           />
         </div>
         <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center justify-center gap-2">
-          HDZ SECURITY
+          BOOSTERA
           <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 font-semibold">
             ERP v1.0
           </span>

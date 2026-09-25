@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HDZ SECURITY — ERP & CRM",
-    short_name: "HDZ SECURITY",
-    description: "Plateforme ERP, CRM, Opérations & Finance pour HDZ SECURITY",
+    name: "BOOSTERA — ERP & CRM",
+    short_name: "BOOSTERA",
+    description: "Plateforme ERP, CRM, Opérations & Finance pour BOOSTERA",
     start_url: "/dashboard",
     display: "standalone",
     background_color: "#080b11",

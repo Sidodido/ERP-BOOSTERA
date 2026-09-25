@@ -336,7 +336,7 @@ export function Sidebar({
               <div className="sidebar-brand-logo-container w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
                 <Image
                   src="/logo.png"
-                  alt="HDZ SECURITY Logo"
+                  alt="BOOSTERA Logo"
                   width={34}
                   height={34}
                   className="w-full h-full object-contain"
@@ -345,21 +345,21 @@ export function Sidebar({
               </div>
               <div className="flex flex-col">
                 <span className="sidebar-brand-title font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                  HDZ SECURITY
+                  BOOSTERA
                   <span className="sidebar-brand-badge text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                     ERP
                   </span>
                 </span>
-                <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">Direction & Sécurité</span>
+                <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">SaaS Agence Digitale</span>
               </div>
             </Link>
           )}
 
           {collapsed && (
-            <div className="sidebar-brand-logo-container w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="HDZ SECURITY ERP">
+            <div className="sidebar-brand-logo-container w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="BOOSTERA ERP">
               <Image
                 src="/logo.png"
-                alt="HDZ SECURITY"
+                alt="BOOSTERA"
                 width={32}
                 height={32}
                 className="w-full h-full object-contain"
@@ -515,7 +515,7 @@ export function Sidebar({
                 <div className="sidebar-brand-logo-container w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0">
                   <Image
                     src="/logo.png"
-                    alt="HDZ SECURITY Logo"
+                    alt="BOOSTERA Logo"
                     width={34}
                     height={34}
                     className="w-full h-full object-contain"
@@ -524,12 +524,12 @@ export function Sidebar({
                 </div>
                 <div className="flex flex-col">
                   <span className="sidebar-brand-title font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                    HDZ SECURITY
+                    BOOSTERA
                     <span className="sidebar-brand-badge text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                       ERP
                     </span>
                   </span>
-                  <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">Direction & Sécurité</span>
+                  <span className="sidebar-brand-subtitle text-[10px] text-neutral-500">SaaS Agence Digitale</span>
                 </div>
               </Link>
 

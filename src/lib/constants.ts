@@ -311,13 +311,13 @@ export const PAYMENT_METHODS = {
 } as const;
 
 export const AGENCY_DETAILS = {
-  name: "HDZ SECURITY",
-  legalName: "HDZ SECURITY SARL",
-  activity: "Services de Sécurité, Surveillance & Solutions Technologiques",
+  name: "BOOSTERA",
+  legalName: "BOOSTERA DIGITAL SARL",
+  activity: "Agence Digitale, Développement Web, Mobile & SaaS ERP",
   address: "Alger, Algérie",
   wilaya: "Alger, Algérie",
   phone: "+213 (0) 550 12 34 56",
-  email: "contact@hdz-security.dz",
+  email: "contact@boostera.digital",
   website: "www.zidane-dev.dz",
   rc: "16/00-0987654B22",
   nif: "002216098765432",

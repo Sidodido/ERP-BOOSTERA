@@ -42,7 +42,7 @@ process.on("uncaughtException", (err) => {
   logDebug("[UNCAUGHT EXCEPTION] " + (err.stack || err.message));
 });
 
-logDebug("Starting HDZ SECURITY ERP server.js...");
+logDebug("Starting BOOSTERA ERP server.js...");
 
 const Module = require("module");
 
@@ -654,7 +654,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
         <head>
           <meta charset="utf-8">
-          <title>HDZ SECURITY ERP — Initialisation</title>
+          <title>BOOSTERA ERP — Initialisation</title>
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; display: flex; justify-content: center; align-items: center; min-height: 80vh; margin: 0; }
             .card { max-width: 750px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -664,7 +664,7 @@ const server = http.createServer(async (req, res) => {
         </head>
         <body>
           <div class="card">
-            <h1>⚠️ Diagnostic — HDZ SECURITY ERP</h1>
+            <h1>⚠️ Diagnostic — BOOSTERA ERP</h1>
             <p>Détail de l'erreur :</p>
             <pre>${initError.stack || initError.message || initError}</pre>
           </div>
@@ -690,7 +690,7 @@ const server = http.createServer(async (req, res) => {
       <html>
         <head><meta charset="utf-8"><meta http-equiv="refresh" content="2"></head>
         <body style="background:#09090b;color:#a1a1aa;font-family:sans-serif;padding:40px;text-align:center;">
-          <h2>🚀 Démarrage de HDZ SECURITY ERP...</h2>
+          <h2>🚀 Démarrage de BOOSTERA ERP...</h2>
           <p>Chargement des modules. Actualisation automatique dans 2 secondes...</p>
         </body>
       </html>
@@ -717,5 +717,5 @@ server.listen(port, (err) => {
     logDebug("Server listen error: " + err.message);
     return;
   }
-  logDebug(`> HDZ SECURITY ERP listening on port ${port}`);
+  logDebug(`> BOOSTERA ERP listening on port ${port}`);
 });
