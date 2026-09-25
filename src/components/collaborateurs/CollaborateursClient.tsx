@@ -370,12 +370,17 @@ export function CollaborateursClient({
         setCollaborators((prev) =>
           prev.map((c) =>
             c.id === emailChangeData.userId
-              ? { ...c, pendingEmail: newEmail.trim().toLowerCase() }
+              ? {
+                  ...c,
+                  email: newEmail.trim().toLowerCase(),
+                  pendingEmail: null,
+                  emailVerified: true,
+                }
               : c
           )
         );
         showFeedback(
-          `E-mail de confirmation envoyé à ${newEmail.trim()}. L'ancienne adresse reste active tant que le lien n'est pas validé.`
+          `L'adresse e-mail a été modifiée et validée immédiatement avec succès (${newEmail.trim()}).`
         );
         setEmailChangeData(null);
         router.refresh();
@@ -1037,7 +1042,7 @@ export function CollaborateursClient({
               />
 
               <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-300 leading-relaxed">
-                <strong>Sécurité :</strong> Un e-mail de vérification sera envoyé à la nouvelle adresse. L'ancienne adresse restera active tant que le lien n'aura pas été validé.
+                <strong>Validation directe :</strong> En tant qu'administrateur, cette nouvelle adresse sera immédiatement activée et enregistrée pour l'utilisateur sans envoi d'e-mail de confirmation.
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">
@@ -1055,7 +1060,7 @@ export function CollaborateursClient({
                   isLoading={isPending}
                   className="bg-blue-600 hover:bg-blue-500 text-white"
                 >
-                  Envoyer le lien de validation
+                  Valider immédiatement
                 </Button>
               </div>
             </form>

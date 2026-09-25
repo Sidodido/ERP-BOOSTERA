@@ -12,6 +12,7 @@ import {
 import crypto from "crypto";
 import { Role, UserStatus, DepartmentType } from "@prisma/client";
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 
 export async function getAppUrl(): Promise<string> {
   try {
@@ -359,40 +360,35 @@ export async function initiateEmailChangeAction(userId: string, newEmail: string
     throw new Error("La nouvelle adresse e-mail est identique à l'adresse actuelle.");
   }
 
-  const changeToken = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 heures
-
+  // Validation directe par l'administrateur sans envoi d'email
   await prisma.user.update({
     where: { id: userId },
     data: {
-      pendingEmail: cleanNewEmail,
-      emailChangeToken: changeToken,
-      emailChangeTokenExpiresAt: expiresAt,
+      email: cleanNewEmail,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      pendingEmail: null,
+      emailChangeToken: null,
+      emailChangeTokenExpiresAt: null,
     },
-  });
-
-  const appUrl = await getAppUrl();
-  const verifyChangeUrl = `${appUrl}/verify-email-change?token=${changeToken}`;
-
-  await sendEmailChangeVerificationEmail({
-    newEmail: cleanNewEmail,
-    name: target.name,
-    oldEmail: target.email,
-    verificationUrl: verifyChangeUrl,
   });
 
   await createAuditLog({
     userId: admin.id,
-    action: "INITIATE_EMAIL_CHANGE",
+    action: "ADMIN_UPDATE_EMAIL",
     module: "AUTH",
     details: {
       targetUserId: userId,
       oldEmail: target.email,
-      newPendingEmail: cleanNewEmail,
+      newEmail: cleanNewEmail,
+      validatedDirectly: true,
     },
   });
 
-  return { success: true };
+  revalidatePath("/collaborateurs");
+  revalidatePath("/parametres");
+
+  return { success: true, email: cleanNewEmail };
 }
 
 export async function toggleUserSuspensionAction(userId: string, shouldSuspend: boolean) {
