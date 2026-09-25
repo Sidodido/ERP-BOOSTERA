@@ -345,18 +345,18 @@ export function Sidebar({
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                  BOOSTERA
+                  HDZ SECURITY
                   <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                     ERP
                   </span>
                 </span>
-                <span className="text-[10px] text-neutral-500">Direction & Gestion</span>
+                <span className="text-[10px] text-neutral-500">Direction & Sécurité</span>
               </div>
             </Link>
           )}
 
           {collapsed && (
-            <div className="w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="BOOSTERA ERP">
+            <div className="w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="HDZ SECURITY ERP">
               <Image
                 src="/logo.png"
                 alt="BOOSTERA"
@@ -524,12 +524,12 @@ export function Sidebar({
                 </div>
                 <div className="flex flex-col">
                   <span className="font-extrabold text-sm tracking-wider text-neutral-100 flex items-center gap-1.5">
-                    BOOSTERA
+                    HDZ SECURITY
                     <span className="text-[10px] font-semibold px-1.5 py-0.2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full">
                       ERP
                     </span>
                   </span>
-                  <span className="text-[10px] text-neutral-500">Direction & Gestion</span>
+                  <span className="text-[10px] text-neutral-500">Direction & Sécurité</span>
                 </div>
               </Link>
 

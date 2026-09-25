@@ -16,12 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BOOSTERA — ERP & CRM SaaS Agence Digitale",
-  description: "Plateforme unifiée ERP, CRM, Production, Finance & RH pour BOOSTERA",
-  applicationName: "BOOSTERA",
+  title: "HDZ SECURITY — ERP & CRM",
+  description: "Plateforme unifiée ERP, CRM, Opérations, Finance & RH pour HDZ SECURITY",
+  applicationName: "HDZ SECURITY",
   appleWebApp: {
     capable: true,
-    title: "BOOSTERA",
+    title: "HDZ SECURITY",
     statusBarStyle: "black-translucent",
   },
   icons: {

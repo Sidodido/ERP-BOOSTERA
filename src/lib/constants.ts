@@ -311,14 +311,14 @@ export const PAYMENT_METHODS = {
 } as const;
 
 export const AGENCY_DETAILS = {
-  name: "BOOSTERA AGENCY",
-  legalName: "BOOSTERA MARKETING & TECH SARL",
-  activity: "Agence de Marketing Digital, Communication 360° & Production Audiovisuelle",
-  address: "14 Rue Didouche Mourad, Alger Centre",
+  name: "HDZ SECURITY",
+  legalName: "HDZ SECURITY SARL",
+  activity: "Services de Sécurité, Surveillance & Solutions Technologiques",
+  address: "Alger, Algérie",
   wilaya: "Alger, Algérie",
-  phone: "+213 (0) 550 12 34 56 / +213 (0) 23 45 67 89",
-  email: "contact@boostera.dz",
-  website: "www.boostera.dz",
+  phone: "+213 (0) 550 12 34 56",
+  email: "contact@hdz-security.dz",
+  website: "www.zidane-dev.dz",
   rc: "16/00-0987654B22",
   nif: "002216098765432",
   nis: "002216090012345",

@@ -39,7 +39,7 @@ function getTransporter(): Transporter | null {
 }
 
 export async function sendEmail({ to, subject, html, text }: SendEmailParams): Promise<{ success: boolean; simulated?: boolean }> {
-  const from = process.env.SMTP_FROM || '"BOOSTERA ERP" <no-reply@boostera.dz>';
+  const from = process.env.SMTP_FROM || '"HDZ SECURITY ERP" <devnovainfo@gmail.com>';
   const transport = getTransporter();
 
   if (!transport) {
@@ -92,12 +92,12 @@ function baseEmailTemplate(title: string, content: string): string {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td style="width: 38px; height: 38px; background: linear-gradient(135deg, #2563eb, #4f46e5); border-radius: 12px; text-align: center; vertical-align: middle; color: #ffffff; font-weight: 900; font-size: 18px;">
-                    B
+                    H
                   </td>
                   <td style="padding-left: 12px;">
-                    <span style="font-size: 16px; font-weight: 800; letter-spacing: 1px; color: #ffffff;">BOOSTERA</span>
+                    <span style="font-size: 16px; font-weight: 800; letter-spacing: 1px; color: #ffffff;">HDZ SECURITY</span>
                     <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; background-color: rgba(59,130,246,0.2); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); border-radius: 9999px; margin-left: 6px;">ERP</span>
-                    <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Plateforme Collaborateurs & Agence Digitale</div>
+                    <div style="font-size: 11px; color: #64748b; margin-top: 1px;">Plateforme ERP Collaborateurs & Direction</div>
                   </td>
                 </tr>
               </table>
@@ -114,7 +114,7 @@ function baseEmailTemplate(title: string, content: string): string {
           <!-- Footer -->
           <tr>
             <td style="padding: 20px 35px; background-color: #0c101a; border-top: 1px solid #1f293d; font-size: 11px; color: #64748b; text-align: center;">
-              Cet e-mail a été envoyé automatiquement par le système sécurisé de BOOSTERA ERP.<br>
+              Cet e-mail a été envoyé automatiquement par le système sécurisé de HDZ SECURITY ERP.<br>
               Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer ce message ou contacter la direction.
             </td>
           </tr>
@@ -134,7 +134,7 @@ export async function sendVerificationEmail(to: string, name: string, verificati
     </h2>
     <p style="margin-bottom: 20px; color: #94a3b8;">
       Bonjour <strong>${name}</strong>,<br>
-      Votre demande de compte collaborateur sur la plateforme ERP de BOOSTERA a bien été enregistrée. Pour poursuivre la validation, veuillez confirmer que cette adresse e-mail vous appartient.
+      Votre demande de compte collaborateur sur la plateforme ERP de HDZ SECURITY a bien été enregistrée. Pour poursuivre la validation, veuillez confirmer que cette adresse e-mail vous appartient.
     </p>
     
     <div style="text-align: center; margin: 30px 0;">
@@ -154,8 +154,8 @@ export async function sendVerificationEmail(to: string, name: string, verificati
 
   return sendEmail({
     to,
-    subject: "Vérification de votre adresse e-mail — BOOSTERA ERP",
-    html: baseEmailTemplate("Vérification d'e-mail — BOOSTERA", content),
+    subject: "Vérification de votre adresse e-mail — HDZ SECURITY ERP",
+    html: baseEmailTemplate("Vérification d'e-mail — HDZ SECURITY", content),
   });
 }
 
@@ -207,8 +207,8 @@ export async function sendAdminNewRegistrationNotification(params: {
 
   return sendEmail({
     to: params.adminEmail,
-    subject: `[Nouvelle Inscription] ${params.applicantName} (${params.applicantEmail}) — BOOSTERA ERP`,
-    html: baseEmailTemplate("Nouvelle demande d'inscription — BOOSTERA", content),
+    subject: `[Nouvelle Inscription] ${params.applicantName} (${params.applicantEmail}) — HDZ SECURITY ERP`,
+    html: baseEmailTemplate("Nouvelle demande d'inscription — HDZ SECURITY", content),
   });
 }
 
@@ -222,7 +222,7 @@ export async function sendAccountApprovedEmail(to: string, name: string, loginUr
     </h2>
     <p style="margin-bottom: 20px; color: #94a3b8;">
       Bonjour <strong>${name}</strong>,<br>
-      La direction générale de BOOSTERA a validé votre accès à l'ERP. Vous pouvez dès à présent vous connecter avec votre adresse e-mail et le mot de passe défini lors de votre inscription.
+      La direction générale de HDZ SECURITY a validé votre accès à l'ERP. Vous pouvez dès à présent vous connecter avec votre adresse e-mail et le mot de passe défini lors de votre inscription.
     </p>
 
     <div style="text-align: center; margin: 30px 0;">
@@ -238,8 +238,8 @@ export async function sendAccountApprovedEmail(to: string, name: string, loginUr
 
   return sendEmail({
     to,
-    subject: "Votre compte collaborateur a été approuvé — BOOSTERA ERP",
-    html: baseEmailTemplate("Compte Approuvé — BOOSTERA", content),
+    subject: "Votre compte collaborateur a été approuvé — HDZ SECURITY ERP",
+    html: baseEmailTemplate("Compte Approuvé — HDZ SECURITY", content),
   });
 }
 
@@ -253,7 +253,7 @@ export async function sendAccountRejectedEmail(to: string, name: string, reason?
     </h2>
     <p style="margin-bottom: 16px; color: #94a3b8;">
       Bonjour <strong>${name}</strong>,<br>
-      Nous vous informons que votre demande d'accès à l'ERP BOOSTERA n'a pas été retenue par l'administration.
+      Nous vous informons que votre demande d'accès à l'ERP HDZ SECURITY n'a pas été retenue par l'administration.
     </p>
 
     ${
@@ -274,8 +274,8 @@ export async function sendAccountRejectedEmail(to: string, name: string, reason?
 
   return sendEmail({
     to,
-    subject: "Information concernant votre demande de compte — BOOSTERA ERP",
-    html: baseEmailTemplate("Statut de votre demande — BOOSTERA", content),
+    subject: "Information concernant votre demande de compte — HDZ SECURITY ERP",
+    html: baseEmailTemplate("Statut de votre demande — HDZ SECURITY", content),
   });
 }
 
@@ -291,7 +291,7 @@ export async function sendEmailChangeVerificationEmail(params: {
     </h2>
     <p style="margin-bottom: 16px; color: #94a3b8;">
       Bonjour <strong>${params.name}</strong>,<br>
-      Une demande de modification d'adresse e-mail pour votre compte collaborateur BOOSTERA a été initiée par l'administration :
+      Une demande de modification d'adresse e-mail pour votre compte collaborateur HDZ SECURITY a été initiée par l'administration :
     </p>
 
     <div style="background-color: #0c101a; border: 1px solid #1f293d; border-radius: 12px; padding: 14px 18px; margin: 20px 0; font-size: 13px;">
@@ -312,8 +312,8 @@ export async function sendEmailChangeVerificationEmail(params: {
 
   return sendEmail({
     to: params.newEmail,
-    subject: "Confirmation de votre nouvelle adresse e-mail — BOOSTERA ERP",
-    html: baseEmailTemplate("Changement d'e-mail — BOOSTERA", content),
+    subject: "Confirmation de votre nouvelle adresse e-mail — HDZ SECURITY ERP",
+    html: baseEmailTemplate("Changement d'e-mail — HDZ SECURITY", content),
   });
 }
 
@@ -324,7 +324,7 @@ export async function sendPasswordResetEmail(to: string, name: string, resetUrl:
     </h2>
     <p style="margin-bottom: 20px; color: #94a3b8;">
       Bonjour <strong>${name}</strong>,<br>
-      Une demande de réinitialisation du mot de passe de votre compte ERP BOOSTERA a été reçue. Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe :
+      Une demande de réinitialisation du mot de passe de votre compte ERP HDZ SECURITY a été reçue. Cliquez sur le bouton ci-dessous pour choisir un nouveau mot de passe :
     </p>
 
     <div style="text-align: center; margin: 30px 0;">
@@ -340,7 +340,7 @@ export async function sendPasswordResetEmail(to: string, name: string, resetUrl:
 
   return sendEmail({
     to,
-    subject: "Réinitialisation de votre mot de passe — BOOSTERA ERP",
-    html: baseEmailTemplate("Réinitialisation de mot de passe — BOOSTERA", content),
+    subject: "Réinitialisation de votre mot de passe — HDZ SECURITY ERP",
+    html: baseEmailTemplate("Réinitialisation de mot de passe — HDZ SECURITY", content),
   });
 }
