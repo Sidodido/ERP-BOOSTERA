@@ -44,6 +44,21 @@ process.on("uncaughtException", (err) => {
 
 logDebug("Starting HDZ SECURITY ERP server.js...");
 
+// Auto-extract erp-deploy.zip if uploaded to root
+const deployZip = path.join(__dirname, "erp-deploy.zip");
+if (fs.existsSync(deployZip)) {
+  logDebug("Found erp-deploy.zip, auto-extracting with unzip -o...");
+  try {
+    const { execSync } = require("child_process");
+    execSync('unzip -o "erp-deploy.zip"', { cwd: __dirname });
+    execSync("chmod -R 755 .next", { cwd: __dirname });
+    fs.unlinkSync(deployZip);
+    logDebug("erp-deploy.zip successfully extracted and permissions fixed!");
+  } catch (uzErr) {
+    logDebug("unzip notice: " + uzErr.message);
+  }
+}
+
 const Module = require("module");
 
 // Auto-fix paths if needed
