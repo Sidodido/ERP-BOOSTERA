@@ -285,12 +285,41 @@ async function bootstrap() {
   }
 
 
+  // Auto-fix permissions on Linux (.next directories require +x to be readable by Next.js)
+  try {
+    const { execSync } = require("child_process");
+    execSync("chmod -R 755 .next", { cwd: __dirname });
+    logDebug("Permissions 755 applied to .next successfully via chmod.");
+  } catch (permErr) {
+    logDebug("chmod execSync notice: " + permErr.message);
+    try {
+      function fixPermissionsRecursive(dir) {
+        if (!fs.existsSync(dir)) return;
+        try { fs.chmodSync(dir, 0o755); } catch {}
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            try { fs.chmodSync(fullPath, 0o755); } catch {}
+            fixPermissionsRecursive(fullPath);
+          } else {
+            try { fs.chmodSync(fullPath, 0o644); } catch {}
+          }
+        }
+      }
+      fixPermissionsRecursive(nextDir);
+      logDebug("Permissions 755 applied to .next recursively via fs.chmodSync.");
+    } catch (fsPermErr) {
+      logDebug("fs.chmodSync error: " + fsPermErr.message);
+    }
+  }
+
   const dev = false;
   nextApp = next({ dev, dir: __dirname, quiet: true });
   preparePromise = nextApp.prepare();
   await preparePromise;
   nextAppReady = true;
-  logDebug("> BOOSTERA ERP démarré à vitesse maximale !");
+  logDebug("> HDZ SECURITY ERP démarré à vitesse maximale !");
 }
 
 bootstrap().catch((err) => {
