@@ -17,8 +17,11 @@ import {
   Database,
   Palette,
   Sparkles,
+  User,
+  Edit2,
+  CheckCircle2,
 } from "lucide-react";
-import { logoutAction } from "@/actions/auth";
+import { logoutAction, updateMyProfileAction } from "@/actions/auth";
 import {
   getUserNotificationsAction,
   markNotificationReadAction,
@@ -61,9 +64,59 @@ export function Header({ userName, userRole }: HeaderProps) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  // User Dropdown State
+  // User Dropdown & Profile State
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [displayName, setDisplayName] = useState(userName || "Administrateur");
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState(userName || "");
+  const [profilePhoneInput, setProfilePhoneInput] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (userName) {
+      setDisplayName(userName);
+      setProfileNameInput(userName);
+    }
+  }, [userName]);
+
+  const handleOpenProfileModal = () => {
+    setShowUserMenu(false);
+    setProfileNameInput(displayName);
+    setProfileError(null);
+    setProfileSuccess(false);
+    setShowProfileModal(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileNameInput.trim() || profileNameInput.trim().length < 2) {
+      setProfileError("Le nom d'utilisateur doit comporter au moins 2 caractères.");
+      return;
+    }
+
+    try {
+      setProfileSaving(true);
+      setProfileError(null);
+      const res = await updateMyProfileAction({
+        name: profileNameInput.trim(),
+        phone: profilePhoneInput.trim() || undefined,
+      });
+      setDisplayName(res.name);
+      setProfileSuccess(true);
+      setTimeout(() => {
+        setShowProfileModal(false);
+        setProfileSuccess(false);
+      }, 1200);
+      router.refresh();
+    } catch (err: any) {
+      setProfileError(err.message || "Erreur lors de la mise à jour du profil.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const isAdmin =
     userRole?.toLowerCase().includes("admin") ||
@@ -320,11 +373,11 @@ export function Header({ userName, userRole }: HeaderProps) {
             title="Menu Utilisateur & Système"
           >
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs flex items-center justify-center shadow-xs shadow-blue-500/20">
-              {userName ? userName.charAt(0).toUpperCase() : "A"}
+              {displayName ? displayName.charAt(0).toUpperCase() : "A"}
             </div>
             <div className="hidden xl:flex flex-col text-left">
               <span className="user-profile-name text-xs font-bold text-neutral-900 dark:text-neutral-100 truncate max-w-[130px]">
-                {userName || "Administrateur"}
+                {displayName}
               </span>
               <span className="user-profile-role text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
                 {userRole || "Admin"}
@@ -343,7 +396,7 @@ export function Header({ userName, userRole }: HeaderProps) {
               {/* Identity Header */}
               <div className="px-3 py-2.5 rounded-xl bg-neutral-950/60 border border-neutral-800/80">
                 <p className="text-xs font-bold text-neutral-100 truncate">
-                  {userName || "Administrateur"}
+                  {displayName}
                 </p>
                 <div className="flex items-center gap-1.5 mt-1">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -352,6 +405,16 @@ export function Header({ userName, userRole }: HeaderProps) {
                   </span>
                 </div>
               </div>
+
+              {/* Edit Profile Trigger */}
+              <button
+                type="button"
+                onClick={handleOpenProfileModal}
+                className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                <User className="w-3.5 h-3.5 text-blue-400" />
+                <span>Modifier mon profil (Nom)</span>
+              </button>
 
               {/* Admin Shortcuts */}
               {isAdmin && (
@@ -412,6 +475,91 @@ export function Header({ userName, userRole }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {/* MODAL MODIFICATION DU PROFIL UTILISATEUR */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-md p-6 space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => setShowProfileModal(false)}
+              className="absolute top-5 right-5 text-neutral-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Modifier mon Profil</h3>
+                <p className="text-xs text-neutral-400">
+                  Mettez à jour votre nom d'affichage dans l'ERP
+                </p>
+              </div>
+            </div>
+
+            {profileError && (
+              <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl font-medium">
+                {profileError}
+              </div>
+            )}
+
+            {profileSuccess && (
+              <div className="p-3 text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl font-medium flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>Nom d'utilisateur mis à jour avec succès !</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">
+                  Nom d'utilisateur / Nom complet *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={profileNameInput}
+                  onChange={(e) => setProfileNameInput(e.target.value)}
+                  placeholder="Ex: Zidane Sidahmed, Direction..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">
+                  Numéro de Téléphone (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  value={profilePhoneInput}
+                  onChange={(e) => setProfilePhoneInput(e.target.value)}
+                  placeholder="05 / 06 / 07..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={profileSaving}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-lg shadow-blue-600/20 disabled:opacity-50 cursor-pointer"
+                >
+                  {profileSaving ? "Enregistrement..." : "Enregistrer les modifications"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

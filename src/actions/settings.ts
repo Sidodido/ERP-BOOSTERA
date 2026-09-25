@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, signToken, setSessionCookie } from "@/lib/auth";
 import { Role, CommissionRuleType, AttendanceStatus, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { syncDailyAbsences } from "./attendance";
@@ -318,10 +318,50 @@ export async function updateUserAction(
     }
   }
 
-  await prisma.user.update({
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name.trim();
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.phone !== undefined) updateData.phone = data.phone.trim() || null;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+  const updated = await prisma.user.update({
     where: { id },
-    data,
+    data: updateData,
   });
+
+  // Synchronisation avec le profil employé (RH, organigramme, dashboard)
+  if (data.name) {
+    try {
+      const parts = data.name.trim().split(" ");
+      const firstName = parts[0] || data.name.trim();
+      const lastName = parts.slice(1).join(" ") || firstName;
+      await prisma.employee.updateMany({
+        where: { userId: id },
+        data: {
+          firstName,
+          lastName,
+          phone: data.phone !== undefined ? data.phone.trim() || null : undefined,
+        },
+      });
+    } catch (empErr) {
+      console.warn("Notice: sync employee on updateUserAction:", empErr);
+    }
+  }
+
+  // Si l'administrateur met à jour son propre compte, actualiser immédiatement sa session
+  if (user.id === id && data.name) {
+    try {
+      const newToken = await signToken({
+        userId: user.id,
+        email: user.email,
+        name: data.name.trim(),
+        role: data.role || user.role,
+      });
+      await setSessionCookie(newToken);
+    } catch (tokenErr) {
+      console.warn("Notice: refresh session token on self edit:", tokenErr);
+    }
+  }
 
   await prisma.auditLog.create({
     data: {
@@ -334,6 +374,8 @@ export async function updateUserAction(
   });
 
   revalidatePath("/parametres");
+  revalidatePath("/collaborateurs");
+  revalidatePath("/rh");
   return { success: true };
 }
 

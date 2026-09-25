@@ -31,7 +31,7 @@ function getTransporter(): Transporter | null {
     secure,
     auth: { user, pass },
     tls: {
-      rejectUnauthorized: process.env.NODE_ENV === "production",
+      rejectUnauthorized: false,
     },
   });
 
