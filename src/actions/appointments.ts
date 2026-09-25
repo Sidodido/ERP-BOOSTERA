@@ -264,6 +264,90 @@ export async function updateAppointmentStatus(
   return { success: true, appointment: updated };
 }
 
+export async function updateAppointmentAction(data: {
+  id: string;
+  title?: string;
+  type?: AppointmentType;
+  startTime?: string;
+  endTime?: string;
+  durationMin?: number;
+  location?: string;
+  notes?: string;
+  assignedUserId?: string;
+  status?: AppointmentStatus;
+}) {
+  const user = await requireAuth();
+
+  const existing = await prisma.appointment.findUnique({
+    where: { id: data.id },
+    include: { prospect: true, client: true },
+  });
+
+  if (!existing) {
+    return { error: "Rendez-vous introuvable." };
+  }
+
+  const updateData: any = {};
+  if (data.title !== undefined) updateData.title = data.title.trim();
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.startTime !== undefined) updateData.startTime = new Date(data.startTime);
+  if (data.endTime !== undefined) updateData.endTime = new Date(data.endTime);
+  if (data.durationMin !== undefined) updateData.durationMin = Number(data.durationMin);
+  if (data.location !== undefined) updateData.location = data.location.trim() || null;
+  if (data.notes !== undefined) updateData.notes = data.notes.trim() || null;
+  if (data.assignedUserId !== undefined) updateData.userId = data.assignedUserId || null;
+  if (data.status !== undefined) updateData.status = data.status;
+
+  const updated = await prisma.appointment.update({
+    where: { id: data.id },
+    data: updateData,
+    include: {
+      user: { select: { id: true, name: true } },
+      prospect: {
+        select: {
+          id: true,
+          companyName: true,
+          phone: true,
+          sector: true,
+          status: true,
+          address: true,
+          email: true,
+          notes: true,
+          response: true,
+          callStatus: true,
+        },
+      },
+      client: { select: { id: true, companyName: true, phone: true } },
+    },
+  });
+
+  // If notes were updated and linked to prospect, reflect in prospect notes
+  if (data.notes && existing.prospectId) {
+    try {
+      await prisma.prospect.update({
+        where: { id: existing.prospectId },
+        data: { notes: data.notes.trim() },
+      });
+    } catch {}
+  }
+
+  await createAuditLog({
+    userId: user.id,
+    action: "UPDATE_APPOINTMENT",
+    module: "APPOINTMENTS",
+    entityId: data.id,
+    details: { changes: updateData },
+  });
+
+  revalidatePath("/rendez-vous");
+  revalidatePath("/prospection");
+  revalidatePath("/appels");
+  revalidatePath("/dashboard");
+  revalidatePath("/relances");
+
+  return { success: true, appointment: updated };
+}
+
 export async function rescheduleAppointmentAction(data: {
   id: string;
   date: string; // YYYY-MM-DD

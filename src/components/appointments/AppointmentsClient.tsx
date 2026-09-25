@@ -24,6 +24,7 @@ import { WhatsAppIcon } from "@/components/common/WhatsAppIcon";
 import {
   createAppointmentAction,
   updateAppointmentStatus,
+  updateAppointmentAction,
   rescheduleAppointmentAction,
   deleteAppointmentAction,
 } from "@/actions/appointments";
@@ -62,6 +63,7 @@ import {
   Trash2,
   ExternalLink,
   Download,
+  Pencil,
 } from "lucide-react";
 
 const getCommercialBadgeStyle = (name?: string, id?: string) => {
@@ -198,6 +200,21 @@ export function AppointmentsClient({
 
   // Remark / Cancellation reason in detail modal
   const [statusRemark, setStatusRemark] = useState("");
+
+  // Edit general appointment info state
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    type: "COMMERCIAL_VISIT" as AppointmentType,
+    assignedUserId: "",
+    date: "",
+    startTime: "14:00",
+    endTime: "15:00",
+    durationMin: 60,
+    location: "",
+    notes: "",
+    status: "SCHEDULED" as AppointmentStatus,
+  });
 
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{
@@ -447,6 +464,7 @@ export function AppointmentsClient({
   const openAppointmentDetail = (appt: AppointmentItem) => {
     setSelectedAppointment(appt);
     setIsRescheduling(false);
+    setIsEditingInfo(false);
     setStatusRemark(appt.notes || "");
     const d = new Date(appt.startTime);
     setRescheduleDate(toLocalDateString(d));
@@ -458,6 +476,82 @@ export function AppointmentsClient({
     const endM = String(endD.getMinutes()).padStart(2, "0");
     setRescheduleEndTime(`${endH}:${endM}`);
     setDetailModalOpen(true);
+  };
+
+  // Start editing general appointment information
+  const handleStartEdit = () => {
+    if (!selectedAppointment) return;
+    const start = new Date(selectedAppointment.startTime);
+    const end = new Date(selectedAppointment.endTime);
+    const dateStr = toLocalDateString(start);
+    const startHours = String(start.getHours()).padStart(2, "0");
+    const startMinutes = String(start.getMinutes()).padStart(2, "0");
+    const endHours = String(end.getHours()).padStart(2, "0");
+    const endMinutes = String(end.getMinutes()).padStart(2, "0");
+
+    setEditForm({
+      title: selectedAppointment.title || "",
+      type: selectedAppointment.type || "COMMERCIAL_VISIT",
+      assignedUserId: selectedAppointment.user?.id || "",
+      date: dateStr,
+      startTime: `${startHours}:${startMinutes}`,
+      endTime: `${endHours}:${endMinutes}`,
+      durationMin: selectedAppointment.durationMin || 60,
+      location: selectedAppointment.location || "",
+      notes: selectedAppointment.notes || "",
+      status: selectedAppointment.status,
+    });
+    setIsEditingInfo(true);
+    setIsRescheduling(false);
+  };
+
+  // Save edited general appointment information
+  const handleSaveEdit = async () => {
+    if (!selectedAppointment) return;
+    setIsLoading(true);
+    try {
+      const startDateTime = new Date(`${editForm.date}T${editForm.startTime}:00`);
+      const endDateTime = editForm.endTime
+        ? new Date(`${editForm.date}T${editForm.endTime}:00`)
+        : new Date(startDateTime.getTime() + (editForm.durationMin || 60) * 60 * 1000);
+
+      const res = await updateAppointmentAction({
+        id: selectedAppointment.id,
+        title: editForm.title || selectedAppointment.title,
+        type: editForm.type,
+        startTime: startDateTime.toISOString(),
+        endTime: endDateTime.toISOString(),
+        durationMin: Number(editForm.durationMin) || 60,
+        location: editForm.location,
+        notes: editForm.notes,
+        assignedUserId: editForm.assignedUserId,
+        status: editForm.status,
+      });
+
+      if (res.success && res.appointment) {
+        const updated = res.appointment as any;
+        setSelectedAppointment(updated);
+        setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+        setIsEditingInfo(false);
+        setFeedbackMessage({
+          type: "success",
+          text: "Les informations du rendez-vous ont été mises à jour avec succès !",
+        });
+        router.refresh();
+      } else {
+        setFeedbackMessage({
+          type: "error",
+          text: res.error || "Erreur lors de la modification du rendez-vous.",
+        });
+      }
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: "error",
+        text: err?.message || "Erreur lors de l'enregistrement des modifications.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle Reschedule submit
@@ -1959,65 +2053,156 @@ export function AppointmentsClient({
             </div>
 
             {/* Appointment Meta info */}
-            <div className="grid grid-cols-2 gap-3 text-xs bg-neutral-900/60 p-3.5 rounded-xl border border-neutral-800">
-              <div className="space-y-1">
-                <span className="text-neutral-400 font-medium">Commercial assigné :</span>
-                <p className="font-semibold text-neutral-200 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                  <span>{selectedAppointment.user?.name || "Non assigné"}</span>
-                </p>
+            <div className="bg-neutral-900/60 p-4 rounded-2xl border border-neutral-800 space-y-3.5 text-xs shadow-xs">
+              <div className="flex items-center justify-between pb-2.5 border-b border-neutral-800/80">
+                <span className="text-neutral-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Informations du Rendez-vous</span>
+                </span>
+                {!isEditingInfo ? (
+                  <button
+                    type="button"
+                    onClick={handleStartEdit}
+                    className="px-3 py-1.5 text-xs font-semibold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600 border border-blue-500/30 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    title="Modifier toutes les informations de ce rendez-vous"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Modifier les informations</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingInfo(false)}
+                      className="px-2.5 py-1 text-xs font-medium text-neutral-400 hover:text-neutral-200 border border-neutral-700 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={handleSaveEdit}
+                      className="px-3 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Enregistrer</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-1">
-                <span className="text-neutral-400 font-medium">Type & Durée :</span>
-                <p className="font-semibold text-neutral-200">
-                  {APPOINTMENT_TYPES[selectedAppointment.type]} ({selectedAppointment.durationMin} min)
-                </p>
-              </div>
+              {isEditingInfo ? (
+                <div className="space-y-3 pt-1 animate-in fade-in duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Commercial assigné */}
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1">
+                        Commercial assigné :
+                      </label>
+                      <select
+                        value={editForm.assignedUserId}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, assignedUserId: e.target.value }))}
+                        className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-blue-500"
+                      >
+                        <option value="">Sélectionner un commercial...</option>
+                        {salesUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name} {user.role ? `(${user.role})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-              <div className="space-y-1 col-span-2">
-                <span className="text-neutral-400 font-medium">Date & Heure :</span>
-                <p className="font-semibold text-neutral-200 text-sm">
-                  {formatDateTime(selectedAppointment.startTime)}
-                </p>
-              </div>
+                    {/* Type de rendez-vous */}
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-300 mb-1">
+                        Type de rendez-vous :
+                      </label>
+                      <select
+                        value={editForm.type}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, type: e.target.value as AppointmentType }))}
+                        className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-blue-500"
+                      >
+                        {Object.entries(APPOINTMENT_TYPES).map(([typeKey, typeLabel]) => (
+                          <option key={typeKey} value={typeKey}>
+                            {typeLabel}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-              {/* Formulaire inline de report / modification de date */}
-              {isRescheduling && (
-                <div className="col-span-2 p-3 bg-neutral-950 border border-blue-500/40 rounded-xl space-y-3 mt-1 shadow-inner">
-                  <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Reporter ce rendez-vous à une nouvelle date :</span>
-                  </span>
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Date, Heures, Durée */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     <Input
-                      label="Nouvelle Date"
+                      label="Date"
                       type="date"
-                      value={rescheduleDate}
-                      onChange={(e) => setRescheduleDate(e.target.value)}
+                      value={editForm.date}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
                       required
                     />
                     <Input
                       label="Heure Début"
                       type="time"
-                      value={rescheduleStartTime}
-                      onChange={(e) => setRescheduleStartTime(e.target.value)}
+                      value={editForm.startTime}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, startTime: e.target.value }))}
                       required
                     />
                     <Input
                       label="Heure Fin"
                       type="time"
-                      value={rescheduleEndTime}
-                      onChange={(e) => setRescheduleEndTime(e.target.value)}
-                      required
+                      value={editForm.endTime}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                    />
+                    <Input
+                      label="Durée (min)"
+                      type="number"
+                      min="15"
+                      step="15"
+                      value={editForm.durationMin}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, durationMin: Number(e.target.value) }))}
                     />
                   </div>
+
+                  {/* Lieu / Visio */}
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1">
+                      Lieu / Visio :
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.location}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, location: e.target.value }))}
+                      placeholder="Ex: Alger, Bureau Client, Visio Google Meet..."
+                      className="w-full px-3 py-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 focus:outline-none focus:border-blue-500 placeholder:text-neutral-500"
+                    />
+                  </div>
+
+                  {/* Remarques & Historique */}
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-300 mb-1">
+                      Remarques & Historique :
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Détails du prospect, besoins discutés, remarques..."
+                      className="w-full p-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Action buttons */}
                   <div className="flex justify-end gap-2 pt-1">
                     <Button
                       size="sm"
                       variant="outline"
                       type="button"
-                      onClick={() => setIsRescheduling(false)}
+                      onClick={() => setIsEditingInfo(false)}
                     >
                       Annuler
                     </Button>
@@ -2025,28 +2210,104 @@ export function AppointmentsClient({
                       size="sm"
                       type="button"
                       isLoading={isLoading}
-                      onClick={handleRescheduleSubmit}
-                      className="bg-blue-600 hover:bg-blue-500 text-white"
+                      onClick={handleSaveEdit}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-semibold"
                     >
-                      Enregistrer la nouvelle date
+                      Enregistrer les modifications
                     </Button>
                   </div>
                 </div>
-              )}
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-neutral-400 font-medium">Commercial assigné :</span>
+                    <p className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span>{selectedAppointment.user?.name || "Non assigné"}</span>
+                    </p>
+                  </div>
 
-              {selectedAppointment.location && (
-                <div className="space-y-1 col-span-2">
-                  <span className="text-neutral-400 font-medium">Lieu / Visio :</span>
-                  <p className="font-semibold text-neutral-200">{selectedAppointment.location}</p>
-                </div>
-              )}
+                  <div className="space-y-1">
+                    <span className="text-neutral-400 font-medium">Type & Durée :</span>
+                    <p className="font-semibold text-neutral-200">
+                      {APPOINTMENT_TYPES[selectedAppointment.type]} ({selectedAppointment.durationMin} min)
+                    </p>
+                  </div>
 
-              {selectedAppointment.notes && !isRescheduling && (
-                <div className="space-y-1 col-span-2">
-                  <span className="text-neutral-400 font-medium">Remarques & Historique :</span>
-                  <p className="text-neutral-300 italic p-2 bg-neutral-950 rounded-lg">
-                    "{selectedAppointment.notes}"
-                  </p>
+                  <div className="space-y-1 col-span-2">
+                    <span className="text-neutral-400 font-medium">Date & Heure :</span>
+                    <p className="font-semibold text-neutral-200 text-sm">
+                      {formatDateTime(selectedAppointment.startTime)}
+                    </p>
+                  </div>
+
+                  {/* Formulaire inline de report / modification de date */}
+                  {isRescheduling && (
+                    <div className="col-span-2 p-3 bg-neutral-950 border border-blue-500/40 rounded-xl space-y-3 mt-1 shadow-inner">
+                      <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Reporter ce rendez-vous à une nouvelle date :</span>
+                      </span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Input
+                          label="Nouvelle Date"
+                          type="date"
+                          value={rescheduleDate}
+                          onChange={(e) => setRescheduleDate(e.target.value)}
+                          required
+                        />
+                        <Input
+                          label="Heure Début"
+                          type="time"
+                          value={rescheduleStartTime}
+                          onChange={(e) => setRescheduleStartTime(e.target.value)}
+                          required
+                        />
+                        <Input
+                          label="Heure Fin"
+                          type="time"
+                          value={rescheduleEndTime}
+                          onChange={(e) => setRescheduleEndTime(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => setIsRescheduling(false)}
+                        >
+                          Annuler
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          isLoading={isLoading}
+                          onClick={handleRescheduleSubmit}
+                          className="bg-blue-600 hover:bg-blue-500 text-white"
+                        >
+                          Enregistrer la nouvelle date
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedAppointment.location && (
+                    <div className="space-y-1 col-span-2">
+                      <span className="text-neutral-400 font-medium">Lieu / Visio :</span>
+                      <p className="font-semibold text-neutral-200">{selectedAppointment.location}</p>
+                    </div>
+                  )}
+
+                  {selectedAppointment.notes && !isRescheduling && (
+                    <div className="space-y-1 col-span-2">
+                      <span className="text-neutral-400 font-medium">Remarques & Historique :</span>
+                      <p className="text-neutral-300 italic p-2.5 bg-neutral-950 rounded-xl border border-neutral-800/80">
+                        "{selectedAppointment.notes}"
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
