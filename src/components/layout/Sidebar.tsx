@@ -72,17 +72,6 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    groupTitle: "GESTION",
-    items: [
-      { label: "Collaborateurs", href: "/collaborateurs", icon: UserCheck },
-      { label: "Demandes d'accès", href: "/collaborateurs?tab=REQUESTS", icon: UserPlus, badge: "Demandes" },
-      { label: "Clients", href: "/clients", icon: Users },
-      { label: "Ressources Humaines", href: "/rh", icon: Briefcase },
-      { label: "Équipes", href: "/equipes", icon: Layers },
-      { label: "Rôles & Permissions", href: "/parametres?tab=USERS", icon: Settings, badge: "RBAC" },
-    ],
-  },
-  {
     groupTitle: "OPÉRATIONS",
     items: [
       { label: "Base Prospects", href: "/base-prospects", icon: Database },
@@ -96,6 +85,17 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
       { label: "Documents", href: "/documents", icon: FileText },
+    ],
+  },
+  {
+    groupTitle: "GESTION",
+    items: [
+      { label: "Collaborateurs", href: "/collaborateurs", icon: UserCheck },
+      { label: "Demandes d'accès", href: "/collaborateurs?tab=REQUESTS", icon: UserPlus, badge: "Demandes" },
+      { label: "Clients", href: "/clients", icon: Users },
+      { label: "Ressources Humaines", href: "/rh", icon: Briefcase },
+      { label: "Équipes", href: "/equipes", icon: Layers },
+      { label: "Rôles & Permissions", href: "/parametres?tab=USERS", icon: Settings, badge: "RBAC" },
     ],
   },
   {
