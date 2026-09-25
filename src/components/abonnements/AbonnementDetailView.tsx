@@ -9,6 +9,7 @@ import {
   Sparkles,
   Layers,
   Calendar,
+  CalendarDays,
   DollarSign,
   User,
   Phone,

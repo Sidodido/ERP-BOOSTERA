@@ -20,6 +20,7 @@ import {
   Building2,
   Repeat,
   Video,
+  Film,
   Palette,
   Globe,
   TrendingUp,
