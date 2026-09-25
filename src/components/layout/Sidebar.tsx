@@ -26,7 +26,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Repeat,
   Database,
   Activity,
   CalendarDays,
@@ -81,7 +80,6 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       { label: "Relances", href: "/relances", icon: Clock },
       { label: "Import Google Maps", href: "/direction/google-maps", icon: MapPin, badge: "DZ" },
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
-      { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
       { label: "Documents", href: "/documents", icon: FileText },
@@ -163,7 +161,6 @@ const TECHNICIAN_NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Clients", href: "/clients", icon: Users },
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
-      { label: "Abonnements", href: "/abonnements", icon: Repeat, badge: "Packs" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
     ],
