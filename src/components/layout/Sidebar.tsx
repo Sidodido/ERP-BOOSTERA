@@ -106,7 +106,6 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       { label: "Rentabilité", href: "/rentabilite", icon: TrendingUp },
       { label: "Fournisseurs", href: "/fournisseurs", icon: Truck },
       { label: "Achats & Commandes", href: "/achats", icon: ShoppingCart },
-      { label: "Stocks & Matériel", href: "/stocks", icon: Database },
     ],
   },
   {
