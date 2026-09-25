@@ -217,7 +217,7 @@ export function Header({ userName, userRole }: HeaderProps) {
   };
 
   return (
-    <header className="app-top-header h-16 sticky top-0 z-20 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800/80 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full select-none">
+    <header className="app-top-header h-16 sticky top-0 z-20 bg-[#090d18]/80 backdrop-blur-2xl border-b border-white/[0.08] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full select-none shadow-sm shadow-black/20 [box-shadow:inset_0_-1px_0_0_rgba(255,255,255,0.03)]">
       {/* Left side: Hamburger on mobile + Breadcrumb + GlobalSearch */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <button

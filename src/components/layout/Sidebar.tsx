@@ -325,12 +325,12 @@ export function Sidebar({
       {/* Desktop Sidebar */}
       <aside
         className={cn(
-          "hidden md:flex h-screen sticky top-0 flex-col bg-neutral-950 border-r border-neutral-800/80 transition-all duration-300 z-30 select-none shrink-0",
+          "hidden md:flex h-screen sticky top-0 flex-col bg-[#090d18]/90 backdrop-blur-2xl border-r border-white/[0.08] transition-all duration-300 z-30 select-none shrink-0 shadow-2xl shadow-black/40",
           collapsed ? "w-18" : "w-64"
         )}
       >
         {/* Brand Header */}
-        <div className="h-16 flex items-center justify-between px-3.5 border-b border-neutral-800/80">
+        <div className="h-16 flex items-center justify-between px-3.5 border-b border-white/[0.06] bg-white/[0.01]">
           {!collapsed && (
             <Link href="/dashboard" scroll={false} className="flex items-center gap-2.5 group">
               <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
@@ -371,7 +371,7 @@ export function Sidebar({
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
             title={collapsed ? "Agrandir le menu" : "Réduire le menu"}
           >
             {collapsed ? (
@@ -431,17 +431,17 @@ export function Sidebar({
                           }
                         }}
                         className={cn(
-                          "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                          "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 group relative",
                           active
-                            ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
-                            : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+                            ? "bg-gradient-to-r from-blue-600/20 via-blue-600/10 to-transparent text-white border border-blue-500/30 shadow-sm shadow-blue-500/10 font-semibold before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:shadow-[0_0_10px_rgba(59,130,246,0.9)]"
+                            : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05]"
                         )}
                         title={collapsed ? item.label : undefined}
                       >
                         <Icon
                           className={cn(
                             "w-4 h-4 shrink-0 transition-colors",
-                            active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                            active ? "text-blue-400" : "text-neutral-400 group-hover:text-neutral-200"
                           )}
                         />
                         {!collapsed && (
@@ -450,10 +450,10 @@ export function Sidebar({
                         {!collapsed && item.badge && (
                           <span
                             className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
+                              "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border backdrop-blur-sm",
                               active
-                                ? "bg-white/20 text-white border-white/30"
-                                : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                                ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                : "bg-white/[0.05] text-neutral-300 border-white/[0.08]"
                             )}
                           >
                             {item.badge}
@@ -579,26 +579,26 @@ export function Sidebar({
                             href={item.href}
                             onClick={() => setMobileOpen(false)}
                             className={cn(
-                              "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-150 group",
+                              "flex items-center gap-3 px-2.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 group relative",
                               active
-                                ? "bg-blue-600 text-white shadow-md shadow-blue-600/25 font-semibold"
-                                : "text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900"
+                                ? "bg-gradient-to-r from-blue-600/20 via-blue-600/10 to-transparent text-white border border-blue-500/30 shadow-sm shadow-blue-500/10 font-semibold before:absolute before:left-0 before:top-2 before:bottom-2 before:w-1 before:rounded-r-full before:bg-blue-500 before:shadow-[0_0_10px_rgba(59,130,246,0.9)]"
+                                : "text-neutral-400 hover:text-neutral-100 hover:bg-white/[0.04] border border-transparent hover:border-white/[0.05]"
                             )}
                           >
                             <Icon
                               className={cn(
                                 "w-4 h-4 shrink-0 transition-colors",
-                                active ? "text-white" : "text-neutral-400 group-hover:text-neutral-200"
+                                active ? "text-blue-400" : "text-neutral-400 group-hover:text-neutral-200"
                               )}
                             />
                             <span className="flex-1 truncate">{item.label}</span>
                             {item.badge && (
                               <span
                                 className={cn(
-                                  "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border",
+                                  "text-[10px] px-1.5 py-0.5 rounded-md font-semibold border backdrop-blur-sm",
                                   active
-                                    ? "bg-white/20 text-white border-white/30"
-                                    : "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+                                    ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                                    : "bg-white/[0.05] text-neutral-300 border-white/[0.08]"
                                 )}
                               >
                                 {item.badge}

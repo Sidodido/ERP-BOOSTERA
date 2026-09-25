@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/common/ThemeProvider";
 import { ThemeSwitcherModal } from "@/components/common/ThemeSwitcherModal";
 import { ThemeFloatingButton } from "@/components/common/ThemeFloatingButton";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,7 +57,7 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${plusJakartaSans.variable} ${geistSans.variable} ${geistMono.variable} dark h-full antialiased font-sans`}
       data-theme="blue"
       suppressHydrationWarning
     >
@@ -82,11 +88,20 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full bg-neutral-950 text-neutral-100 font-sans theme-transition">
+      <body className="min-h-full bg-[#080c14] text-neutral-100 font-sans theme-transition relative overflow-x-hidden">
+        {/* Subtle Ambient Mesh Aura Glows */}
+        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+          <div className="absolute -top-[15%] left-1/2 -translate-x-1/2 w-[900px] h-[450px] bg-gradient-to-b from-blue-600/[0.12] via-indigo-600/[0.06] to-transparent rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute top-[35%] -right-32 w-[380px] h-[380px] bg-purple-600/[0.05] rounded-full blur-[120px] pointer-events-none" />
+          <div className="absolute bottom-0 left-[10%] w-[500px] h-[300px] bg-blue-500/[0.04] rounded-full blur-[100px] pointer-events-none" />
+        </div>
+
         <ThemeProvider>
-          <ThemeSwitcherModal />
-          <ThemeFloatingButton />
-          {children}
+          <div className="relative z-10">
+            <ThemeSwitcherModal />
+            <ThemeFloatingButton />
+            {children}
+          </div>
         </ThemeProvider>
       </body>
     </html>
