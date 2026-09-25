@@ -685,8 +685,8 @@ export function FinanceClient({
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    step="500"
+                    min="0"
+                    step="any"
                     value={payAmount}
                     onChange={(e) => setPayAmount(Number(e.target.value))}
                     required
@@ -823,8 +823,8 @@ export function FinanceClient({
                 </label>
                 <input
                   type="number"
-                  min="1000"
-                  step="1000"
+                  min="0"
+                  step="any"
                   value={schAmount}
                   onChange={(e) => setSchAmount(Number(e.target.value))}
                   required
@@ -913,8 +913,8 @@ export function FinanceClient({
                   </label>
                   <input
                     type="number"
-                    min="5000"
-                    step="1000"
+                    min="0"
+                    step="any"
                     value={spBudget}
                     onChange={(e) => {
                       setSpBudget(Number(e.target.value));
@@ -960,7 +960,7 @@ export function FinanceClient({
                 <input
                   type="number"
                   min="0"
-                  step="1000"
+                  step="any"
                   value={spPaid}
                   onChange={(e) => setSpPaid(Number(e.target.value))}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 font-mono focus:outline-none focus:border-indigo-500"

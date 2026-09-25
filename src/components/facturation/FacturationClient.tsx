@@ -650,7 +650,7 @@ export function FacturationClient({
                           type="number"
                           placeholder="Prix Unit (DA)"
                           min="0"
-                          step="500"
+                          step="any"
                           value={item.unitPrice}
                           onChange={(e) =>
                             handleItemChange(idx, "unitPrice", e.target.value)
@@ -790,9 +790,8 @@ export function FacturationClient({
                 </label>
                 <input
                   type="number"
-                  min="1"
-                  max={selectedInvoice.balanceDue}
-                  step="500"
+                  min="0"
+                  step="any"
                   value={payAmount}
                   onChange={(e) => setPayAmount(Number(e.target.value))}
                   required

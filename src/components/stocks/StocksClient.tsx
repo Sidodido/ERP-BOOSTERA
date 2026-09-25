@@ -543,7 +543,7 @@ export function StocksClient({
                   <input
                     type="number"
                     min="0"
-                    step="5000"
+                    step="any"
                     value={assetPrice}
                     onChange={(e) => setAssetPrice(Number(e.target.value))}
                     required

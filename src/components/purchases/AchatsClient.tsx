@@ -584,8 +584,8 @@ export function AchatsClient({
                   </label>
                   <input
                     type="number"
-                    min="500"
-                    step="500"
+                    min="0"
+                    step="any"
                     value={orderAmount}
                     onChange={(e) => setOrderAmount(Number(e.target.value))}
                     required
@@ -686,8 +686,8 @@ export function AchatsClient({
                   </label>
                   <input
                     type="number"
-                    min="500"
-                    step="500"
+                    min="0"
+                    step="any"
                     value={subCost}
                     onChange={(e) => setSubCost(Number(e.target.value))}
                     required
@@ -782,8 +782,8 @@ export function AchatsClient({
                   </label>
                   <input
                     type="number"
-                    min="500"
-                    step="500"
+                    min="0"
+                    step="any"
                     value={expAmount}
                     onChange={(e) => setExpAmount(Number(e.target.value))}
                     required

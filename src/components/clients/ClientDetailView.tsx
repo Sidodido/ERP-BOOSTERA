@@ -4240,7 +4240,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                   label="Forfait Mensuel (DZD)"
                   type="number"
                   min="0"
-                  step="500"
+                  step="any"
                   value={editClientForm.monthlyFee}
                   onChange={(e) => setEditClientForm({ ...editClientForm, monthlyFee: Number(e.target.value) || 0 })}
                   placeholder="35000"
@@ -4249,7 +4249,7 @@ export function ClientDetailView({ client, salesUsers = [], currentUserRole }: P
                   label="Valeur Globale Engagement (DZD)"
                   type="number"
                   min="0"
-                  step="1000"
+                  step="any"
                   value={editClientForm.contractValue}
                   onChange={(e) => setEditClientForm({ ...editClientForm, contractValue: Number(e.target.value) || 0 })}
                   placeholder="420000"

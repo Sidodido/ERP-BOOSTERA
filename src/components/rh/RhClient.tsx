@@ -1410,7 +1410,7 @@ export function RhClient({
                   <input
                     type="number"
                     min="0"
-                    step="5000"
+                    step="any"
                     required
                     value={newSalary}
                     onChange={(e) => setNewSalary(Number(e.target.value))}

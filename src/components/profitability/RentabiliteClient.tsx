@@ -431,8 +431,8 @@ export function RentabiliteClient({
                   </label>
                   <input
                     type="number"
-                    min="500"
-                    step="500"
+                    min="0"
+                    step="any"
                     value={costAmount}
                     onChange={(e) => setCostAmount(Number(e.target.value))}
                     required
