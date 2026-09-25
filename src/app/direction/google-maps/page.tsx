@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { GoogleMapsImporterClient } from "@/components/direction/GoogleMapsImporterClient";
 
 export const metadata = {
-  title: "Import Google Maps | Direction BOOSTERA CRM",
+  title: "Import Google Maps | Direction HDZ SECURITY CRM",
   description: "Extraction et importation directe de prospects depuis Google Maps et les annuaires d'entreprises en Algérie.",
 };
 

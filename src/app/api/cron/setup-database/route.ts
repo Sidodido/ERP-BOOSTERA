@@ -27,7 +27,7 @@ export async function GET() {
       create: {
         email: "admin@boostera.dz",
         passwordHash: defaultPassword,
-        name: "Direction BOOSTERA",
+        name: "Direction HDZ SECURITY",
         role: "ADMIN",
         phone: "0550 00 00 01",
       },
@@ -77,7 +77,7 @@ export async function GET() {
       create: {
         userId: admin.id,
         firstName: "Direction",
-        lastName: "BOOSTERA",
+        lastName: "HDZ SECURITY",
         position: "Direction Générale",
         department: "ADMINISTRATION",
       },

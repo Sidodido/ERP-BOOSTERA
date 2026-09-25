@@ -11,7 +11,7 @@ async function main() {
     create: {
       email: "admin@boostera.dz",
       passwordHash: hash,
-      name: "Direction BOOSTERA",
+      name: "Direction HDZ SECURITY",
       role: "ADMIN",
       phone: "0550 00 00 01",
     },

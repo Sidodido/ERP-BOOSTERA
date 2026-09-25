@@ -129,10 +129,10 @@ function LoginForm() {
         <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/25 mb-1 border border-neutral-800">
           <Image
             src="/logo.png"
-            alt="BOOSTERA Logo"
+            alt="HDZ SECURITY Logo"
             width={76}
             height={76}
-            className="w-18 h-18 object-contain"
+            className="w-18 h-18 object-contain rounded-2xl"
             priority
           />
         </div>

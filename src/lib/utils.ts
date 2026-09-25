@@ -92,21 +92,15 @@ export function buildWhatsAppUrl(
   const targetName = contactName?.trim() || companyName?.trim() || "Bonjour";
   const message = `Bonjour ${targetName},
 
-Suite à notre échange téléphonique, je vous transmets comme convenu un récapitulatif de nos services chez BOOSTERA Agency.
+Suite à notre échange téléphonique, je vous transmets comme convenu un récapitulatif de nos services chez HDZ SECURITY.
 
-Nous accompagnons les professionnels et entreprises dans le développement de leur visibilité et l'acquisition de nouveaux clients :
-🎬 Production vidéo & Reels percutants (tournage pro sur site & montage dynamique)
-🎨 Création graphique & identité visuelle (Carrousels, Maquettes et visuels réseaux)
-📱 Gestion complète & Campagnes sponsorisées Meta (Facebook Ads / Instagram Ads)
-💻 Conception de sites web professionnels & référencement Google
-
-Nous proposons des formules complètes clé en main adaptées à vos besoins (Pack Starter, Silver, Gold ou Sur-mesure).
+Nous accompagnons les professionnels et entreprises dans la sécurisation, la télésurveillance et les solutions de gestion intégrée.
 
 N'hésitez pas si vous avez des questions ou pour convenir d'un rendez-vous de présentation.
 
 Bien cordialement,
-L'équipe BOOSTERA Agency
-contact@boostera.dz`;
+L'équipe HDZ SECURITY
+contact@hdz-security.dz`;
 
   return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
 }

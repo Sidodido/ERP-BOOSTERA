@@ -685,7 +685,7 @@ const server = http.createServer(async (req, res) => {
       <html lang="fr">
       <head>
         <meta charset="utf-8">
-        <title>BOOSTERA ERP — Diagnostic & Configuration Base de données</title>
+        <title>HDZ SECURITY ERP — Diagnostic & Configuration Base de données</title>
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f4f4f5; padding: 40px; margin: 0; display: flex; justify-content: center; }
           .card { max-width: 800px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
@@ -703,7 +703,7 @@ const server = http.createServer(async (req, res) => {
       </head>
       <body>
         <div class="card">
-          <h1>🚀 BOOSTERA ERP — État de la Base de Données</h1>
+          <h1>🚀 HDZ SECURITY ERP — État de la Base de Données</h1>
           <p><strong>URL PostgreSQL :</strong> <code>${maskedUrl}</code></p>
           <p><strong>Statut :</strong> <span class="badge ${dbError ? 'badge-error' : 'badge-success'}">${dbStatus}</span></p>
           

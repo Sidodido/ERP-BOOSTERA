@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Starting BOOSTERA ERP Database Seeding...");
+  console.log("🌱 Starting HDZ SECURITY ERP Database Seeding...");
 
   // 1. Clean existing records in reverse order
   await prisma.auditLog.deleteMany();
@@ -30,7 +30,7 @@ async function main() {
     data: {
       email: "admin@boostera.dz",
       passwordHash: defaultPasswordHash,
-      name: "Direction BOOSTERA",
+      name: "Direction HDZ SECURITY",
       role: Role.ADMIN,
       phone: "0550 00 00 01",
     },
@@ -513,7 +513,7 @@ async function main() {
 
   console.log("✅ Invoices and Payments created");
 
-  console.log("🚀 BOOSTERA ERP Database successfully seeded!");
+  console.log("🚀 HDZ SECURITY ERP Database successfully seeded!");
 }
 
 main()

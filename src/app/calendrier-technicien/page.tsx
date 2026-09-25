@@ -5,8 +5,8 @@ import { getTechnicianCalendarData } from "@/actions/production";
 import { TechnicianCalendarClient } from "@/components/production/TechnicianCalendarClient";
 
 export const metadata = {
-  title: "Calendrier Tâches Technicien | BOOSTERA CRM",
-  description: "Calendrier mensuel des tâches de production issues des packs signés et en préparation.",
+  title: "Calendrier Tâches Technicien | HDZ SECURITY CRM",
+  description: "Calendrier mensuel des tâches d'intervention et techniques.",
 };
 
 export default async function TechnicianCalendarPage({

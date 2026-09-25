@@ -68,7 +68,7 @@ export function CommercialAiHub({ initialContext }: CommercialAiHubProps) {
     {
       id: "welcome-msg",
       role: "assistant",
-      content: `Bonjour **${initialContext.userName}** ! Je suis ton **Assistant IA Commercial BOOSTERA**.
+      content: `Bonjour **${initialContext.userName}** ! Je suis ton **Assistant IA Commercial HDZ SECURITY**.
 
 Je suis directement connecté en temps réel à tes **6 sections de vente** :
 • **Prospection** : ${initialContext.stats.virginProspectsCount} prospects vierges à démarcher
@@ -258,7 +258,7 @@ Comment puis-je t'aider à maximiser tes signatures aujourd'hui ? Tu peux me pos
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-black text-neutral-900 dark:text-neutral-100 tracking-tight">
-                  Assistant IA Commercial BOOSTERA
+                  Assistant IA Commercial HDZ SECURITY
                 </h1>
                 <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 text-[11px] font-semibold flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3" />
@@ -456,7 +456,7 @@ Comment puis-je t'aider à maximiser tes signatures aujourd'hui ? Tu peux me pos
                     }`}
                   >
                     <div className="flex items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 pb-1 text-[10px] opacity-75">
-                      <span>{m.role === "user" ? "Vous" : m.model || "Assistant BOOSTERA"}</span>
+                      <span>{m.role === "user" ? "Vous" : m.model || "Assistant HDZ SECURITY"}</span>
                       <div className="flex items-center gap-2">
                         <span>{m.time}</span>
                         {m.role === "assistant" && (

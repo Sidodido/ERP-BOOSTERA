@@ -83,21 +83,21 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center p-2.5 rounded-3xl bg-white shadow-2xl shadow-blue-500/25 mb-1 border border-neutral-800">
             <Image
               src="/logo.png"
-              alt="BOOSTERA Logo"
+              alt="HDZ SECURITY Logo"
               width={70}
               height={70}
-              className="w-16 h-16 object-contain"
+              className="w-16 h-16 object-contain rounded-2xl"
               priority
             />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-100 flex items-center justify-center gap-2">
             Demande d'Accès Collaborateur
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
-              ERP
+              HDZ SECURITY ERP
             </span>
           </h1>
           <p className="text-xs text-neutral-400 max-w-md mx-auto">
-            Créez votre demande pour rejoindre la plateforme BOOSTERA. Un e-mail de confirmation vous sera transmis avant validation par la direction.
+            Créez votre demande pour rejoindre la plateforme HDZ SECURITY. Un e-mail de confirmation vous sera transmis avant validation par la direction.
           </p>
         </div>
 

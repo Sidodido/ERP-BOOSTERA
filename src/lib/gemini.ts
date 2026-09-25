@@ -90,7 +90,7 @@ export async function generateEditorialPlanWithGemini(
   ];
 
   // Construction du prompt structuré respectant à 100% les quotas contractuels de l'agence
-  const systemPrompt = `Tu es le Directeur de Création et Stratège Social Media Senior de l'agence digitale algérienne BOOSTERA.
+  const systemPrompt = `Tu es le Directeur de Création et Stratège Social Media Senior de l'agence HDZ SECURITY.
 Ta mission est de concevoir un calendrier de contenu éditorial mensuel ultra-performant, percutant et réaliste pour le marché algérien (${wilaya || "Algérie"}).
 
 DONNÉES DU CLIENT & SES RÉSEAUX SOCIAUX (MÉDIAS DU CLIENT) :
@@ -318,7 +318,7 @@ Tu DOIS impérativement répondre UNIQUEMENT avec un objet JSON valide (sans tex
           cta: pub.cta || "Contactez-nous en DM pour commander 📲",
           hashtags: Array.isArray(pub.hashtags)
             ? pub.hashtags.map((h: string) => h.replace(/^#/, ""))
-            : ["algerie", "boostera"],
+            : ["algerie", "hdz-security"],
           suggestedTaskTitle:
             pub.suggestedTaskTitle ||
             `${
@@ -384,7 +384,7 @@ Tu DOIS impérativement répondre UNIQUEMENT avec un objet JSON valide (sans tex
       success: true,
       source: "LOCAL_ENGINE",
       plan: fallbackPlan,
-      notice: `Généré via la base sectorielle Boostera (Basculement automatique : ${
+      notice: `Généré via la base sectorielle HDZ SECURITY (Basculement automatique : ${
         geminiError?.message || "Gemini indisponible"
       }).`,
       error: geminiError?.message,

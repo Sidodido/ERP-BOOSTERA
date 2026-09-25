@@ -1718,7 +1718,7 @@ export function CallsClient({
             label="Intitulé du RDV *"
             value={appointmentForm.title}
             onChange={(e) => setAppointmentForm({ ...appointmentForm, title: e.target.value })}
-            placeholder="ex: Démo Solution ERP Boostera"
+            placeholder="ex: Démo Solution HDZ SECURITY ERP"
             required
           />
 

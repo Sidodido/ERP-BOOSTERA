@@ -141,10 +141,10 @@ export async function getSettingsDataAction() {
       todayAbsents,
     },
     agencyConfig: {
-      name: "BOOSTERA Agency",
-      address: "Kouba, Alger, Algérie",
+      name: "HDZ SECURITY",
+      address: "Alger, Algérie",
       phone: "+213 (0) 550 00 00 00",
-      email: "contact@boostera.dz",
+      email: "contact@hdz-security.dz",
       currency: "DA (Dinar Algérien)",
       defaultVatRate: 0,
       baridiMobRip: "00799999002233445521",

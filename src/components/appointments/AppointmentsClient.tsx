@@ -2492,7 +2492,7 @@ export function AppointmentsClient({
             label="Lieu / Lien visio"
             value={form.location}
             onChange={(e) => setForm({ ...form, location: e.target.value })}
-            placeholder="Bureau client, Agence BOOSTERA, Google Meet..."
+            placeholder="Bureau client, Agence HDZ SECURITY, Google Meet..."
           />
 
           <Input

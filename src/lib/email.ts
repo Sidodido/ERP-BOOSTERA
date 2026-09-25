@@ -69,7 +69,7 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
 }
 
 // ============================================================
-// TEMPLATES HTML TRANSACTIONNELS PROFESSIONNELS (BRAND BOOSTERA)
+// TEMPLATES HTML TRANSACTIONNELS PROFESSIONNELS (BRAND HDZ SECURITY)
 // ============================================================
 
 function baseEmailTemplate(title: string, content: string): string {

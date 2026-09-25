@@ -118,55 +118,47 @@ export function ProspectAiEmailModal({
     if (!prospect) return;
 
     const targetName = prospect.contactName?.trim() || prospect.companyName?.trim() || "Madame, Monsieur";
-    const subject = `BOOSTERA Agency — Présentation de nos offres & Recommandation personnalisée pour ${prospect.companyName}`;
+    const subject = `HDZ SECURITY — Présentation de nos solutions & Recommandation personnalisée pour ${prospect.companyName}`;
 
     let packHighlightText = "";
     if (selectedPack === "STARTER") {
-      packHighlightText = `👉 LE PACK STARTER (1 publication par semaine — 9 000 DA/mois) :
-• 2 Carrousels stratégiques + 2 Maquettes graphiques sur-mesure chaque mois
-• Conception d'un Site Web professionnel inclus pour asseoir votre crédibilité
-• Idéal pour structurer votre image de marque à un tarif très accessible`;
+      packHighlightText = `👉 PACK PROTECTION ESSENTIEL :
+• Télésurveillance & alertes 24/7
+• Configuration et suivi de vos équipements
+• Idéal pour sécuriser vos locaux au meilleur coût`;
     } else if (selectedPack === "SILVER") {
-      packHighlightText = `👉 LE PACK SILVER (2 publications par semaine — 26 000 DA/mois) [RECOMMANDÉ] :
-• 3 Carrousels + 3 Maquettes graphiques professionnelles
-• 2 Vidéos Reels / TikTok immersives avec voix-off professionnelle enregistrée en studio
-• 3 Séances de tournage / shooting professionnel par an sur place dans vos locaux
-• Accélération forte de vos vues et de votre engagement client`;
+      packHighlightText = `👉 PACK SURVEILLANCE PLUS [RECOMMANDÉ] :
+• Télésurveillance avancée HD & détection d'intrusions
+• Interventions rapides & rapports périodiques
+• Maintenance prioritaire et support dédié`;
     } else if (selectedPack === "GOLD") {
-      packHighlightText = `👉 LE PACK GOLD (3 publications par semaine — 42 000 DA/mois) [MAXIMUM IMPACT] :
-• 4 Carrousels + 4 Maquettes graphiques haute définition
-• 4 Vidéos Reels / TikTok captivantes avec voix-off professionnelle
-• 5 Séances de tournage / shooting professionnel par an dans votre établissement
-• La solution d'élite pour dominer votre secteur et acquérir un flux régulier de clients`;
+      packHighlightText = `👉 PACK PREMIUM INTÉGRAL [MAXIMUM IMPACT] :
+• Protection totale sur-mesure & contrôle d'accès intelligent
+• Surveillance continue, audits réguliers et astreinte 24/7
+• La référence absolue pour sécuriser vos infrastructures sensibles`;
     } else {
-      packHighlightText = `👉 LE PACK SUR-MESURE :
-• Stratégie personnalisée selon vos objectifs spécifiques de vente et d'expansion
-• Volume flexible de vidéos, carrousels, sponsorisation publicitaire et site web`;
+      packHighlightText = `👉 PACK SUR-MESURE :
+• Stratégie personnalisée selon vos impératifs de sécurité et la topologie de vos sites`;
     }
 
     const body = `Bonjour ${targetName},
 
-Suite à notre échange téléphonique, je vous transmets comme convenu la présentation des solutions digitales proposées par l'agence BOOSTERA pour dynamiser l'activité de ${prospect.companyName}.
+Suite à notre échange téléphonique, je vous transmets comme convenu la présentation des solutions proposées par HDZ SECURITY pour sécuriser les activités de ${prospect.companyName}.
 
 Compte tenu de votre positionnement dans le secteur "${prospect.sector || "votre activité"}", nous vous recommandons tout particulièrement :
 
 ${packHighlightText}
 
---- NOS 3 FORMULES CLÉS EN MAIN ---
-1. PACK STARTER : 9 000 DA/mois — 4 publications/mois + Site Web inclus
-2. PACK SILVER : 26 000 DA/mois — 8 publications/mois dont 2 Reels pro + Voix-off + 3 tournages/an
-3. PACK GOLD : 42 000 DA/mois — 12 publications/mois dont 4 Reels pro + Voix-off + 5 tournages/an
+Toutes nos prestations intègrent des équipements certifiés, une installation professionnelle conforme aux normes et un support réactif.
 
-Tous nos forfaits comprennent la scénarisation, le copywriting persuasif, le tournage avec matériel cinéma sur site, le montage dynamique et le ciblage publicitaire Meta (Facebook & Instagram Ads).
-
-Seriez-vous disponible pour un court rendez-vous de démonstration (dans vos locaux ou en visio) afin de vous présenter des réalisations similaires à succès ?
+Seriez-vous disponible pour un court rendez-vous de démonstration (dans vos locaux ou en visio) afin d'étudier vos besoins ?
 
 Restant à votre entière disposition,
 
 Bien cordialement,
 
-L'équipe commerciale BOOSTERA Agency
-Tél : 0560 00 00 00 | contact@boostera.dz
+L'équipe commerciale HDZ SECURITY
+Tél : 0550 00 00 00 | contact@hdz-security.dz
 Alger, Algérie`;
 
     setEmailSubject(subject);

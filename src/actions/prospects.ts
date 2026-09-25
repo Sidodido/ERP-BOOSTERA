@@ -1566,6 +1566,8 @@ function findLocalProspectionFile(): string | null {
   const dlDir = path.join(userProfile, "Downloads");
 
   const candidates = [
+    path.join(dlDir, "PROSPECTION HDZ SECURITY.xlsx"),
+    path.join(dlDir, "PROSPECTION_HDZ_SECURITY.xlsx"),
     path.join(dlDir, "Feuille de calcul sans titre.xlsx"),
     path.join(dlDir, "PROSPECTION BOOSTERA.xlsx"),
     path.join(dlDir, "PROSPECTION_BOOSTERA.xlsx"),

@@ -336,10 +336,10 @@ export function Sidebar({
               <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0 group-hover:scale-105 transition-transform">
                 <Image
                   src="/logo.png"
-                  alt="BOOSTERA Logo"
+                  alt="HDZ SECURITY Logo"
                   width={34}
                   height={34}
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain rounded-lg"
                   priority
                 />
               </div>
@@ -359,10 +359,10 @@ export function Sidebar({
             <div className="w-9 h-9 mx-auto rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800" title="HDZ SECURITY ERP">
               <Image
                 src="/logo.png"
-                alt="BOOSTERA"
+                alt="HDZ SECURITY Logo"
                 width={32}
                 height={32}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain rounded-lg"
                 priority
               />
             </div>
@@ -515,10 +515,10 @@ export function Sidebar({
                 <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center p-1 shadow-md shadow-blue-500/15 border border-neutral-800 shrink-0">
                   <Image
                     src="/logo.png"
-                    alt="BOOSTERA Logo"
+                    alt="HDZ SECURITY Logo"
                     width={34}
                     height={34}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain rounded-lg"
                     priority
                   />
                 </div>

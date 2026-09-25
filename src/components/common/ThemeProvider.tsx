@@ -38,7 +38,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     id: "blue",
     name: "Cyber Blue",
     subtitle: "Bleu Tech (Défaut)",
-    description: "Bleu électrique et nuit profonde — Identité officielle BOOSTERA",
+    description: "Bleu électrique et nuit profonde — Identité officielle HDZ SECURITY",
     category: "dark",
     mode: "dark",
     dotColor: "bg-blue-500",

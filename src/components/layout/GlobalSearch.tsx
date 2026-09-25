@@ -410,7 +410,7 @@ export function GlobalSearch() {
             <span>
               Recherche instantanée sur : Clients, Prospects, RDV, Projets, Collaborateurs
             </span>
-            <span className="font-medium text-neutral-400">BOOSTERA ERP</span>
+            <span className="font-medium text-neutral-400">HDZ SECURITY ERP</span>
           </div>
         </div>
       )}

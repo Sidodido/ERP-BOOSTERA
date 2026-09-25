@@ -1302,7 +1302,7 @@ export function RhClient({
               <div className="flex items-center gap-2.5">
                 <Users className="w-5 h-5 text-indigo-400" />
                 <h3 className="text-lg font-bold text-neutral-100">
-                  Nouveau Collaborateur BOOSTERA
+                  Nouveau Collaborateur HDZ SECURITY
                 </h3>
               </div>
               <button

@@ -857,7 +857,7 @@ export async function regenerateSinglePublicationAction(params: {
     let newPubData: any = null;
     let sourceUsed: "GEMINI_AI" | "OPENAI_CHATGPT" | "LOCAL_ENGINE" = "LOCAL_ENGINE";
 
-    const promptText = `Tu es le Directeur Artistique et Concepteur-Rédacteur Senior de l'agence BOOSTERA en Algérie.
+    const promptText = `Tu es le Directeur Artistique et Concepteur-Rédacteur Senior de l'agence HDZ SECURITY en Algérie.
 L'utilisateur souhaite RÉGÉNÉRER LE SUJET ET LE THÈME de cette publication spécifique pour le client :
 - Entreprise / Marque : "${displayName}" (Raison sociale : "${client.companyName}")
 - Secteur d'activité : "${client.sector}"
@@ -1309,7 +1309,7 @@ export async function generateThemesWithAiAction(params: {
     const sector = client.sector || "Entreprise";
     const wilaya = client.wilaya || "Alger";
 
-    const promptText = `Tu es Directeur de Création Social Media chez l'agence BOOSTERA.
+    const promptText = `Tu es Directeur de Création Social Media chez HDZ SECURITY.
 Pour l'entreprise "${displayName}" active dans le secteur "${sector}" à ${wilaya} (Algérie).
 Génère EXACTEMENT 4 thèmes / piliers éditoriaux stratégiques pour les 4 semaines du mois (Semaine 1, Semaine 2, Semaine 3, Semaine 4).
 Chaque thème doit être percutant, commercialement attractif et parfaitement adapté au marché algérien.

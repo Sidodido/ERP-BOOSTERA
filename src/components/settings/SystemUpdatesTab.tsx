@@ -115,7 +115,7 @@ export function SystemUpdatesTab() {
               <Sparkles className="w-3.5 h-3.5" /> Centre de Déploiement & Mises à Jour
             </div>
             <h2 className="text-2xl font-bold text-neutral-100 flex items-center gap-2.5">
-              Mise à jour rapide de l'ERP Boostera
+              Mise à jour rapide de HDZ SECURITY ERP
             </h2>
             <p className="text-sm text-neutral-400 max-w-2xl leading-relaxed">
               Lorsque vous développez ou ajoutez de nouveaux outils, sections ou modèles, déployez-les en 1 clic
