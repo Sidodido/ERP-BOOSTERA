@@ -889,3 +889,60 @@ html.light .app-top-header svg.lucide-chevron-down {
   color: #64748b !important;
 }
 
+/* ========================================================
+   GLOBAL LIGHT THEME HIGH-CONTRAST RULES (WCAG 2.2 AA/AAA)
+   Garantit que tout texte clair devient foncé et lisible en mode clair
+   ======================================================== */
+[data-theme-mode="light"],
+html.light {
+  color: #0f172a;
+}
+
+/* Ambre / Remarques en Mode Clair : lisibilité immédiate */
+[data-theme-mode="light"] .text-amber-100,
+[data-theme-mode="light"] .text-amber-200,
+html.light .text-amber-100,
+html.light .text-amber-200 {
+  color: #451a03 !important; /* Espresso foncé ultra lisible */
+  font-weight: 600;
+}
+
+[data-theme-mode="light"] .text-amber-300,
+[data-theme-mode="light"] .text-amber-400,
+html.light .text-amber-300,
+html.light .text-amber-400 {
+  color: #92400e !important; /* Ambre foncé */
+}
+
+/* Textes neutres en Mode Clair */
+[data-theme-mode="light"] .text-neutral-100,
+[data-theme-mode="light"] .text-neutral-200,
+[data-theme-mode="light"] .text-neutral-300,
+html.light .text-neutral-100,
+html.light .text-neutral-200,
+html.light .text-neutral-300 {
+  color: #0f172a !important; /* Noir d'encre */
+}
+
+[data-theme-mode="light"] .text-neutral-400,
+html.light .text-neutral-400 {
+  color: #334155 !important;
+}
+
+[data-theme-mode="light"] .text-neutral-500,
+html.light .text-neutral-500 {
+  color: #475569 !important;
+}
+
+/* Rangées en retard ou actives en Mode Clair */
+[data-theme-mode="light"] .bg-rose-950\/10,
+html.light .bg-rose-950\/10 {
+  background-color: rgba(244, 63, 94, 0.08) !important;
+}
+
+[data-theme-mode="light"] .bg-blue-950\/10,
+html.light .bg-blue-950\/10 {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+
+

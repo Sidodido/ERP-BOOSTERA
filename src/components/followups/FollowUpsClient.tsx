@@ -1273,7 +1273,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                   <th className="py-3 px-3">ADRESS</th>
                   <th className="py-3 px-3">APPEL</th>
                   <th className="py-3 px-3 text-emerald-400">RÉSULTAT D'APPEL</th>
-                  <th className="py-3 px-3 min-w-[220px] max-w-[320px] text-amber-400">REMARQUES DU PROSPECT</th>
+                  <th className="py-3 px-3 min-w-[220px] max-w-[320px] text-amber-700 dark:text-amber-400 font-bold">REMARQUES DU PROSPECT</th>
                   <th className="py-3 px-3">DATE PRÉVUE</th>
                   <th className="py-3 px-3 text-center">ÉTAPE</th>
                   <th className="py-3 px-3">STATUT</th>
@@ -1470,13 +1470,13 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                             {item.prospect.notes ? (
                               <div
                                 onClick={() => openRemarksModal(item)}
-                                className="text-xs text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                                className="text-xs bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/15 border border-amber-500/30 dark:border-amber-500/30 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors shadow-xs"
                                 title="Cliquer pour modifier la remarque"
                               >
-                                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                                <span className="text-[10px] text-amber-800 dark:text-amber-300 font-black uppercase tracking-wider block">
                                   💬 Remarque :
                                 </span>
-                                <p className="font-medium whitespace-normal line-clamp-2 text-amber-100">
+                                <p className="font-semibold whitespace-normal line-clamp-2 text-neutral-900 dark:text-amber-100 leading-snug">
                                   {item.prospect.notes}
                                 </p>
                               </div>
@@ -1485,17 +1485,17 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                             {item.prospect.response && item.prospect.response !== item.prospect.notes ? (
                               <p
                                 onClick={() => openRemarksModal(item)}
-                                className="text-[11px] text-neutral-300 whitespace-normal line-clamp-1 truncate pl-1 cursor-pointer hover:text-white transition-colors"
+                                className="text-[11px] text-neutral-800 dark:text-neutral-200 whitespace-normal line-clamp-1 truncate pl-1 cursor-pointer hover:text-black dark:hover:text-white transition-colors"
                                 title="Cliquer pour modifier la réponse"
                               >
-                                <span className="text-neutral-500 font-semibold">Rép :</span> {item.prospect.response}
+                                <span className="text-neutral-600 dark:text-neutral-400 font-bold">Rép :</span> {item.prospect.response}
                               </p>
                             ) : null}
 
                             {item.notes && !item.notes.startsWith("Relance Étape") && item.notes !== item.prospect.notes ? (
                               <p
                                 onClick={() => openRemarksModal(item)}
-                                className="text-[10px] text-neutral-400 italic whitespace-normal line-clamp-1 pl-1 cursor-pointer hover:text-neutral-300 transition-colors"
+                                className="text-[10px] text-neutral-700 dark:text-neutral-400 italic whitespace-normal line-clamp-1 pl-1 cursor-pointer hover:text-neutral-900 dark:hover:text-neutral-300 transition-colors"
                                 title="Cliquer pour modifier la note"
                               >
                                 Note : {item.notes}
@@ -1506,7 +1506,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                               <button
                                 type="button"
                                 onClick={() => openRemarksModal(item)}
-                                className="inline-flex items-center gap-1 text-[11px] text-neutral-500 hover:text-amber-300 py-1 px-1.5 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-neutral-400 hover:text-amber-900 dark:hover:text-amber-300 py-1 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-dashed border-amber-500/30 transition-colors cursor-pointer"
                               >
                                 <Plus className="w-3 h-3" />
                                 <span>Ajouter remarque</span>
@@ -1518,7 +1518,7 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                           <button
                             type="button"
                             onClick={() => openRemarksModal(item)}
-                            className="p-1.5 rounded-lg bg-neutral-900/80 hover:bg-amber-500/20 text-neutral-400 hover:text-amber-300 border border-neutral-800 hover:border-amber-500/30 transition-all cursor-pointer shrink-0 opacity-70 group-hover:opacity-100"
+                            className="p-1.5 rounded-lg bg-neutral-200/80 dark:bg-neutral-900/80 hover:bg-amber-500/20 text-neutral-700 dark:text-neutral-400 hover:text-amber-800 dark:hover:text-amber-300 border border-neutral-300 dark:border-neutral-800 hover:border-amber-500/30 transition-all cursor-pointer shrink-0 opacity-80 group-hover:opacity-100"
                             title="Modifier les remarques et réponses"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
