@@ -676,6 +676,84 @@ export async function logFollowUpCallAction(data: {
   return { success: true, call, nextFollowUp };
 }
 
+/**
+ * Marque immédiatement la relance comme TERMINÉE (status: COMPLETED) en 1 clic direct
+ * et enregistre l'appel dans l'historique sans replanifier de relance.
+ */
+export async function directCompleteFollowUpCallAction(followUpId: string) {
+  const user = await requireAuth();
+
+  const followUp = await prisma.followUp.findUnique({
+    where: { id: followUpId },
+    include: { prospect: true },
+  });
+
+  if (!followUp || !followUp.prospectId) {
+    throw new Error("Relance ou prospect introuvable.");
+  }
+
+  const now = new Date();
+  const prospectId = followUp.prospectId;
+
+  // 1. Enregistrer dans la table Call (historique des appels)
+  const call = await prisma.call.create({
+    data: {
+      prospectId,
+      userId: user.id,
+      result: CallResult.INTERESTED,
+      comment: `Appel effectué (+ APPEL direct) — Relance étape ${followUp.stepNumber} clôturée`,
+      durationSeconds: 60,
+      calledAt: now,
+    },
+  });
+
+  // 2. Mettre à jour le prospect (statut d'appel et transfert vers appels)
+  await prisma.prospect.update({
+    where: { id: prospectId },
+    data: {
+      callStatus: "EFFECTUE",
+      rawState: "TRANSFERE_APPELS",
+      prospectionDate: now,
+      assignedToId: followUp.userId || user.id,
+    },
+  });
+
+  // 3. Mettre à jour la relance directement en TERMINÉE (COMPLETED)
+  const updatedFollowUp = await prisma.followUp.update({
+    where: { id: followUp.id },
+    data: {
+      status: FollowUpStatus.COMPLETED,
+      completedAt: now,
+      notes: followUp.notes
+        ? `${followUp.notes} [Appel direct effectué]`
+        : "Appel direct effectué — Relance terminée",
+    },
+  });
+
+  try {
+    await createAuditLog({
+      userId: user.id,
+      action: "DIRECT_COMPLETE_FOLLOWUP_CALL",
+      module: "FOLLOWUPS",
+      entityId: followUp.id,
+      details: {
+        prospectId,
+        prospectName: followUp.prospect?.companyName,
+        callId: call.id,
+      },
+    });
+  } catch (auditErr) {
+    console.warn("Audit log error:", auditErr);
+  }
+
+  revalidatePath("/relances");
+  revalidatePath("/appels");
+  revalidatePath("/prospection");
+  revalidatePath("/dashboard");
+
+  return { success: true, followUp: updatedFollowUp, call };
+}
+
 export async function updateFollowUpRemarksAndNotesAction(data: {
   followUpId: string;
   prospectId: string;

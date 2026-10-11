@@ -10,6 +10,7 @@ import {
   processFollowUpAction,
   rescheduleFollowUpAction,
   logFollowUpCallAction,
+  directCompleteFollowUpCallAction,
   updateFollowUpRemarksAndNotesAction,
 } from "@/actions/followups";
 import { updateProspectField } from "@/actions/prospects";
@@ -41,6 +42,7 @@ import {
   Tag,
   ChevronDown,
   Check,
+  Loader2,
 } from "lucide-react";
 
 interface FollowUpItem {
@@ -491,6 +493,48 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
     setCallComment(item.notes || "");
     setCallDuration("60");
     setCallModalOpen(true);
+  };
+
+  // Action 1-clic direct : + APPEL -> Mettre directement dans TERMINÉ
+  const handleDirectCompleteCall = async (item: FollowUpItem) => {
+    setLoadingId(item.id);
+    setFeedbackMessage(null);
+
+    // Mise à jour optimiste immédiate : statut COMPLETED, libellé "Traitée"
+    setFollowUps((prev) =>
+      prev.map((f) =>
+        f.id === item.id
+          ? {
+              ...f,
+              status: FollowUpStatus.COMPLETED,
+              completedAt: new Date(),
+              notes: f.notes ? `${f.notes} [Appel direct]` : "Appel direct effectué — Relance terminée",
+              prospect: {
+                ...f.prospect,
+                callStatus: "EFFECTUE",
+                rawState: "TRANSFERE_APPELS",
+              },
+            }
+          : f
+      )
+    );
+
+    try {
+      const res = await directCompleteFollowUpCallAction(item.id);
+      if (res.success) {
+        setFeedbackMessage({
+          type: "success",
+          text: `✓ Appel enregistré ! La relance pour "${item.prospect.companyName}" est maintenant TERMINÉE.`,
+        });
+      }
+    } catch (err: any) {
+      setFeedbackMessage({
+        type: "error",
+        text: err?.message || "Erreur lors de la validation de l'appel.",
+      });
+    } finally {
+      setLoadingId(null);
+    }
   };
 
   const handleCallSubmit = async (e: React.FormEvent) => {
@@ -1231,16 +1275,22 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                         <span>Reporter</span>
                       </button>
 
-                      {/* + APPEL (AJOUTER DANS LES APPELS) */}
+                      {/* + APPEL (METTRE DIRECTEMENT DANS TERMINÉ) */}
                       <button
                         type="button"
-                        disabled={isPending}
-                        onClick={() => openCallModal(item)}
+                        disabled={isPending || loadingId === item.id}
+                        onClick={() => handleDirectCompleteCall(item)}
                         className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50"
-                        title="Enregistrer un appel et ajouter dans les appels"
+                        title="Enregistrer l'appel et mettre directement la relance dans Terminé"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <PhoneCall className="w-3.5 h-3.5" />
+                        {loadingId === item.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <PhoneCall className="w-3.5 h-3.5" />
+                          </>
+                        )}
                         <span>+ APPEL</span>
                       </button>
                     </div>
@@ -1580,16 +1630,22 @@ export function FollowUpsClient({ initialFollowUps }: Props) {
                               <span>Reporter</span>
                             </button>
 
-                            {/* + APPEL (AJOUTER DANS LES APPELS) */}
+                            {/* + APPEL (METTRE DIRECTEMENT DANS TERMINÉ) */}
                             <button
                               type="button"
-                              disabled={isPending}
-                              onClick={() => openCallModal(item)}
+                              disabled={isPending || loadingId === item.id}
+                              onClick={() => handleDirectCompleteCall(item)}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50"
-                              title="Enregistrer un appel et ajouter dans les appels"
+                              title="Enregistrer l'appel et mettre directement la relance dans Terminé"
                             >
-                              <Plus className="w-3.5 h-3.5" />
-                              <PhoneCall className="w-3.5 h-3.5" />
+                              {loadingId === item.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <PhoneCall className="w-3.5 h-3.5" />
+                                </>
+                              )}
                               <span>+ APPEL</span>
                             </button>
                           </div>
