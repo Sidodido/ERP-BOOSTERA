@@ -2,20 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type ThemeCategory = "dark" | "light";
+export type ThemeCategory = "light" | "dark" | "glass";
 
-export type ThemeName =
-  // Thèmes Sombres
-  | "blue"
-  | "emerald"
-  | "purple"
-  | "amber"
-  | "onyx"
-  // Thèmes Clairs & Élégants
-  | "clean-light"
-  | "pearl-light"
-  | "sage-light"
-  | "lavender-light";
+export type ThemeName = "light" | "dark" | "glass";
 
 export interface ThemeConfig {
   id: ThemeName;
@@ -23,7 +12,7 @@ export interface ThemeConfig {
   subtitle: string;
   description: string;
   category: ThemeCategory;
-  mode: "dark" | "light";
+  mode: "light" | "dark" | "glass";
   dotColor: string;
   gradient: string;
   badgeColor: string;
@@ -33,12 +22,28 @@ export interface ThemeConfig {
 }
 
 export const THEMES: Record<ThemeName, ThemeConfig> = {
-  // ==================== THÈMES SOMBRES ====================
-  blue: {
-    id: "blue",
-    name: "Cyber Blue",
-    subtitle: "Bleu Tech (Défaut)",
-    description: "Bleu électrique et nuit profonde — Identité officielle BOOSTERA",
+  // ==================== 1. THÈME CLAIR (PAR DÉFAUT) ====================
+  light: {
+    id: "light",
+    name: "Clair Moderne",
+    subtitle: "Thème Clair (Par Défaut)",
+    description: "Interface lumineuse, pure et nette — Optimale pour la clarté et le confort de travail au quotidien.",
+    category: "light",
+    mode: "light",
+    dotColor: "bg-blue-600",
+    gradient: "from-blue-600 to-indigo-600",
+    badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
+    previewBg: "bg-[#f8fafc]",
+    primaryHex: "#2563eb",
+    bgHex: "#f8fafc",
+  },
+
+  // ==================== 2. THÈME SOMBRE ====================
+  dark: {
+    id: "dark",
+    name: "Sombre Élégant",
+    subtitle: "Mode Nuit Profond",
+    description: "Nuit profonde, contrastes sombres feutrés et reposants pour soulager la fatigue visuelle.",
     category: "dark",
     mode: "dark",
     dotColor: "bg-blue-500",
@@ -48,119 +53,21 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     primaryHex: "#3b82f6",
     bgHex: "#080b11",
   },
-  emerald: {
-    id: "emerald",
-    name: "Emerald Mint",
-    subtitle: "Vert Émeraude",
-    description: "Menthe vivante et forêt sombre — Style Finance, Croissance et Succès",
-    category: "dark",
-    mode: "dark",
-    dotColor: "bg-emerald-500",
-    gradient: "from-emerald-500 to-teal-600",
-    badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    previewBg: "bg-[#050e0a]",
-    primaryHex: "#10b981",
-    bgHex: "#050e0a",
-  },
-  purple: {
-    id: "purple",
-    name: "Nebula Purple",
-    subtitle: "Violet Nébuleuse",
-    description: "Améthyste royale et abysse violet — Style Studio Créatif et Luxe",
-    category: "dark",
-    mode: "dark",
-    dotColor: "bg-purple-500",
-    gradient: "from-purple-500 to-violet-600",
-    badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-    previewBg: "bg-[#0b0914]",
-    primaryHex: "#8b5cf6",
-    bgHex: "#0b0914",
-  },
-  amber: {
-    id: "amber",
-    name: "Sunset Amber",
-    subtitle: "Ambre Cuivré et Or",
-    description: "Or cuivré et titane chaud — Style Énergie Commerciale et Prestige",
-    category: "dark",
-    mode: "dark",
-    dotColor: "bg-amber-500",
-    gradient: "from-amber-500 to-orange-600",
-    badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-    previewBg: "bg-[#110d08]",
-    primaryHex: "#f59e0b",
-    bgHex: "#110d08",
-  },
-  onyx: {
-    id: "onyx",
-    name: "Onyx Midnight",
-    subtitle: "Noir Absolu & Cyan",
-    description: "Contraste ultra-profond noir carbone et néon cyan laser",
-    category: "dark",
-    mode: "dark",
-    dotColor: "bg-cyan-400",
-    gradient: "from-cyan-500 to-blue-600",
-    badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    previewBg: "bg-[#030303]",
-    primaryHex: "#06b6d4",
-    bgHex: "#030303",
-  },
 
-  // ==================== THÈMES CLAIRS ÉLÉGANTS ====================
-  "clean-light": {
-    id: "clean-light",
-    name: "Clean Snow",
-    subtitle: "Blanc Albâtre & Bleu",
-    description: "Interface épurée et lumineuse, fond blanc doux et accents bleu royal",
-    category: "light",
-    mode: "light",
-    dotColor: "bg-blue-600",
-    gradient: "from-blue-600 to-sky-500",
-    badgeColor: "bg-blue-100 text-blue-800 border-blue-200",
-    previewBg: "bg-[#f8fafc]",
-    primaryHex: "#2563eb",
-    bgHex: "#f8fafc",
-  },
-  "pearl-light": {
-    id: "pearl-light",
-    name: "Warm Pearl",
-    subtitle: "Ivoire & Ambre Chaud",
-    description: "Ambiance chaleureuse, tons crèmes ivoire et or solaire élégant",
-    category: "light",
-    mode: "light",
-    dotColor: "bg-amber-600",
-    gradient: "from-amber-500 to-yellow-600",
-    badgeColor: "bg-amber-100 text-amber-800 border-amber-200",
-    previewBg: "bg-[#faf8f5]",
-    primaryHex: "#d97706",
-    bgHex: "#faf8f5",
-  },
-  "sage-light": {
-    id: "sage-light",
-    name: "Sage Mint",
-    subtitle: "Sauge & Menthe Claire",
-    description: "Fraîcheur naturelle zen, gris-vert sauge et vert émeraude doux",
-    category: "light",
-    mode: "light",
-    dotColor: "bg-emerald-600",
-    gradient: "from-emerald-600 to-teal-500",
-    badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
-    previewBg: "bg-[#f4f9f6]",
-    primaryHex: "#059669",
-    bgHex: "#f4f9f6",
-  },
-  "lavender-light": {
-    id: "lavender-light",
-    name: "Soft Lavender",
-    subtitle: "Brume Lilas & Violet",
-    description: "Élégance pastel, nuances de lilas reposantes et touches violettes",
-    category: "light",
-    mode: "light",
-    dotColor: "bg-purple-600",
-    gradient: "from-purple-600 to-violet-500",
-    badgeColor: "bg-purple-100 text-purple-800 border-purple-200",
-    previewBg: "bg-[#f7f6fc]",
-    primaryHex: "#7c3aed",
-    bgHex: "#f7f6fc",
+  // ==================== 3. STYLE IPHONE GLASS ====================
+  glass: {
+    id: "glass",
+    name: "iPhone Glass",
+    subtitle: "Liquid Glassmorphism iOS",
+    description: "Inspiré de l'iPhone Apple — Effet verre dépoli translucide, reflets liquides, flou d'arrière-plan et cartes flottantes.",
+    category: "glass",
+    mode: "glass",
+    dotColor: "bg-sky-400",
+    gradient: "from-sky-400 via-indigo-500 to-purple-500",
+    badgeColor: "bg-sky-500/20 text-sky-200 border-sky-400/40",
+    previewBg: "bg-[#0c101d]",
+    primaryHex: "#38bdf8",
+    bgHex: "#0c101d",
   },
 };
 
@@ -175,7 +82,7 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeName>("blue");
+  const [theme, setThemeState] = useState<ThemeName>("light");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -185,24 +92,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (saved && THEMES[saved]) {
       applyTheme(saved);
     } else {
-      applyTheme("blue");
+      applyTheme("light");
     }
   }, []);
 
   const applyTheme = (newTheme: ThemeName) => {
-    const config = THEMES[newTheme] || THEMES.blue;
+    const config = THEMES[newTheme] || THEMES.light;
     setThemeState(newTheme);
     if (typeof window !== "undefined") {
       localStorage.setItem("boostera-theme", newTheme);
       document.documentElement.setAttribute("data-theme", newTheme);
       document.documentElement.setAttribute("data-theme-mode", config.mode);
+
+      document.documentElement.classList.remove("light", "dark", "glass");
+      document.documentElement.classList.add(config.mode);
+
       if (config.mode === "light") {
         document.documentElement.classList.remove("dark");
-        document.documentElement.classList.add("light");
       } else {
-        document.documentElement.classList.remove("light");
         document.documentElement.classList.add("dark");
       }
+
       document.cookie = `boostera-theme=${newTheme}; path=/; max-age=31536000; SameSite=Lax`;
     }
   };
@@ -233,4 +143,3 @@ export function useTheme() {
   }
   return context;
 }
-

@@ -483,11 +483,31 @@ html:not(.dark) [class*="text-purple-400"] {
 }
 
 /* ========================================================
-   THÈMES SOMBRES
+   LES 3 THÈMES OFFICIELS BOOSTERA : CLAIR, SOMBRE & IPHONE GLASS
    ======================================================== */
 
-/* 1. Cyber Blue (Défaut) */
-[data-theme="blue"] {
+/* 1. THÈME CLAIR (PAR DÉFAUT) */
+[data-theme="light"],
+[data-theme-mode="light"],
+html.light:not(.glass) {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --theme-primary: #2563eb;
+  --theme-primary-hover: #1d4ed8;
+  --theme-primary-light: #3b82f6;
+  --theme-glow: rgba(37, 99, 235, 0.2);
+  --theme-border: rgba(37, 99, 235, 0.25);
+}
+[data-theme="light"] body,
+html.light:not(.glass) body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* 2. THÈME SOMBRE */
+[data-theme="dark"],
+[data-theme-mode="dark"],
+html.dark:not(.glass) {
   --background: #080b11;
   --foreground: #ededed;
   --theme-primary: #3b82f6;
@@ -496,148 +516,112 @@ html:not(.dark) [class*="text-purple-400"] {
   --theme-glow: rgba(59, 130, 246, 0.25);
   --theme-border: rgba(59, 130, 246, 0.3);
 }
-
-/* 2. Emerald Mint */
-[data-theme="emerald"] {
-  --background: #050e0a;
-  --foreground: #ededed;
-  --theme-primary: #10b981;
-  --theme-primary-hover: #059669;
-  --theme-primary-light: #34d399;
+[data-theme="dark"] body,
+html.dark:not(.glass) body {
+  background-color: #080b11;
+  color: #ededed;
 }
-[data-theme="emerald"] body { background-color: #050e0a; }
-[data-theme="emerald"] .bg-blue-600 { background-color: #10b981 !important; }
-[data-theme="emerald"] .bg-blue-500 { background-color: #10b981 !important; }
-[data-theme="emerald"] .hover\:bg-blue-700:hover,
-[data-theme="emerald"] .hover\:bg-blue-600:hover { background-color: #059669 !important; }
-[data-theme="emerald"] .text-blue-400 { color: #34d399 !important; }
-[data-theme="emerald"] .text-blue-500 { color: #10b981 !important; }
-[data-theme="emerald"] .text-blue-300 { color: #6ee7b7 !important; }
-[data-theme="emerald"] .border-blue-500 { border-color: #10b981 !important; }
-[data-theme="emerald"] .border-blue-500\/30 { border-color: rgba(16, 185, 129, 0.3) !important; }
-[data-theme="emerald"] .border-blue-500\/20 { border-color: rgba(16, 185, 129, 0.2) !important; }
-[data-theme="emerald"] .bg-blue-500\/10 { background-color: rgba(16, 185, 129, 0.1) !important; }
-[data-theme="emerald"] .bg-blue-500\/20 { background-color: rgba(16, 185, 129, 0.2) !important; }
-[data-theme="emerald"] .ring-blue-500 { --tw-ring-color: #10b981 !important; }
-[data-theme="emerald"] .shadow-blue-600\/25 { --tw-shadow-color: rgba(16, 185, 129, 0.25) !important; }
 
-/* 3. Nebula Purple */
-[data-theme="purple"] {
-  --background: #0b0914;
-  --foreground: #ededed;
-  --theme-primary: #8b5cf6;
-  --theme-primary-hover: #7c3aed;
-  --theme-primary-light: #a78bfa;
+/* 3. STYLE IPHONE GLASS (LIQUID GLASSMORPHISM iOS) */
+[data-theme="glass"],
+[data-theme-mode="glass"],
+html.glass {
+  --background: #090d16;
+  --foreground: #f8fafc;
+  --theme-primary: #38bdf8;
+  --theme-primary-hover: #0ea5e9;
+  --theme-primary-light: #7dd3fc;
+  --theme-glow: rgba(56, 189, 248, 0.35);
+  --theme-border: rgba(255, 255, 255, 0.2);
 }
-[data-theme="purple"] body { background-color: #0b0914; }
-[data-theme="purple"] .bg-blue-600 { background-color: #8b5cf6 !important; }
-[data-theme="purple"] .bg-blue-500 { background-color: #8b5cf6 !important; }
-[data-theme="purple"] .hover\:bg-blue-700:hover,
-[data-theme="purple"] .hover\:bg-blue-600:hover { background-color: #7c3aed !important; }
-[data-theme="purple"] .text-blue-400 { color: #a78bfa !important; }
-[data-theme="purple"] .text-blue-500 { color: #8b5cf6 !important; }
-[data-theme="purple"] .text-blue-300 { color: #c4b5fd !important; }
-[data-theme="purple"] .border-blue-500 { border-color: #8b5cf6 !important; }
-[data-theme="purple"] .border-blue-500\/30 { border-color: rgba(139, 92, 246, 0.3) !important; }
-[data-theme="purple"] .border-blue-500\/20 { border-color: rgba(139, 92, 246, 0.2) !important; }
-[data-theme="purple"] .bg-blue-500\/10 { background-color: rgba(139, 92, 246, 0.1) !important; }
-[data-theme="purple"] .bg-blue-500\/20 { background-color: rgba(139, 92, 246, 0.2) !important; }
-[data-theme="purple"] .ring-blue-500 { --tw-ring-color: #8b5cf6 !important; }
-[data-theme="purple"] .shadow-blue-600\/25 { --tw-shadow-color: rgba(139, 92, 246, 0.25) !important; }
 
-/* 4. Sunset Amber */
-[data-theme="amber"] {
-  --background: #110d08;
-  --foreground: #ededed;
-  --theme-primary: #f59e0b;
-  --theme-primary-hover: #d97706;
-  --theme-primary-light: #fbbf24;
+[data-theme="glass"] body,
+html.glass body {
+  background: radial-gradient(circle at 12% 18%, rgba(56, 189, 248, 0.16) 0%, transparent 45%),
+              radial-gradient(circle at 88% 15%, rgba(139, 92, 246, 0.18) 0%, transparent 50%),
+              radial-gradient(circle at 50% 85%, rgba(37, 99, 235, 0.14) 0%, transparent 55%),
+              #090d16 !important;
+  background-attachment: fixed !important;
+  color: #f8fafc !important;
 }
-[data-theme="amber"] body { background-color: #110d08; }
-[data-theme="amber"] .bg-blue-600 { background-color: #f59e0b !important; color: #1c1917 !important; }
-[data-theme="amber"] .bg-blue-500 { background-color: #f59e0b !important; }
-[data-theme="amber"] .hover\:bg-blue-700:hover,
-[data-theme="amber"] .hover\:bg-blue-600:hover { background-color: #d97706 !important; }
-[data-theme="amber"] .text-blue-400 { color: #fbbf24 !important; }
-[data-theme="amber"] .text-blue-500 { color: #f59e0b !important; }
-[data-theme="amber"] .text-blue-300 { color: #fde68a !important; }
-[data-theme="amber"] .border-blue-500 { border-color: #f59e0b !important; }
-[data-theme="amber"] .border-blue-500\/30 { border-color: rgba(245, 158, 11, 0.3) !important; }
-[data-theme="amber"] .border-blue-500\/20 { border-color: rgba(245, 158, 11, 0.2) !important; }
-[data-theme="amber"] .bg-blue-500\/10 { background-color: rgba(245, 158, 11, 0.1) !important; }
-[data-theme="amber"] .bg-blue-500\/20 { background-color: rgba(245, 158, 11, 0.2) !important; }
-[data-theme="amber"] .ring-blue-500 { --tw-ring-color: #f59e0b !important; }
-[data-theme="amber"] .shadow-blue-600\/25 { --tw-shadow-color: rgba(245, 158, 11, 0.25) !important; }
 
-/* 5. Onyx Midnight */
-[data-theme="onyx"] {
-  --background: #030303;
-  --foreground: #f4f4f5;
-  --theme-primary: #06b6d4;
-  --theme-primary-hover: #0891b2;
-  --theme-primary-light: #67e8f9;
+/* iPhone Glass Surfaces: Panneaux de verre dépoli liquide */
+[data-theme="glass"] .bg-neutral-900,
+[data-theme="glass"] .bg-neutral-900\/70,
+[data-theme="glass"] .bg-neutral-900\/80,
+[data-theme="glass"] .bg-neutral-900\/90,
+[data-theme="glass"] .bg-neutral-900\/95,
+[data-theme="glass"] .bg-neutral-950,
+[data-theme="glass"] .bg-neutral-950\/60,
+[data-theme="glass"] .bg-neutral-950\/70,
+[data-theme="glass"] .bg-neutral-950\/80,
+[data-theme="glass"] .bg-neutral-950\/90,
+[data-theme="glass"] .bg-neutral-850,
+html.glass .bg-neutral-900,
+html.glass .bg-neutral-950 {
+  background-color: rgba(20, 26, 42, 0.55) !important;
+  backdrop-filter: blur(24px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.2) !important;
 }
-[data-theme="onyx"] body { background-color: #030303; }
-[data-theme="onyx"] .bg-blue-600 { background-color: #06b6d4 !important; color: #082f49 !important; font-weight: 700; }
-[data-theme="onyx"] .bg-blue-500 { background-color: #06b6d4 !important; }
-[data-theme="onyx"] .hover\:bg-blue-700:hover,
-[data-theme="onyx"] .hover\:bg-blue-600:hover { background-color: #0891b2 !important; }
-[data-theme="onyx"] .text-blue-400 { color: #67e8f9 !important; }
-[data-theme="onyx"] .text-blue-500 { color: #06b6d4 !important; }
-[data-theme="onyx"] .border-blue-500 { border-color: #06b6d4 !important; }
-[data-theme="onyx"] .border-blue-500\/30 { border-color: rgba(6, 182, 212, 0.3) !important; }
-[data-theme="onyx"] .bg-blue-500\/10 { background-color: rgba(6, 182, 212, 0.1) !important; }
 
-/* ========================================================
-   THÈMES CLAIRS ÉLÉGANTS
-   ======================================================== */
-
-/* Clean Snow */
-[data-theme="clean-light"] {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --theme-primary: #2563eb;
-  --theme-primary-hover: #1d4ed8;
+/* iPhone Glass Top Header & Sidebar */
+[data-theme="glass"] header,
+[data-theme="glass"] .app-top-header,
+[data-theme="glass"] aside,
+[data-theme="glass"] .sidebar-container,
+html.glass header,
+html.glass aside {
+  background-color: rgba(12, 16, 28, 0.68) !important;
+  backdrop-filter: blur(28px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
 }
-[data-theme="clean-light"] body { background-color: #f8fafc; }
-[data-theme="clean-light"] .bg-blue-600 { background-color: #2563eb !important; color: #ffffff !important; }
-[data-theme="clean-light"] .text-blue-400 { color: #2563eb !important; }
 
-/* Warm Pearl */
-[data-theme="pearl-light"] {
-  --background: #faf8f5;
-  --foreground: #1c1917;
-  --theme-primary: #d97706;
-  --theme-primary-hover: #b45309;
+/* iPhone Liquid Accent Buttons */
+[data-theme="glass"] .bg-blue-600,
+[data-theme="glass"] .bg-indigo-600,
+html.glass .bg-blue-600,
+html.glass .bg-indigo-600 {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.95), rgba(99, 102, 241, 0.95)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+  color: #ffffff !important;
 }
-[data-theme="pearl-light"] body { background-color: #faf8f5; }
-[data-theme="pearl-light"] .bg-blue-600 { background-color: #d97706 !important; color: #ffffff !important; }
-[data-theme="pearl-light"] .text-blue-400 { color: #b45309 !important; }
-[data-theme="pearl-light"] .border-blue-500 { border-color: #d97706 !important; }
+[data-theme="glass"] .hover\:bg-blue-500:hover,
+[data-theme="glass"] .hover\:bg-indigo-500:hover,
+html.glass .hover\:bg-blue-500:hover,
+html.glass .hover\:bg-indigo-500:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 1), rgba(99, 102, 241, 1)) !important;
+  box-shadow: 0 8px 25px rgba(56, 189, 248, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
+}
 
-/* Sage Mint */
-[data-theme="sage-light"] {
-  --background: #f4f9f6;
-  --foreground: #062817;
-  --theme-primary: #059669;
-  --theme-primary-hover: #047857;
+[data-theme="glass"] .text-blue-400,
+html.glass .text-blue-400 {
+  color: #38bdf8 !important;
 }
-[data-theme="sage-light"] body { background-color: #f4f9f6; }
-[data-theme="sage-light"] .bg-blue-600 { background-color: #059669 !important; color: #ffffff !important; }
-[data-theme="sage-light"] .text-blue-400 { color: #047857 !important; }
-[data-theme="sage-light"] .border-blue-500 { border-color: #059669 !important; }
 
-/* Soft Lavender */
-[data-theme="lavender-light"] {
-  --background: #f7f6fc;
-  --foreground: #1a1033;
-  --theme-primary: #7c3aed;
-  --theme-primary-hover: #6d28d9;
+[data-theme="glass"] .border-blue-500,
+html.glass .border-blue-500 {
+  border-color: rgba(56, 189, 248, 0.5) !important;
 }
-[data-theme="lavender-light"] body { background-color: #f7f6fc; }
-[data-theme="lavender-light"] .bg-blue-600 { background-color: #7c3aed !important; color: #ffffff !important; }
-[data-theme="lavender-light"] .text-blue-400 { color: #6d28d9 !important; }
-[data-theme="lavender-light"] .border-blue-500 { border-color: #7c3aed !important; }
+
+/* Glass Card */
+[data-theme="glass"] .glass-card,
+html.glass .glass-card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(28px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(200%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+/* Table rows glass hover */
+[data-theme="glass"] tr:hover,
+html.glass tr:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
 
 /* Sleek custom scrollbars for modern dark ERP */
 .custom-scrollbar::-webkit-scrollbar,
@@ -1067,18 +1051,15 @@ html.light .sidebar-nav-item-active .sidebar-badge-active {
   border-color: rgba(255, 255, 255, 0.4) !important;
 }
 
-/* Specific Light Themes Accents for Active Items */
-[data-theme="pearl-light"] .sidebar-nav-item-active {
-  background-color: #d97706 !important;
-  box-shadow: 0 4px 14px -2px rgba(217, 119, 6, 0.35) !important;
-}
-[data-theme="sage-light"] .sidebar-nav-item-active {
-  background-color: #059669 !important;
-  box-shadow: 0 4px 14px -2px rgba(5, 150, 105, 0.35) !important;
-}
-[data-theme="lavender-light"] .sidebar-nav-item-active {
-  background-color: #7c3aed !important;
-  box-shadow: 0 4px 14px -2px rgba(124, 58, 237, 0.35) !important;
+/* Glass Theme Active Sidebar Item */
+[data-theme="glass"] .sidebar-nav-item-active,
+html.glass .sidebar-nav-item-active {
+  background: rgba(255, 255, 255, 0.24) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.45) !important;
 }
 
 /* Footer & User Profile Card */

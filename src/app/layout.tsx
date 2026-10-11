@@ -51,8 +51,9 @@ export default function RootLayout({
   return (
     <html
       lang="fr"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
-      data-theme="blue"
+      className={`${geistSans.variable} ${geistMono.variable} light h-full antialiased`}
+      data-theme="light"
+      data-theme-mode="light"
       suppressHydrationWarning
     >
       <head>
@@ -64,16 +65,17 @@ export default function RootLayout({
             __html: `
               (function() {
                 try {
-                  var saved = localStorage.getItem('boostera-theme') || 'blue';
-                  var lightThemes = ['clean-light', 'pearl-light', 'sage-light', 'lavender-light'];
-                  var isLight = lightThemes.indexOf(saved) !== -1;
+                  var saved = localStorage.getItem('boostera-theme') || 'light';
+                  if (saved !== 'light' && saved !== 'dark' && saved !== 'glass') {
+                    saved = 'light';
+                  }
                   document.documentElement.setAttribute('data-theme', saved);
-                  document.documentElement.setAttribute('data-theme-mode', isLight ? 'light' : 'dark');
-                  if (isLight) {
+                  document.documentElement.setAttribute('data-theme-mode', saved);
+                  document.documentElement.classList.remove('light', 'dark', 'glass');
+                  document.documentElement.classList.add(saved);
+                  if (saved === 'light') {
                     document.documentElement.classList.remove('dark');
-                    document.documentElement.classList.add('light');
                   } else {
-                    document.documentElement.classList.remove('light');
                     document.documentElement.classList.add('dark');
                   }
                 } catch(e) {}
