@@ -612,8 +612,14 @@ export function FinanceClient({
 
       {/* MODAL: RECORD PAYMENT */}
       {showPayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowPayModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <CreditCard className="w-5 h-5 text-emerald-400" />
@@ -767,8 +773,14 @@ export function FinanceClient({
 
       {/* MODAL: NEW SCHEDULE */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowScheduleModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Calendar className="w-5 h-5 text-indigo-400" />
@@ -855,8 +867,14 @@ export function FinanceClient({
 
       {/* MODAL: NEW SPONSOR */}
       {showSponsorModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowSponsorModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Share2 className="w-5 h-5 text-indigo-400" />

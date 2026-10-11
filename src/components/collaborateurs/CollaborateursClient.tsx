@@ -833,8 +833,14 @@ export function CollaborateursClient({
           MODAL: DÉTAILS DE DEMANDE (VOIR)
          ======================================================== */}
       {selectedRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+        <div
+          onClick={() => setSelectedRequest(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
               <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
                 <UserPlus className="w-4 h-4 text-blue-400" />
@@ -919,8 +925,14 @@ export function CollaborateursClient({
           MODAL: REFUS DE DEMANDE AVEC MOTIF
          ======================================================== */}
       {rejectModalData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+        <div
+          onClick={() => setRejectModalData(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
               <h3 className="text-sm font-bold text-rose-400 flex items-center gap-2">
                 <XCircle className="w-4 h-4" />
@@ -995,8 +1007,14 @@ export function CollaborateursClient({
           MODAL: MODIFICATION SÉCURISÉE D'E-MAIL
          ======================================================== */}
       {emailChangeData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+        <div
+          onClick={() => setEmailChangeData(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in zoom-in-95"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
               <h3 className="text-sm font-bold text-neutral-100 flex items-center gap-2">
                 <Mail className="w-4 h-4 text-blue-400" />
@@ -1072,8 +1090,14 @@ export function CollaborateursClient({
           DRAWER: FICHE COLLABORATEUR DÉTAILLÉE
          ======================================================== */}
       {detailCollaboratorId && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-xl h-full bg-neutral-950 border-l border-neutral-800 shadow-2xl p-6 overflow-y-auto space-y-6 animate-in slide-in-from-right duration-200">
+        <div
+          onClick={() => setDetailCollaboratorId(null)}
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default w-full max-w-xl h-full bg-neutral-950 border-l border-neutral-800 shadow-2xl p-6 overflow-y-auto space-y-6 animate-in slide-in-from-right duration-200"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center">

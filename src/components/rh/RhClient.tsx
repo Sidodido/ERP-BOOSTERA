@@ -1734,8 +1734,14 @@ export function RhClient({
 
       {/* MODAL: ADD EMPLOYEE */}
       {showAddEmpModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowAddEmpModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Users className="w-5 h-5 text-indigo-400" />
@@ -1911,8 +1917,14 @@ export function RhClient({
 
       {/* MODAL: EDIT EMPLOYEE */}
       {editingEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setEditingEmployee(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <h3 className="text-lg font-bold text-neutral-100">
                 Modifier Collaborateur : {editingEmployee.firstName} {editingEmployee.lastName}
@@ -2061,8 +2073,14 @@ export function RhClient({
 
       {/* MODAL: NEW LEAVE */}
       {showLeaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowLeaveModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Calendar className="w-5 h-5 text-indigo-400" />
@@ -2228,8 +2246,14 @@ export function RhClient({
 
       {/* MODAL: NEW GOAL */}
       {showGoalModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowGoalModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Target className="w-5 h-5 text-indigo-400" />

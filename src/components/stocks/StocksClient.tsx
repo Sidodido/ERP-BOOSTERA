@@ -472,8 +472,14 @@ export function StocksClient({
 
       {/* MODAL: NEW ASSET */}
       {showAssetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowAssetModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Camera className="w-5 h-5 text-indigo-400" />
@@ -592,8 +598,14 @@ export function StocksClient({
 
       {/* MODAL: NEW INVENTORY ITEM */}
       {showItemModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowItemModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Boxes className="w-5 h-5 text-indigo-400" />
@@ -702,8 +714,14 @@ export function StocksClient({
 
       {/* MODAL: STOCK MOVEMENT */}
       {movementItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setMovementItem(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <h3 className="text-lg font-bold text-neutral-100">
                 Mouvement de Stock : {movementItem.name}

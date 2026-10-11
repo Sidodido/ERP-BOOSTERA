@@ -1541,8 +1541,14 @@ export function ParametresClient({
 
       {/* MODAL: CREATE USER */}
       {showUserModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowUserModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Users className="w-5 h-5 text-indigo-400" />
@@ -1638,8 +1644,14 @@ export function ParametresClient({
 
       {/* MODAL: CREATE COMMISSION RULE */}
       {showRuleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowRuleModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Percent className="w-5 h-5 text-indigo-400" />
@@ -1740,8 +1752,14 @@ export function ParametresClient({
 
       {/* MODAL: AJOUTER / MODIFIER UN POINTAGE */}
       {showAttendanceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowAttendanceModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Clock className="w-5 h-5 text-indigo-400" />
@@ -1873,8 +1891,18 @@ export function ParametresClient({
 
       {/* MODAL GESTION DU MOT DE PASSE UTILISATEUR */}
       {passwordModalUser && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+        <div
+          onClick={() => {
+            setPasswordModalUser(null);
+            setPasswordFeedback(null);
+            setNewDirectPassword("");
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative"
+          >
             <button
               onClick={() => {
                 setPasswordModalUser(null);

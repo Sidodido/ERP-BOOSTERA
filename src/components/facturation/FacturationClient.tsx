@@ -548,8 +548,14 @@ export function FacturationClient({
 
       {/* CREATE INVOICE MODAL */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-8">
+        <div
+          onClick={() => setShowCreateModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-8"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <Receipt className="w-5 h-5 text-indigo-400" />
@@ -749,8 +755,14 @@ export function FacturationClient({
 
       {/* QUICK PAYMENT MODAL */}
       {showPayModal && selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div
+          onClick={() => setShowPayModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          >
             <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
               <div className="flex items-center gap-2.5">
                 <CreditCard className="w-5 h-5 text-emerald-400" />
@@ -852,8 +864,14 @@ export function FacturationClient({
 
       {/* PRINTABLE OFFICIAL INVOICE MODAL */}
       {showPrintModal && selectedInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-          <div className="bg-white text-neutral-900 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-6 print:m-0 print:w-full print:max-w-none print:shadow-none print:rounded-none">
+        <div
+          onClick={() => setShowPrintModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-white text-neutral-900 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl my-6 print:m-0 print:w-full print:max-w-none print:shadow-none print:rounded-none"
+          >
             {/* Action Bar (hidden on print) */}
             <div className="p-4 bg-neutral-100 border-b border-neutral-200 flex items-center justify-between print:hidden">
               <div className="flex items-center gap-2 text-sm font-semibold text-neutral-700">

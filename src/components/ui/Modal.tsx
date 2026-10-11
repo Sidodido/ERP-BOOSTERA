@@ -57,14 +57,13 @@ export function Modal({
       aria-modal="true"
       aria-labelledby={titleId}
       aria-describedby={descId}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         className={cn(
-          "w-full bg-neutral-900/95 border border-neutral-800/90 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150 relative",
+          "cursor-default w-full bg-neutral-900/95 border border-neutral-800/90 rounded-2xl shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh] animate-in zoom-in-95 duration-150 relative",
           maxWidthStyles[maxWidth]
         )}
       >
