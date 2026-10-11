@@ -78,9 +78,15 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       { label: "Rendez-vous", href: "/rendez-vous", icon: Calendar },
       { label: "Relances", href: "/relances", icon: Clock },
       { label: "Import Google Maps", href: "/direction/google-maps", icon: MapPin, badge: "DZ" },
+    ],
+  },
+  {
+    groupTitle: "TECHNIQUE",
+    items: [
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
+      { label: "Clients", href: "/clients", icon: Users },
       { label: "Documents", href: "/documents", icon: FileText },
     ],
   },
@@ -88,7 +94,6 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
     groupTitle: "GESTION",
     items: [
       { label: "Collaborateurs", href: "/collaborateurs", icon: UserCheck },
-      { label: "Clients", href: "/clients", icon: Users },
       { label: "Ressources Humaines", href: "/rh", icon: Briefcase },
       { label: "Équipes", href: "/equipes", icon: Layers },
       { label: "Rôles & Permissions", href: "/parametres?tab=USERS", icon: Settings, badge: "RBAC" },
@@ -155,12 +160,13 @@ const TECHNICIAN_NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    groupTitle: "PRODUCTION & MISSIONS",
+    groupTitle: "TECHNIQUE",
     items: [
-      { label: "Clients", href: "/clients", icon: Users },
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
+      { label: "Clients", href: "/clients", icon: Users },
+      { label: "Documents", href: "/documents", icon: FileText },
     ],
   },
 ];
