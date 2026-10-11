@@ -33,6 +33,17 @@ export async function getSettingsDataAction() {
     orderBy: { createdAt: "desc" },
   });
 
+  // 1b. Registration Requests (demandes d'inscription en attente)
+  const registrationRequests = await prisma.user.findMany({
+    where: {
+      status: { in: ["PENDING", "EMAIL_UNVERIFIED"] },
+    },
+    include: {
+      employee: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   // 2. Commission Rules
   const commissionRules = await prisma.commissionRule.findMany({
     orderBy: { createdAt: "asc" },
@@ -98,6 +109,24 @@ export async function getSettingsDataAction() {
 
   return {
     users,
+    registrationRequests: registrationRequests.map((r) => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      role: r.role,
+      status: r.status,
+      emailVerified: r.emailVerified,
+      createdAt: r.createdAt.toISOString(),
+      employee: r.employee
+        ? {
+            firstName: r.employee.firstName,
+            lastName: r.employee.lastName,
+            position: r.employee.position,
+            department: r.employee.department,
+          }
+        : null,
+    })),
     commissionRules: commissionRules.map((cr) => ({
       ...cr,
       ratePercentage: Number(cr.ratePercentage),

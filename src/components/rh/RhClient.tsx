@@ -20,6 +20,9 @@ import {
   ChevronRight,
   Lock,
   RefreshCw,
+  Layers,
+  Target,
+  Flame,
 } from "lucide-react";
 import {
   createEmployeeAction,
@@ -32,7 +35,48 @@ import {
   markSalaryPaidAction,
   getTodayAttendancesAction,
 } from "@/actions/rh";
+import {
+  createEmployeeGoalAction,
+  updateEmployeeGoalAction,
+  deleteEmployeeGoalAction,
+  syncGoalsAction,
+} from "@/actions/teams";
 import { DepartmentType, AttendanceStatus, LeaveType, LeaveStatus, Role } from "@prisma/client";
+
+interface DepartmentData {
+  name: string;
+  label: string;
+  members: {
+    id: string;
+    userId: string;
+    name: string;
+    position: string;
+    email?: string | null;
+    phone?: string | null;
+    activeTasksCount: number;
+    goals: {
+      id: string;
+      metric: string;
+      targetValue: number;
+      achievedValue: number;
+    }[];
+    reviews?: {
+      id: string;
+      scorePercentage: number;
+      feedback?: string | null;
+    }[];
+  }[];
+  activeTasksCount: number;
+}
+
+interface GoalItem {
+  id: string;
+  employeeId: string;
+  metric: string;
+  targetValue: number;
+  achievedValue: number;
+  employee: { id: string; firstName: string; lastName: string; position: string };
+}
 
 interface EmployeeItem {
   id: string;
@@ -120,6 +164,14 @@ export interface AvailablePayrollCycleClient {
   isCurrent: boolean;
 }
 
+export type RhTab =
+  | "DIRECTORY"
+  | "DEPARTMENTS"
+  | "GOALS"
+  | "ATTENDANCE"
+  | "LEAVES"
+  | "PAYROLL";
+
 interface RhClientProps {
   month: number;
   year: number;
@@ -140,6 +192,10 @@ interface RhClientProps {
     totalCommissions: number;
     totalDeductions?: number;
   };
+  departments?: DepartmentData[];
+  goals?: GoalItem[];
+  employeesList?: { id: string; name: string; position: string }[];
+  userRole?: string;
   initialTab?: string;
 }
 
@@ -243,19 +299,35 @@ export function RhClient({
   commissions = [],
   usersWithoutEmployee,
   kpis,
+  departments = [],
+  goals = [],
+  employeesList = [],
+  userRole = "ADMIN",
   initialTab,
 }: RhClientProps) {
   const router = useRouter();
-  const getInitialTab = (): "DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL" => {
-    if (initialTab && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(initialTab)) {
-      return initialTab as any;
+  const getInitialTab = (): RhTab => {
+    if (initialTab) {
+      const upper = initialTab.toUpperCase();
+      if (upper === "DEPARTMENTS" || upper === "POLES") return "DEPARTMENTS";
+      if (upper === "GOALS" || upper === "OBJECTIFS") return "GOALS";
+      if (
+        [
+          "DIRECTORY",
+          "DEPARTMENTS",
+          "GOALS",
+          "ATTENDANCE",
+          "LEAVES",
+          "PAYROLL",
+        ].includes(upper)
+      ) {
+        return upper as RhTab;
+      }
     }
     return "DIRECTORY";
   };
 
-  const [activeTab, setActiveTab] = useState<"DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL">(
-    getInitialTab()
-  );
+  const [activeTab, setActiveTab] = useState<RhTab>(getInitialTab());
   const [isPending, startTransition] = useTransition();
 
   // État local réactif pour la synchronisation automatique en temps réel des pointages
@@ -326,20 +398,114 @@ export function RhClient({
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const tabFromUrl = params.get("tab") as any;
-      if (tabFromUrl && ["DIRECTORY", "ATTENDANCE", "LEAVES", "PAYROLL"].includes(tabFromUrl)) {
-        setActiveTab(tabFromUrl);
+      const tabFromUrl = params.get("tab")?.toUpperCase() as any;
+      if (tabFromUrl) {
+        if (tabFromUrl === "DEPARTMENTS" || tabFromUrl === "POLES") {
+          setActiveTab("DEPARTMENTS");
+        } else if (tabFromUrl === "GOALS" || tabFromUrl === "OBJECTIFS") {
+          setActiveTab("GOALS");
+        } else if (
+          [
+            "DIRECTORY",
+            "DEPARTMENTS",
+            "GOALS",
+            "ATTENDANCE",
+            "LEAVES",
+            "PAYROLL",
+          ].includes(tabFromUrl)
+        ) {
+          setActiveTab(tabFromUrl);
+        }
       }
     } catch {}
   }, []);
 
-  const handleSelectTab = (tab: "DIRECTORY" | "ATTENDANCE" | "LEAVES" | "PAYROLL") => {
+  const handleSelectTab = (tab: RhTab) => {
     setActiveTab(tab);
     try {
       const url = new URL(window.location.href);
-      url.searchParams.set("tab", tab);
+      if (tab === "DIRECTORY") {
+        url.searchParams.delete("tab");
+      } else {
+        url.searchParams.set("tab", tab);
+      }
       window.history.replaceState(null, "", url.toString());
     } catch {}
+  };
+
+  // État & handlers pour les Objectifs Mensuels
+  const isPrivileged =
+    userRole === "ADMIN" || userRole === "SALES_DIRECTOR" || userRole === "HR";
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalEmpId, setGoalEmpId] = useState("");
+  const [goalMetric, setGoalMetric] = useState("APPELS");
+  const [goalTarget, setGoalTarget] = useState<number>(100);
+  const [isSyncingGoals, setIsSyncingGoals] = useState(false);
+
+  const handleCreateGoal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!goalEmpId || goalTarget <= 0) {
+      alert("Champs obligatoires manquants");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await createEmployeeGoalAction({
+          employeeId: goalEmpId,
+          month,
+          year,
+          metric: goalMetric,
+          targetValue: goalTarget,
+        });
+        setShowGoalModal(false);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur de création de l'objectif");
+      }
+    });
+  };
+
+  const handleUpdateGoalProgress = (id: string, current: number, delta: number) => {
+    const nextVal = Math.max(0, current + delta);
+    startTransition(async () => {
+      try {
+        await updateEmployeeGoalAction(id, nextVal);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur");
+      }
+    });
+  };
+
+  const handleDeleteGoal = (id: string, label?: string) => {
+    const confirmed = window.confirm(
+      label
+        ? `Êtes-vous sûr de vouloir supprimer l'objectif pour ${label} ?`
+        : "Êtes-vous sûr de vouloir supprimer cet objectif ?"
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      try {
+        await deleteEmployeeGoalAction(id);
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Erreur lors de la suppression de l'objectif");
+      }
+    });
+  };
+
+  const handleSyncGoals = async () => {
+    setIsSyncingGoals(true);
+    try {
+      await syncGoalsAction(month, year);
+      router.refresh();
+    } catch (err: any) {
+      alert("Erreur lors de la synchronisation des objectifs");
+    } finally {
+      setIsSyncingGoals(false);
+    }
   };
 
   // Modals
@@ -568,6 +734,14 @@ export function RhClient({
           </p>
         </div>
         <div className="flex items-center gap-2.5">
+          {activeTab === "GOALS" && (
+            <button
+              onClick={() => setShowGoalModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+            >
+              <Target className="w-4 h-4" /> Fixer Objectif
+            </button>
+          )}
           <button
             onClick={() => setShowLeaveModal(true)}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm font-medium transition"
@@ -660,10 +834,10 @@ export function RhClient({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-neutral-800 pb-3">
+      <div className="flex items-center gap-2 border-b border-neutral-800 pb-3 overflow-x-auto">
         <button
           onClick={() => handleSelectTab("DIRECTORY")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === "DIRECTORY"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
               : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
@@ -672,8 +846,28 @@ export function RhClient({
           Annuaire Collaborateurs ({employees.length})
         </button>
         <button
+          onClick={() => handleSelectTab("DEPARTMENTS")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
+            activeTab === "DEPARTMENTS"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Pôles de l'Agence ({departments.filter((d) => d.members.length > 0).length || departments.length})
+        </button>
+        <button
+          onClick={() => handleSelectTab("GOALS")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
+            activeTab === "GOALS"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          Objectifs Mensuels ({goals.length})
+        </button>
+        <button
           onClick={() => handleSelectTab("ATTENDANCE")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === "ATTENDANCE"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
               : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
@@ -683,7 +877,7 @@ export function RhClient({
         </button>
         <button
           onClick={() => handleSelectTab("LEAVES")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === "LEAVES"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
               : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
@@ -693,7 +887,7 @@ export function RhClient({
         </button>
         <button
           onClick={() => handleSelectTab("PAYROLL")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 ${
             activeTab === "PAYROLL"
               ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
               : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
@@ -1294,6 +1488,250 @@ export function RhClient({
         </div>
       )}
 
+      {/* TAB: DEPARTMENTS GRID */}
+      {activeTab === "DEPARTMENTS" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {departments.map((dept) => (
+            <div
+              key={dept.name}
+              className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm flex flex-col"
+            >
+              <div className="p-4 bg-neutral-950/60 border-b border-neutral-800 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-neutral-200 text-sm">{dept.label}</h3>
+                  <span className="text-xs text-neutral-400">
+                    {dept.members.length} collaborateur{dept.members.length > 1 ? "s" : ""}
+                  </span>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-neutral-800 text-xs font-semibold text-neutral-300">
+                  {dept.activeTasksCount} tâches en cours
+                </span>
+              </div>
+
+              <div className="p-4 space-y-3 flex-1 divide-y divide-neutral-800/50">
+                {dept.members.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-neutral-500">
+                    Aucun collaborateur affecté à ce pôle.
+                  </div>
+                ) : (
+                  dept.members.map((m) => (
+                    <div key={m.id} className="pt-3 first:pt-0">
+                      <div className="flex items-center justify-between">
+                        <div className="font-semibold text-neutral-200 text-sm">
+                          {m.name}
+                        </div>
+                        <span className="text-[11px] text-indigo-400 font-medium">
+                          {m.position}
+                        </span>
+                      </div>
+
+                      {m.phone && (
+                        <div className="text-xs text-neutral-400 font-mono mt-0.5">
+                          {m.phone}
+                        </div>
+                      )}
+
+                      {/* Goals snapshot if any */}
+                      {m.goals.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {m.goals.map((g) => {
+                            const pct = Math.min(
+                              100,
+                              Math.round((g.achievedValue / g.targetValue) * 100)
+                            );
+                            return (
+                              <div key={g.id} className="text-[11px]">
+                                <div className="flex justify-between text-neutral-400">
+                                  <span>{g.metric}</span>
+                                  <span className="font-mono">
+                                    {g.achievedValue} / {g.targetValue} ({pct}%)
+                                  </span>
+                                </div>
+                                <div className="w-full bg-neutral-800 h-1 rounded-full mt-0.5 overflow-hidden">
+                                  <div
+                                    className="bg-indigo-500 h-full"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TAB: GOALS LIST */}
+      {activeTab === "GOALS" && (
+        <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+          <div className="p-4 bg-neutral-950/40 border-b border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-neutral-200">
+                  Objectifs Mensuels des Collaborateurs ({month}/{year})
+                </span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/50 text-emerald-400 text-[10px] font-bold border border-emerald-800/40">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Synchronisation Active ⚡
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Les valeurs réalisées sont calculées en direct d'après les appels, rendez-vous, clients signés et livrables réels.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSyncGoals}
+                disabled={isSyncingGoals}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 transition disabled:opacity-50 cursor-pointer"
+                title="Recalculer en direct depuis les actions réelles"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isSyncingGoals ? "animate-spin" : ""}`} />
+                <span>{isSyncingGoals ? "Calcul..." : "Actualiser"}</span>
+              </button>
+
+              <button
+                onClick={() => setShowGoalModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-sm shadow-indigo-600/30 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Nouvel Objectif
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                  <th className="py-3.5 px-4">Collaborateur</th>
+                  <th className="py-3.5 px-4">Métrique</th>
+                  <th className="py-3.5 px-4 text-center">Cible</th>
+                  <th className="py-3.5 px-4 text-center">Réalisé en Direct ⚡</th>
+                  <th className="py-3.5 px-4">Progression & Statut</th>
+                  {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                {goals.length === 0 ? (
+                  <tr>
+                    <td colSpan={isPrivileged ? 6 : 5} className="py-12 text-center text-neutral-400">
+                      Aucun objectif fixé pour ce mois.
+                    </td>
+                  </tr>
+                ) : (
+                  goals.map((g) => {
+                    const pct = Math.min(
+                      100,
+                      Math.round((g.achievedValue / g.targetValue) * 100)
+                    );
+                    const isOver = g.achievedValue > g.targetValue;
+                    return (
+                      <tr key={g.id} className="hover:bg-neutral-800/30 transition">
+                        <td className="py-3 px-4 font-semibold text-neutral-200">
+                          <div>{g.employee.firstName} {g.employee.lastName}</div>
+                          <div className="text-[11px] text-neutral-400 font-normal">{g.employee.position}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-indigo-950/60 text-indigo-400 border border-indigo-800/30">
+                            {g.metric}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-neutral-200">
+                          {g.targetValue}
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono font-bold text-emerald-400">
+                          <span className="inline-flex items-center gap-1.5">
+                            {g.achievedValue}
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 animate-pulse" title="Synchronisé en direct avec la base de données" />
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 w-52">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs font-mono">
+                              <span className={pct >= 100 ? "text-emerald-400 font-bold" : "text-neutral-300 font-bold"}>
+                                {pct}%
+                              </span>
+                              {pct >= 100 ? (
+                                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
+                                  <CheckCircle2 className="w-3 h-3" /> {isOver ? "Dépassement 🚀" : "Atteint 🎯"}
+                                </span>
+                              ) : pct >= 70 ? (
+                                <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-0.5">
+                                  <Flame className="w-3 h-3" /> En bonne voie
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-neutral-400 font-semibold">
+                                  En cours
+                                </span>
+                              )}
+                            </div>
+                            <div className="w-full bg-neutral-800 h-2 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full transition-all duration-300 ${
+                                  pct >= 100
+                                    ? "bg-gradient-to-r from-emerald-500 to-teal-400"
+                                    : pct >= 70
+                                    ? "bg-gradient-to-r from-amber-500 to-yellow-400"
+                                    : "bg-gradient-to-r from-indigo-500 to-blue-500"
+                                }`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        {isPrivileged && (
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() =>
+                                  handleUpdateGoalProgress(g.id, g.achievedValue, -1)
+                                }
+                                title="Diminuer manuellement (-1)"
+                                className="px-2 py-0.5 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:border-transparent text-xs font-bold cursor-pointer transition"
+                              >
+                                -1
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleUpdateGoalProgress(g.id, g.achievedValue, 1)
+                                }
+                                title="Augmenter manuellement (+1)"
+                                className="px-2 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:text-white dark:border-transparent text-xs font-bold cursor-pointer transition"
+                              >
+                                +1
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDeleteGoal(
+                                    g.id,
+                                    `${g.employee.firstName} ${g.employee.lastName} (${g.metric})`
+                                  )
+                                }
+                                title="Supprimer cet objectif"
+                                className="p-1 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 dark:text-rose-400 dark:border-rose-800/40 transition cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: ADD EMPLOYEE */}
       {showAddEmpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1781,6 +2219,105 @@ export function RhClient({
                   className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
                 >
                   {isPending ? "Envoi..." : "Envoyer Demande"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NEW GOAL */}
+      {showGoalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
+              <div className="flex items-center gap-2.5">
+                <Target className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-lg font-bold text-neutral-100">
+                  Fixer un Objectif Mensuel
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowGoalModal(false)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGoal} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Collaborateur *
+                </label>
+                <select
+                  value={goalEmpId}
+                  onChange={(e) => setGoalEmpId(e.target.value)}
+                  required
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="">Sélectionner...</option>
+                  {(employeesList.length > 0
+                    ? employeesList
+                    : employees.map((e) => ({
+                        id: e.id,
+                        name: `${e.firstName} ${e.lastName}`,
+                        position: e.position,
+                      }))
+                  ).map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.name} ({e.position})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Métrique de Performance *
+                </label>
+                <select
+                  value={goalMetric}
+                  onChange={(e) => setGoalMetric(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="APPELS">Nombre d'Appels Passés</option>
+                  <option value="RENDEZ_VOUS">Rendez-vous Décrochés</option>
+                  <option value="CLIENTS">Nouveaux Clients Closés</option>
+                  <option value="CA_DA">Chiffre d'Affaires Généré (DA)</option>
+                  <option value="VIDEOS">Vidéos Montées & Livrées</option>
+                  <option value="DESIGNS">Créations Graphiques Validées</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Valeur Cible *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={goalTarget}
+                  onChange={(e) => setGoalTarget(Number(e.target.value))}
+                  required
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowGoalModal(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+                >
+                  {isPending ? "Attribution..." : "Valider l'Objectif"}
                 </button>
               </div>
             </form>

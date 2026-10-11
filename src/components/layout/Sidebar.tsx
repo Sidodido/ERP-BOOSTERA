@@ -35,7 +35,6 @@ import {
   MessagesSquare,
   MapPin,
   ShieldCheck,
-  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "./SidebarContext";
@@ -89,7 +88,6 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
     groupTitle: "GESTION",
     items: [
       { label: "Collaborateurs", href: "/collaborateurs", icon: UserCheck },
-      { label: "Demandes d'accès", href: "/collaborateurs?tab=REQUESTS", icon: UserPlus, badge: "Demandes" },
       { label: "Clients", href: "/clients", icon: Users },
       { label: "Ressources Humaines", href: "/rh", icon: Briefcase },
       { label: "Équipes", href: "/equipes", icon: Layers },

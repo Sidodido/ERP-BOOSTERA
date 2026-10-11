@@ -84,13 +84,21 @@ export function detectTaskNotificationTarget(
     content.includes("figma") ||
     content.includes("ui/ux") ||
     content.includes("design") ||
-    // Campagne & Meta Ads
+    // Campagne & Meta Ads / Sponsoring
     content.includes("campagne") ||
     content.includes("meta ads") ||
     content.includes("ads") ||
     content.includes("sponsor") ||
+    content.includes("sponsoring") ||
     content.includes("publicité") ||
-    content.includes("publicite")
+    content.includes("publicite") ||
+    // Certification Google, Passage Technique, Recouvrement
+    content.includes("certification") ||
+    content.includes("google") ||
+    content.includes("passage technique") ||
+    content.includes("technique") ||
+    content.includes("recouvrement") ||
+    content.includes("encaissement")
   ) {
     return {
       type: "DIRECTION",

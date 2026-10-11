@@ -598,9 +598,8 @@ export async function createBatchTasksAction(data: {
 }
 
 /**
- * Synchronise et génère automatiquement les tâches des abonnements mensuels pour chaque client :
- * 1. Publications chaque début de semaine (Lundi)
- * 2. Shooting Photo & Vidéo programmé automatiquement 2 mois après la date de signature du contrat
+ * Synchronise les conteneurs de projets d'abonnements mensuels pour chaque client actif.
+ * Note : Les shootings et sujets éditoriaux sont ajoutés MANUELLEMENT selon les plannings convenus avec les clients.
  */
 export async function syncSubscriptionTasksForClients(clientId?: string) {
   try {
@@ -641,31 +640,18 @@ export async function syncSubscriptionTasksForClients(clientId?: string) {
         select: { id: true, title: true, dueDate: true },
       });
 
-      // 1. Shooting Photo & Vidéo programmé automatiquement 2 mois après la date de signature
-      const shootingDate = new Date(signatureDate);
-      shootingDate.setMonth(shootingDate.getMonth() + 2);
-      shootingDate.setHours(10, 0, 0, 0);
-
-      const hasShooting = existingTasks.some((t) => {
-        if (!t.title.toLowerCase().includes("shooting")) return false;
-        if (!t.dueDate) return false;
-        const diffDays = Math.abs(t.dueDate.getTime() - shootingDate.getTime()) / (1000 * 60 * 60 * 24);
-        return diffDays < 15;
+      // 1. Nettoyage des anciens shootings programmés automatiquement (M+2) non terminés
+      // Les shootings sont désormais planifiés UNIQUEMENT de manière MANUELLE par l'équipe
+      await prisma.projectTask.deleteMany({
+        where: {
+          projectId: project.id,
+          OR: [
+            { title: { contains: "Shooting Photo & Vidéo (M+2)" } },
+            { description: { contains: "programmée automatiquement 2 mois après" } },
+          ],
+          status: TaskStatus.TODO,
+        },
       });
-
-      if (!hasShooting) {
-        await prisma.projectTask.create({
-          data: {
-            projectId: project.id,
-            title: `🎬 Shooting Photo & Vidéo (M+2) — ${client.companyName}`,
-            description: `Session de tournage et shooting vidéo/photo programmée automatiquement 2 mois après la date de signature du contrat (${signatureDate.toLocaleDateString("fr-FR")}).`,
-            dueDate: shootingDate,
-            priority: TaskPriority.HIGH,
-            status: TaskStatus.TODO,
-            timeSpentHours: 4,
-          },
-        });
-      }
 
       // 2. Nettoyage des anciennes publications automatiques génériques
       // Les thèmes et sujets sont désormais saisis MANUELLEMENT depuis le Calendrier des Tâches
@@ -697,7 +683,7 @@ export async function getTechnicianCalendarData(params?: {
 }) {
   const user = await requireAuth();
 
-  // Auto-synchronisation des jalons de contrat (ex: Shooting M+2)
+  // Synchronisation des conteneurs d'abonnements et purge d'anciennes tâches automatiques
   try {
     await syncSubscriptionTasksForClients();
   } catch (syncErr) {

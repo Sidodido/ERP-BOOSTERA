@@ -31,6 +31,7 @@ export default async function ParametresPage({
         attendances={data.attendances as any}
         employees={data.employees}
         attendanceStats={data.attendanceStats}
+        registrationRequests={data.registrationRequests as any}
         initialTab={resolvedSearchParams?.tab}
       />
     </AppShell>

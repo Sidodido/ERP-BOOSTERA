@@ -148,11 +148,197 @@ export function getAvailablePayrollCycles(referenceDate: Date = new Date(), past
   return cycles;
 }
 
+export function getCalendarDateOnly(date: Date = new Date()): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
+
+/**
+ * Synchronise automatiquement les absences pour les collaborateurs actifs n'ayant pas pointé.
+ * Règle :
+ * - Si le collaborateur n'a pas pointé pour un jour ouvré et n'a pas de congé approuvé -> statut ABSENT
+ * - Si le collaborateur a un congé approuvé -> statut ON_LEAVE
+ * - Les vendredis (5) et samedis (6) sont chômés et payés : aucune absence n'est créée
+ */
+export async function syncDailyAbsences(options: {
+  daysBack?: number;
+  includeToday?: boolean;
+  startDate?: Date;
+  endDate?: Date;
+  skipPayrollSync?: boolean;
+} = {}) {
+  const daysBack = options.daysBack ?? 35;
+  const includeToday = options.includeToday ?? true;
+
+  const now = new Date();
+  const today = getCalendarDateOnly(now);
+
+  // 1. Collaborateurs actifs
+  const activeEmployees = await prisma.employee.findMany({
+    where: { isActive: true },
+    select: { id: true, firstName: true, lastName: true, hireDate: true },
+  });
+
+  if (activeEmployees.length === 0) {
+    return { createdCount: 0, updatedCount: 0, totalEvaluated: 0 };
+  }
+
+  // 2. Dates à évaluer (hors vendredis 5 et samedis 6)
+  const datesToEvaluate: Date[] = [];
+  if (options.startDate && options.endDate) {
+    const cur = new Date(options.startDate);
+    const limit = new Date(Math.min(options.endDate.getTime(), now.getTime()));
+    while (cur < limit) {
+      if (cur.getDay() !== 5 && cur.getDay() !== 6) {
+        datesToEvaluate.push(getCalendarDateOnly(cur));
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+    if (includeToday && today >= options.startDate && today < options.endDate && today.getDay() !== 5 && today.getDay() !== 6) {
+      const todayCal = getCalendarDateOnly(today);
+      if (!datesToEvaluate.some((d) => d.getTime() === todayCal.getTime())) {
+        datesToEvaluate.push(todayCal);
+      }
+    }
+  } else {
+    for (let i = daysBack; i >= 1; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      if (d.getDay() !== 5 && d.getDay() !== 6) {
+        datesToEvaluate.push(getCalendarDateOnly(d));
+      }
+    }
+
+    if (includeToday && today.getDay() !== 5 && today.getDay() !== 6) {
+      datesToEvaluate.push(today);
+    }
+  }
+
+  // 2b. Nettoyage proactif des absences créées par erreur un vendredi ou un samedi
+  try {
+    const weekendAbsences = await prisma.attendance.findMany({
+      where: {
+        status: "ABSENT",
+        clockIn: null,
+        clockOut: null,
+      },
+      select: { id: true, date: true },
+    });
+    const weekendIdsToDelete = weekendAbsences
+      .filter((a) => {
+        const day = new Date(a.date).getDay();
+        return day === 5 || day === 6;
+      })
+      .map((a) => a.id);
+
+    if (weekendIdsToDelete.length > 0) {
+      await prisma.attendance.deleteMany({
+        where: { id: { in: weekendIdsToDelete } },
+      });
+    }
+  } catch (cleanErr) {
+    console.error("Erreur nettoyage absences weekend:", cleanErr);
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const targetDate of datesToEvaluate) {
+    const approvedLeaves = await prisma.leaveRequest.findMany({
+      where: {
+        status: { in: ["CONFIRMED_HR", "APPROVED_MANAGER"] },
+        startDate: { lte: targetDate },
+        endDate: { gte: targetDate },
+      },
+      select: { employeeId: true, type: true },
+    });
+    const leaveMap = new Map(approvedLeaves.map((l) => [l.employeeId, l.type]));
+
+    const existingAttendances = await prisma.attendance.findMany({
+      where: { date: targetDate },
+      select: { id: true, employeeId: true, clockIn: true, clockOut: true, status: true, notes: true },
+    });
+    const attendanceMap = new Map(existingAttendances.map((a) => [a.employeeId, a]));
+
+    for (const emp of activeEmployees) {
+      if (emp.hireDate && targetDate < getCalendarDateOnly(new Date(emp.hireDate))) {
+        continue;
+      }
+
+      const existing = attendanceMap.get(emp.id);
+      const leaveType = leaveMap.get(emp.id);
+      const isOnLeave = Boolean(leaveType);
+
+      let leaveNote = "Absence autorisée (Congé validé)";
+      if (leaveType === "ANNUAL") {
+        leaveNote = "🌴 Congé Annuel (Chômé & Payé - 100% Salaire maintenu)";
+      } else if (leaveType === "SICK") {
+        leaveNote = "🩺 Congé Maladie (Non Rémunéré - Déduit du salaire / CNAS)";
+      } else if (leaveType === "PERMISSION") {
+        leaveNote = "⏱️ Permission non rémunérée (Déduit du salaire)";
+      } else if (leaveType === "SPECIAL") {
+        leaveNote = "🎉 Événement Familial Spécial (Chômé & Payé)";
+      }
+
+      if (!existing) {
+        await prisma.attendance.create({
+          data: {
+            employeeId: emp.id,
+            date: targetDate,
+            clockIn: null,
+            clockOut: null,
+            status: isOnLeave ? "ON_LEAVE" : "ABSENT",
+            notes: isOnLeave
+              ? leaveNote
+              : "Absence automatique - Aucun pointage d'arrivée ni de sortie",
+          },
+        });
+        createdCount++;
+      } else if (
+        !existing.clockIn &&
+        !existing.clockOut &&
+        existing.status !== "HALF_DAY"
+      ) {
+        const targetStatus = isOnLeave ? "ON_LEAVE" : "ABSENT";
+        const targetNotes = isOnLeave
+          ? leaveNote
+          : "Absence automatique - Aucun pointage d'arrivée ni de sortie";
+
+        if (existing.status !== targetStatus || existing.notes !== targetNotes) {
+          await prisma.attendance.update({
+            where: { id: existing.id },
+            data: {
+              status: targetStatus,
+              notes: targetNotes,
+            },
+          });
+          updatedCount++;
+        }
+      }
+    }
+  }
+
+  // Recalculer automatiquement les fiches de paie si non désactivé
+  if (!options.skipPayrollSync) {
+    try {
+      await calculateAndSyncPayroll();
+    } catch (err) {
+      console.error("Erreur auto-sync paie après sync absences:", err);
+    }
+  }
+
+  return {
+    createdCount,
+    updatedCount,
+    totalEvaluated: activeEmployees.length * datesToEvaluate.length,
+  };
+}
+
 /**
  * Calcule et synchronise automatiquement les salaires et retenues pour le cycle donné.
  * Règle RH & Droit du travail :
  * - Salaire journalier de référence = Salaire de base / 30 jours
  * - Toute absence non justifiée (non pointée / ABSENT) = Retenue automatique de 1 jour de salaire
+ * - Demi-journée (HALF_DAY) = Retenue automatique de 0.5 jour de salaire
  * - Congé Maladie (SICK) ou Permission non rémunérée = Retenue automatique de 1 jour par jour de congé
  * - Congé Annuel (ANNUAL) & Événement Familial (SPECIAL) = Chômé et payé à 100% (0 DA retenu)
  * - Commissions commerciales du cycle (du 10 au 10) = Ajoutées automatiquement
@@ -169,6 +355,18 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
   }
 
   const { startDate, endDate } = cycleInfo;
+
+  // 0. Synchronisation automatique des absences pour toute la période du cycle
+  try {
+    await syncDailyAbsences({
+      startDate,
+      endDate,
+      includeToday: true,
+      skipPayrollSync: true,
+    });
+  } catch (err) {
+    console.error("Erreur syncDailyAbsences dans calculateAndSyncPayroll:", err);
+  }
 
   // 1. Tous les collaborateurs actifs
   const employees = await prisma.employee.findMany({
@@ -245,9 +443,6 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
         employeeId: emp.id,
         date: { gte: cycleStartDate, lt: endDate },
         status: "ABSENT",
-        NOT: {
-          notes: { contains: "Absence automatique" },
-        },
       },
       select: { date: true },
     });
@@ -272,10 +467,25 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
       }
     }
 
+    // Demi-journées (HALF_DAY)
+    const halfDayAttendances = await prisma.attendance.findMany({
+      where: {
+        employeeId: emp.id,
+        date: { gte: cycleStartDate, lt: endDate },
+        status: "HALF_DAY",
+      },
+      select: { date: true },
+    });
+    let halfDaysCount = 0;
+    for (const att of halfDayAttendances) {
+      const attDate = new Date(att.date);
+      if (attDate.getDay() === 5 || attDate.getDay() === 6) continue;
+      halfDaysCount += 0.5;
+    }
+
     // D. Calcul des déductions automatiques
-    const deductibleDays = sickDays + permissionDays + unexcusedAbsences;
+    const deductibleDays = sickDays + permissionDays + unexcusedAbsences + halfDaysCount;
     const deductions = Math.min(base, Math.round(deductibleDays * dailyRate));
-    const net = Math.max(0, Math.round(base + commAmount - deductions));
 
     // E. Upsert dans la table SalaryPayment
     const existingPayment = await prisma.salaryPayment.findUnique({
@@ -287,6 +497,10 @@ export async function calculateAndSyncPayroll(monthParam?: number, yearParam?: n
         },
       },
     });
+
+    const primes = Number(existingPayment?.primes || 0);
+    const bonuses = Number(existingPayment?.bonuses || 0);
+    const net = Math.max(0, Math.round(base + commAmount + primes + bonuses - deductions));
 
     await prisma.salaryPayment.upsert({
       where: {

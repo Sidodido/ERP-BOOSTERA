@@ -229,11 +229,11 @@ export async function createClientAction(data: {
     console.warn("Erreur attribution commission signature client:", commErr);
   }
 
-  // Auto-génération des tâches d'abonnement (Publications hebdo le lundi + Shooting à M+2)
+  // Synchronisation du dossier projet d'abonnement (les shootings et tâches sont gérés manuellement)
   try {
     await syncSubscriptionTasksForClients(client.id);
   } catch (syncErr) {
-    console.warn("Erreur auto-génération tâches abonnement client:", syncErr);
+    console.warn("Erreur synchronisation projet abonnement client:", syncErr);
   }
 
   revalidatePath("/clients");

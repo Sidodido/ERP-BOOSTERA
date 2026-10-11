@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { AttendanceStatus, DepartmentType, Role } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { calculateAndSyncPayroll } from "@/lib/payroll";
+import { calculateAndSyncPayroll, syncDailyAbsences, getCalendarDateOnly } from "@/lib/payroll";
+export { syncDailyAbsences };
 
 /**
  * Helper to ensure a User has an associated Employee profile
@@ -87,13 +88,6 @@ async function ensureEmployeeForUser(userId: string) {
   }
 
   return employee;
-}
-
-/**
- * Normalizes a date to UTC midnight for exact matching against PostgreSQL @db.Date fields
- */
-function getCalendarDateOnly(date: Date = new Date()): Date {
-  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 }
 
 /**
@@ -580,168 +574,7 @@ export async function getMyBreakStatusAction() {
   };
 }
 
-/**
- * Automatically sync absences for active employees who haven't clocked in and out
- * When an active collaborator does not record arrival and departure for a workday:
- * - If they have an approved leave during that date -> status: "ON_LEAVE"
- * - Otherwise -> status: "ABSENT" with notes: "Absence automatique - Aucun pointage enregistré"
- */
-export async function syncDailyAbsences(options: {
-  daysBack?: number;
-  includeToday?: boolean;
-} = {}) {
-  const daysBack = options.daysBack ?? 35;
-  const includeToday = options.includeToday ?? true;
-
-  const now = new Date();
-  const today = getCalendarDateOnly(now);
-
-  // 1. Fetch all active employees
-  const activeEmployees = await prisma.employee.findMany({
-    where: { isActive: true },
-    select: { id: true, firstName: true, lastName: true, hireDate: true },
-  });
-
-  if (activeEmployees.length === 0) {
-    return { createdCount: 0, updatedCount: 0, totalEvaluated: 0 };
-  }
-
-  // 2. Build array of dates to evaluate (excluding Fridays and Saturdays which are weekly rest days - chômés et payés)
-  const datesToEvaluate: Date[] = [];
-  for (let i = daysBack; i >= 1; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    // Friday = 5, Saturday = 6 (Week-end chômé et payé)
-    if (d.getDay() !== 5 && d.getDay() !== 6) {
-      datesToEvaluate.push(getCalendarDateOnly(d));
-    }
-  }
-
-  if (includeToday && today.getDay() !== 5 && today.getDay() !== 6) {
-    datesToEvaluate.push(today);
-  }
-
-  // 2b. Nettoyage proactif : supprimer toute absence automatique créée un vendredi ou un samedi
-  try {
-    const weekendAbsences = await prisma.attendance.findMany({
-      where: {
-        status: "ABSENT",
-        clockIn: null,
-        clockOut: null,
-      },
-      select: { id: true, date: true },
-    });
-    const weekendIdsToDelete = weekendAbsences
-      .filter((a) => {
-        const day = new Date(a.date).getDay();
-        return day === 5 || day === 6;
-      })
-      .map((a) => a.id);
-
-    if (weekendIdsToDelete.length > 0) {
-      await prisma.attendance.deleteMany({
-        where: { id: { in: weekendIdsToDelete } },
-      });
-    }
-  } catch (cleanErr) {
-    console.error("Erreur nettoyage absences weekend:", cleanErr);
-  }
-
-  let createdCount = 0;
-  let updatedCount = 0;
-
-  for (const targetDate of datesToEvaluate) {
-    // Approved leaves for this date
-    const approvedLeaves = await prisma.leaveRequest.findMany({
-      where: {
-        status: { in: ["CONFIRMED_HR", "APPROVED_MANAGER"] },
-        startDate: { lte: targetDate },
-        endDate: { gte: targetDate },
-      },
-      select: { employeeId: true, type: true },
-    });
-    const leaveMap = new Map(approvedLeaves.map((l) => [l.employeeId, l.type]));
-
-    // Existing attendances for this date
-    const existingAttendances = await prisma.attendance.findMany({
-      where: { date: targetDate },
-      select: { id: true, employeeId: true, clockIn: true, clockOut: true, status: true, notes: true },
-    });
-    const attendanceMap = new Map(existingAttendances.map((a) => [a.employeeId, a]));
-
-    for (const emp of activeEmployees) {
-      // Don't evaluate dates prior to employee hire date
-      if (emp.hireDate && targetDate < getCalendarDateOnly(new Date(emp.hireDate))) {
-        continue;
-      }
-
-      const existing = attendanceMap.get(emp.id);
-      const leaveType = leaveMap.get(emp.id);
-      const isOnLeave = Boolean(leaveType);
-
-      let leaveNote = "Absence autorisée (Congé validé)";
-      if (leaveType === "ANNUAL") {
-        leaveNote = "🌴 Congé Annuel (Chômé & Payé - 100% Salaire maintenu)";
-      } else if (leaveType === "SICK") {
-        leaveNote = "🩺 Congé Maladie (Non Rémunéré - Déduit du salaire / CNAS)";
-      } else if (leaveType === "PERMISSION") {
-        leaveNote = "⏱️ Permission non rémunérée (Déduit du salaire)";
-      } else if (leaveType === "SPECIAL") {
-        leaveNote = "🎉 Événement Familial Spécial (Chômé & Payé)";
-      }
-
-      if (!existing) {
-        // Collaborator did NOT clock in or out on this day -> Auto mark as ABSENT or ON_LEAVE
-        await prisma.attendance.create({
-          data: {
-            employeeId: emp.id,
-            date: targetDate,
-            clockIn: null,
-            clockOut: null,
-            status: isOnLeave ? "ON_LEAVE" : "ABSENT",
-            notes: isOnLeave
-              ? leaveNote
-              : "Absence automatique - Aucun pointage d'arrivée ni de sortie",
-          },
-        });
-        createdCount++;
-      } else if (
-        !existing.clockIn &&
-        !existing.clockOut &&
-        existing.status !== "HALF_DAY"
-      ) {
-        const targetStatus = isOnLeave ? "ON_LEAVE" : "ABSENT";
-        const targetNotes = isOnLeave
-          ? leaveNote
-          : "Absence automatique - Aucun pointage d'arrivée ni de sortie";
-
-        if (existing.status !== targetStatus || existing.notes !== targetNotes) {
-          await prisma.attendance.update({
-            where: { id: existing.id },
-            data: {
-              status: targetStatus,
-              notes: targetNotes,
-            },
-          });
-          updatedCount++;
-        }
-      }
-    }
-  }
-
-  // Synchroniser automatiquement les salaires et retenues du cycle de paie en cours (-1 jour / absence)
-  try {
-    await calculateAndSyncPayroll();
-  } catch (err) {
-    console.error("Erreur auto-sync paie après sync absences:", err);
-  }
-
-  return {
-    createdCount,
-    updatedCount,
-    totalEvaluated: activeEmployees.length * datesToEvaluate.length,
-  };
-}
+// Note: syncDailyAbsences est défini dans @/lib/payroll et ré-exporté au sommet de ce fichier
 
 /**
  * Server action for on-demand synchronization of absences

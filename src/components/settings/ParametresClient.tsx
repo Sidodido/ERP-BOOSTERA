@@ -32,6 +32,8 @@ import {
   Database,
   KeyRound,
   Mail,
+  UserPlus,
+  Check,
 } from "lucide-react";
 import {
   createUserAction,
@@ -44,11 +46,30 @@ import {
 import {
   adminDirectSetUserPasswordAction,
   adminTriggerPasswordResetAction,
+  approveRegistrationRequestAction,
+  rejectRegistrationRequestAction,
 } from "@/actions/users-management";
 import { autoSyncDailyAbsencesAction } from "@/actions/attendance";
 import { Role, CommissionRuleType, AttendanceStatus, DepartmentType } from "@prisma/client";
 import { SystemUpdatesTab } from "./SystemUpdatesTab";
 import { DatabaseBackupTab } from "./DatabaseBackupTab";
+
+export interface RegistrationRequestItem {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  role: Role;
+  status: string;
+  emailVerified: boolean;
+  createdAt: string;
+  employee?: {
+    firstName: string;
+    lastName: string;
+    position: string;
+    department: DepartmentType;
+  } | null;
+}
 
 interface UserItem {
   id: string;
@@ -130,6 +151,7 @@ interface ParametresClientProps {
   attendances?: AttendanceItem[];
   employees?: EmployeeOption[];
   attendanceStats?: AttendanceStats;
+  registrationRequests?: RegistrationRequestItem[];
   initialTab?: string;
 }
 
@@ -179,6 +201,7 @@ export function ParametresClient({
   attendances = [],
   employees = [],
   attendanceStats = { totalRecorded: 0, todayCount: 0, todayCompleted: 0, todayLates: 0 },
+  registrationRequests = [],
   initialTab,
 }: ParametresClientProps) {
   const router = useRouter();
@@ -193,6 +216,9 @@ export function ParametresClient({
   };
 
   const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
+  const [userSubTab, setUserSubTab] = useState<"COLLABORATORS" | "REQUESTS">("COLLABORATORS");
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [requestActionLoadingId, setRequestActionLoadingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
@@ -201,6 +227,10 @@ export function ParametresClient({
       const tabFromUrl = params.get("tab") as any;
       if (tabFromUrl && validTabs.includes(tabFromUrl)) {
         setActiveTab(tabFromUrl);
+      }
+      const sub = params.get("subtab");
+      if (sub === "REQUESTS" || sub === "DEMANDES") {
+        setUserSubTab("REQUESTS");
       }
     } catch {}
   }, []);
@@ -212,6 +242,33 @@ export function ParametresClient({
       url.searchParams.set("tab", tab);
       window.history.replaceState(null, "", url.toString());
     } catch {}
+  };
+
+  const handleApproveRequest = async (userId: string, userName: string) => {
+    if (!confirm(`Confirmer l'approbation du compte pour ${userName} ?`)) return;
+    setRequestActionLoadingId(userId);
+    try {
+      await approveRegistrationRequestAction(userId);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || "Erreur lors de l'approbation");
+    } finally {
+      setRequestActionLoadingId(null);
+    }
+  };
+
+  const handleRejectRequest = async (userId: string, userName: string) => {
+    const reason = prompt(`Motif du refus pour ${userName} (optionnel) :`, "Critères d'accès non remplis");
+    if (reason === null) return;
+    setRequestActionLoadingId(userId);
+    try {
+      await rejectRegistrationRequestAction(userId, reason);
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || "Erreur lors du rejet");
+    } finally {
+      setRequestActionLoadingId(null);
+    }
   };
 
   // Modals
@@ -611,7 +668,12 @@ export function ParametresClient({
           }`}
         >
           <Users className="w-4 h-4" />
-          Utilisateurs & Rôles ({users.length})
+          Rôles & Permissions ({users.length})
+          {registrationRequests.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-[10px] font-bold text-neutral-950 animate-pulse">
+              {registrationRequests.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => handleSelectTab("COMMISSIONS")}
@@ -1000,116 +1062,279 @@ export function ParametresClient({
         </div>
       )}
 
-      {/* TAB 1: USERS */}
+      {/* TAB 1: USERS / ROLES & PERMISSIONS */}
       {activeTab === "USERS" && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          {/* Sous-onglets : Tous les Collaborateurs & Demandes d'inscription */}
+          <div className="flex items-center gap-2 border-b border-neutral-800 pb-2">
             <button
-              onClick={() => setShowUserModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+              type="button"
+              onClick={() => setUserSubTab("COLLABORATORS")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                userSubTab === "COLLABORATORS"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900"
+              }`}
             >
-              <Plus className="w-4 h-4" /> Créer un Utilisateur
+              <Users className="w-4 h-4" />
+              <span>Tous les Collaborateurs</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                userSubTab === "COLLABORATORS" ? "bg-white/20 text-white" : "bg-neutral-800 text-neutral-300"
+              }`}>
+                {users.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setUserSubTab("REQUESTS")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                userSubTab === "REQUESTS"
+                  ? "bg-amber-600 text-white shadow-md shadow-amber-600/20"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900"
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Demandes d'inscription</span>
+              {registrationRequests.length > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-[10px] font-bold text-neutral-950 animate-pulse">
+                  {registrationRequests.length}
+                </span>
+              )}
             </button>
           </div>
 
-          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
-                    <th className="py-3.5 px-4">Utilisateur</th>
-                    <th className="py-3.5 px-4">Email</th>
-                    <th className="py-3.5 px-4">Téléphone</th>
-                    <th className="py-3.5 px-4">Rôle Attribué</th>
-                    <th className="py-3.5 px-4 text-center">Statut</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800/60">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-neutral-800/30 transition">
-                      <td className="py-3 px-4 font-semibold text-neutral-200">
-                        {u.name}
-                      </td>
-                      <td className="py-3 px-4 text-xs font-mono text-neutral-300">
-                        {u.email}
-                      </td>
-                      <td className="py-3 px-4 text-xs font-mono text-neutral-400">
-                        {u.phone || "—"}
-                      </td>
-                      <td className="py-3 px-4">
-                        {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/40 text-xs font-medium text-indigo-300">
-                            <Shield className="w-3 h-3 text-indigo-400" /> Administrateur
-                          </span>
-                        ) : (
-                          <select
-                            value={u.role}
-                            onChange={(e) => handleUpdateUserRole(u.id, e.target.value as Role)}
-                            className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
-                          >
-                            {ROLES.map((r) => (
-                              <option key={r.key} value={r.key}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                            u.isActive
-                              ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
-                              : "bg-neutral-800 text-neutral-400"
-                          }`}
-                        >
-                          {u.isActive ? "Actif" : "Désactivé"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => {
-                              setPasswordModalUser(u);
-                              setNewDirectPassword("");
-                              setPasswordFeedback(null);
-                            }}
-                            title="Gérer le mot de passe de cet utilisateur"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/40 transition"
-                          >
-                            <KeyRound className="w-3 h-3 text-indigo-400" />
-                            <span>Mot de passe</span>
-                          </button>
+          {/* SOUS-PARTIE 1 : TOUS LES COLLABORATEURS */}
+          {userSubTab === "COLLABORATORS" && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom, e-mail, rôle..."
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    className="w-full h-9 pl-9 pr-4 rounded-xl bg-neutral-950 border border-neutral-800 text-neutral-200 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+                <button
+                  onClick={() => setShowUserModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition shadow-lg shadow-indigo-600/20 shrink-0 w-full sm:w-auto justify-center"
+                >
+                  <Plus className="w-4 h-4" /> Créer un Utilisateur
+                </button>
+              </div>
 
-                          {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
-                            <span
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-neutral-400 bg-neutral-800/60 border border-neutral-700/40"
-                              title="Compte administrateur protégé : impossible à désactiver"
-                            >
-                              <Lock className="w-3 h-3 text-amber-400" />
-                              Protégé
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleToggleUserActive(u.id, u.isActive)}
-                              className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
-                                u.isActive
-                                  ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
-                                  : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
-                              }`}
-                            >
-                              {u.isActive ? "Désactiver" : "Réactiver"}
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                        <th className="py-3.5 px-4">Utilisateur</th>
+                        <th className="py-3.5 px-4">Email</th>
+                        <th className="py-3.5 px-4">Téléphone</th>
+                        <th className="py-3.5 px-4">Rôle Attribué</th>
+                        <th className="py-3.5 px-4 text-center">Statut</th>
+                        <th className="py-3.5 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {users
+                        .filter((u) => {
+                          if (!userSearchQuery) return true;
+                          const q = userSearchQuery.toLowerCase();
+                          return (
+                            u.name.toLowerCase().includes(q) ||
+                            u.email.toLowerCase().includes(q) ||
+                            (u.phone && u.phone.toLowerCase().includes(q)) ||
+                            u.role.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((u) => (
+                          <tr key={u.id} className="hover:bg-neutral-800/30 transition">
+                            <td className="py-3 px-4 font-semibold text-neutral-200">
+                              {u.name}
+                            </td>
+                            <td className="py-3 px-4 text-xs font-mono text-neutral-300">
+                              {u.email}
+                            </td>
+                            <td className="py-3 px-4 text-xs font-mono text-neutral-400">
+                              {u.phone || "—"}
+                            </td>
+                            <td className="py-3 px-4">
+                              {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-800/40 text-xs font-medium text-indigo-300">
+                                  <Shield className="w-3 h-3 text-indigo-400" /> Administrateur
+                                </span>
+                              ) : (
+                                <select
+                                  value={u.role}
+                                  onChange={(e) => handleUpdateUserRole(u.id, e.target.value as Role)}
+                                  className="bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                                >
+                                  {ROLES.map((r) => (
+                                    <option key={r.key} value={r.key}>
+                                      {r.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                  u.isActive
+                                    ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                                    : "bg-neutral-800 text-neutral-400"
+                                }`}
+                              >
+                                {u.isActive ? "Actif" : "Désactivé"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => {
+                                    setPasswordModalUser(u);
+                                    setNewDirectPassword("");
+                                    setPasswordFeedback(null);
+                                  }}
+                                  title="Gérer le mot de passe de cet utilisateur"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-indigo-950/40 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/40 transition"
+                                >
+                                  <KeyRound className="w-3 h-3 text-indigo-400" />
+                                  <span>Mot de passe</span>
+                                </button>
+
+                                {u.role === "ADMIN" || u.email === "admin@boostera.dz" ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-neutral-400 bg-neutral-800/60 border border-neutral-700/40"
+                                    title="Compte administrateur protégé : impossible à désactiver"
+                                  >
+                                    <Lock className="w-3 h-3 text-amber-400" />
+                                    Protégé
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => handleToggleUserActive(u.id, u.isActive)}
+                                    className={`px-2.5 py-1 rounded text-xs font-semibold transition ${
+                                      u.isActive
+                                        ? "bg-rose-950/40 hover:bg-rose-900 text-rose-400 border border-rose-800/40"
+                                        : "bg-emerald-950/50 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/40"
+                                    }`}
+                                  >
+                                    {u.isActive ? "Désactiver" : "Réactiver"}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* SOUS-PARTIE 2 : DEMANDES D'INSCRIPTION */}
+          {userSubTab === "REQUESTS" && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-neutral-300">
+                  <strong className="text-amber-400 font-bold">{registrationRequests.length}</strong> demande(s) d'inscription en attente d'approbation administrative.
+                </div>
+                <button
+                  onClick={() => router.push("/register")}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-medium text-xs transition border border-neutral-700/60"
+                >
+                  <UserPlus className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Créer une Demande</span>
+                </button>
+              </div>
+
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-800 bg-neutral-950/60 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                        <th className="py-3 px-4">Collaborateur</th>
+                        <th className="py-3 px-4">Adresse E-mail</th>
+                        <th className="py-3 px-4">Département / Poste</th>
+                        <th className="py-3 px-4">Date de Demande</th>
+                        <th className="py-3 px-4 text-center">Statut</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/80">
+                      {registrationRequests.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-neutral-500">
+                            Aucune demande d'inscription en attente. Tous les comptes ont été validés.
+                          </td>
+                        </tr>
+                      ) : (
+                        registrationRequests.map((r) => (
+                          <tr key={r.id} className="hover:bg-neutral-800/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-neutral-200">{r.name}</div>
+                              {r.phone && <div className="text-[11px] text-neutral-400 font-mono">{r.phone}</div>}
+                            </td>
+                            <td className="py-3 px-4 text-neutral-300 font-mono text-[11px]">
+                              {r.email}
+                            </td>
+                            <td className="py-3 px-4 text-neutral-300">
+                              <div>{r.employee?.position || r.role}</div>
+                              {r.employee?.department && (
+                                <span className="text-[10px] text-neutral-500">{r.employee.department}</span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-neutral-400 text-[11px]">
+                              {new Date(r.createdAt).toLocaleDateString("fr-FR", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-950/60 text-amber-400 border border-amber-800/40">
+                                En attente
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveRequest(r.id, r.name)}
+                                  disabled={requestActionLoadingId === r.id}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  title="Approuver cette demande"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  <span>Accepter</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectRequest(r.id, r.name)}
+                                  disabled={requestActionLoadingId === r.id}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 font-semibold text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  title="Refuser cette demande"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>Refuser</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

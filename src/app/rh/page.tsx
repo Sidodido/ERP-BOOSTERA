@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { getCurrentUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getRhDataAction } from "@/actions/rh";
+import { getTeamsDataAction } from "@/actions/teams";
 import { RhClient } from "@/components/rh/RhClient";
 
 export default async function RhPage({
@@ -27,7 +28,10 @@ export default async function RhPage({
   const monthParam = resolvedSearchParams?.month ? parseInt(resolvedSearchParams.month, 10) : undefined;
   const yearParam = resolvedSearchParams?.year ? parseInt(resolvedSearchParams.year, 10) : undefined;
 
-  const data = await getRhDataAction(monthParam, yearParam);
+  const [data, teamsData] = await Promise.all([
+    getRhDataAction(monthParam, yearParam),
+    getTeamsDataAction(monthParam, yearParam),
+  ]);
 
   return (
     <AppShell>
@@ -43,6 +47,10 @@ export default async function RhPage({
         commissions={data.commissions}
         usersWithoutEmployee={data.usersWithoutEmployee}
         kpis={data.kpis}
+        departments={teamsData.departments as any}
+        goals={teamsData.goals as any}
+        employeesList={teamsData.employeesList}
+        userRole={user.role}
         initialTab={resolvedSearchParams?.tab}
       />
     </AppShell>

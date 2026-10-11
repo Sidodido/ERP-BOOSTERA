@@ -192,6 +192,14 @@ export function AppointmentsClient({
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentItem | null>(null);
 
+  // Modal pour afficher tous les rendez-vous d'une journée spécifique (au clic sur le calendrier)
+  const [dayDetailsModalOpen, setDayDetailsModalOpen] = useState(false);
+  const [selectedDayDateStr, setSelectedDayDateStr] = useState<string | null>(null);
+
+  const handleOpenDayDetails = (dateStr: string) => {
+    setSelectedDayDateStr(dateStr);
+    setDayDetailsModalOpen(true);
+  };
   // Reschedule inline state in detail modal
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -1032,6 +1040,31 @@ export function AppointmentsClient({
     }).length;
   }, [filteredAppointments, year, month]);
 
+  // Formattage et récupération des rendez-vous pour la journée sélectionnée dans le calendrier
+  const selectedDayFormatted = useMemo(() => {
+    if (!selectedDayDateStr) return "";
+    try {
+      const [y, m, d] = selectedDayDateStr.split("-").map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const formatted = dateObj.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } catch {
+      return selectedDayDateStr;
+    }
+  }, [selectedDayDateStr]);
+
+  const selectedDayAppointments = useMemo(() => {
+    if (!selectedDayDateStr) return [];
+    return appointments
+      .filter((a) => toLocalDateString(a.startTime) === selectedDayDateStr)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  }, [appointments, selectedDayDateStr]);
+
   return (
     <div className="space-y-6">
       {/* Top Controls Bar */}
@@ -1446,31 +1479,51 @@ export function AppointmentsClient({
               return (
                 <div
                   key={idx}
-                  className={`min-h-[115px] p-2 rounded-xl border flex flex-col justify-between transition-all group ${
+                  onClick={() => handleOpenDayDetails(dayItem.dateStr)}
+                  className={`min-h-[115px] p-2 rounded-xl border flex flex-col justify-between transition-all group cursor-pointer hover:border-blue-500/50 hover:bg-neutral-900/90 shadow-2xs ${
                     dayItem.isCurrentMonth
                       ? dayItem.isToday
-                        ? "bg-blue-950/20 border-blue-500/60 shadow-md shadow-blue-500/10"
+                        ? "bg-blue-950/20 border-blue-500/60 shadow-md shadow-blue-500/10 ring-1 ring-blue-500/30"
                         : "bg-neutral-950/70 border-neutral-800/80 hover:border-neutral-700"
                       : "bg-neutral-950/30 border-neutral-900/60 opacity-40 hover:opacity-75"
                   }`}
+                  title={`Cliquer pour voir les rendez-vous du ${dayItem.dateStr}`}
                 >
                   {/* Top Day Header */}
                   <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
-                        dayItem.isToday
-                          ? "bg-blue-600 text-white shadow-xs"
-                          : dayItem.isCurrentMonth
-                          ? "text-neutral-200"
-                          : "text-neutral-500"
-                      }`}
-                    >
-                      {dayNum}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDayDetails(dayItem.dateStr);
+                        }}
+                        className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full transition-transform hover:scale-110 cursor-pointer ${
+                          dayItem.isToday
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : dayItem.isCurrentMonth
+                            ? "text-neutral-200 hover:bg-neutral-800"
+                            : "text-neutral-500 hover:bg-neutral-900"
+                        }`}
+                        title={`Voir les rendez-vous du ${dayItem.dateStr}`}
+                      >
+                        {dayNum}
+                      </button>
+
+                      {dayItem.appointments.length > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-500/15 text-blue-300 font-semibold border border-blue-500/25">
+                          {dayItem.appointments.length}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Quick Add Button on Hover */}
                     <button
-                      onClick={() => openNewForDate(dayItem.dateStr)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openNewForDate(dayItem.dateStr);
+                      }}
                       className="opacity-0 group-hover:opacity-100 p-1 bg-neutral-800 hover:bg-blue-600 hover:text-white rounded-md text-neutral-400 transition-all cursor-pointer"
                       title="Planifier un RDV ce jour"
                     >
@@ -1497,7 +1550,10 @@ export function AppointmentsClient({
                       return (
                         <div
                           key={appt.id}
-                          onClick={() => openAppointmentDetail(appt)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAppointmentDetail(appt);
+                          }}
                           className={`group/item relative px-1.5 py-1 rounded-md text-[10px] font-medium border cursor-pointer transition-all hover:scale-[1.02] flex flex-col gap-0.5 ${
                             isCompleted
                               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
@@ -1544,12 +1600,17 @@ export function AppointmentsClient({
                     })}
 
                     {dayItem.appointments.length > 4 && (
-                      <p
-                        onClick={() => openNewForDate(dayItem.dateStr)}
-                        className="text-[9px] font-semibold text-blue-400 cursor-pointer hover:underline text-center"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDayDetails(dayItem.dateStr);
+                        }}
+                        className="w-full text-[9px] font-bold text-blue-400 hover:text-blue-300 hover:underline text-center cursor-pointer py-0.5 rounded hover:bg-blue-500/10 transition-colors"
+                        title="Ouvrir la liste complète des rendez-vous de cette journée"
                       >
-                        +{dayItem.appointments.length - 4} autres
-                      </p>
+                        +{dayItem.appointments.length - 4} autres (voir tout)
+                      </button>
                     )}
                   </div>
 
@@ -1992,6 +2053,262 @@ export function AppointmentsClient({
           </div>
         </div>
       )}
+
+      {/* MODAL : TOUS LES RENDEZ-VOUS D'UNE JOURNÉE (AU CLIC SUR UNE DATE DU CALENDRIER) */}
+      <Modal
+        isOpen={dayDetailsModalOpen}
+        onClose={() => setDayDetailsModalOpen(false)}
+        title={selectedDayFormatted ? `Rendez-vous du ${selectedDayFormatted}` : "Rendez-vous du jour"}
+        description={
+          selectedDayAppointments.length === 0
+            ? "Aucun rendez-vous planifié pour cette journée"
+            : `${selectedDayAppointments.length} rendez-vous et relance(s) au programme`
+        }
+        maxWidth="2xl"
+      >
+        <div className="space-y-4">
+          {/* Header Action & Stats Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-neutral-950/80 rounded-xl border border-neutral-800/80">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold flex items-center gap-1.5">
+                <CalendarDays className="w-3.5 h-3.5 text-blue-400" />
+                <span>{selectedDayAppointments.length} au total</span>
+              </span>
+
+              {selectedDayAppointments.filter((a) => a.status === "COMPLETED").length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
+                  {selectedDayAppointments.filter((a) => a.status === "COMPLETED").length} effectué(s)
+                </span>
+              )}
+
+              {selectedDayAppointments.filter((a) => a.status === "SCHEDULED").length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[11px] font-semibold border border-sky-500/20">
+                  {selectedDayAppointments.filter((a) => a.status === "SCHEDULED").length} planifié(s)
+                </span>
+              )}
+
+              {selectedDayAppointments.filter((a) => a.type === "PHONE" || a.title.toLowerCase().includes("relance")).length > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                  {selectedDayAppointments.filter((a) => a.type === "PHONE" || a.title.toLowerCase().includes("relance")).length} relance(s)
+                </span>
+              )}
+            </div>
+
+            <Button
+              size="sm"
+              onClick={() => {
+                if (selectedDayDateStr) {
+                  openNewForDate(selectedDayDateStr);
+                  setDayDetailsModalOpen(false);
+                }
+              }}
+              className="gap-1.5 shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nouveau RDV ce jour</span>
+            </Button>
+          </div>
+
+          {/* Liste des rendez-vous */}
+          {selectedDayAppointments.length === 0 ? (
+            <div className="py-12 px-4 text-center bg-neutral-950/40 rounded-xl border border-neutral-800/60 space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-full bg-neutral-800/80 border border-neutral-700/60 flex items-center justify-center text-neutral-400">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-neutral-200">Aucun rendez-vous ce jour-là</p>
+                <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+                  Tous les créneaux horaires sont libres pour fixer une visite commerciale ou une relance téléphonique.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedDayDateStr) {
+                    openNewForDate(selectedDayDateStr);
+                    setDayDetailsModalOpen(false);
+                  }
+                }}
+                className="gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Planifier un rendez-vous</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-neutral-700">
+              {selectedDayAppointments.map((appt) => {
+                const d = new Date(appt.startTime);
+                const endD = new Date(appt.endTime);
+                const startH = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                const endH = `${String(endD.getHours()).padStart(2, "0")}:${String(endD.getMinutes()).padStart(2, "0")}`;
+                const targetName = appt.prospect?.companyName || appt.client?.companyName || appt.title;
+                const phone = appt.prospect?.phone || appt.client?.phone;
+                const sector = appt.prospect?.sector;
+                const badge = getCommercialBadgeStyle(appt.user?.name, appt.user?.id);
+                const isRelance = appt.type === "PHONE" || appt.title.toLowerCase().includes("relance");
+
+                const statusBadge =
+                  appt.status === "COMPLETED"
+                    ? { bg: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", label: "✓ Effectué" }
+                    : appt.status === "CANCELLED"
+                    ? { bg: "bg-rose-500/15 text-rose-300 border-rose-500/30", label: "✗ Annulé" }
+                    : appt.status === "NO_SHOW"
+                    ? { bg: "bg-neutral-500/15 text-neutral-400 border-neutral-500/30", label: "Absent" }
+                    : { bg: "bg-blue-500/15 text-blue-300 border-blue-500/30", label: "⏳ Planifié" };
+
+                const typeLabel = APPOINTMENT_TYPES[appt.type] || appt.type;
+
+                return (
+                  <div
+                    key={appt.id}
+                    className="p-4 rounded-xl bg-neutral-950/70 border border-neutral-800 hover:border-neutral-700 transition-all space-y-3"
+                  >
+                    {/* Top Row: Time + Status + Badges */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-750 text-blue-400 font-mono text-xs font-bold shrink-0">
+                          <Clock className="w-3.5 h-3.5 text-blue-400" />
+                          <span>{startH} - {endH}</span>
+                          <span className="text-[10px] text-neutral-500 font-normal">({appt.durationMin || 60}m)</span>
+                        </div>
+
+                        {isRelance ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold flex items-center gap-1">
+                            <Phone className="w-2.5 h-2.5" />
+                            Relance
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30 font-medium">
+                            {typeLabel}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${statusBadge.bg}`}>
+                          {statusBadge.label}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Target Info & Title */}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-neutral-100 flex items-center gap-1.5">
+                          <Building className="w-4 h-4 text-neutral-400 shrink-0" />
+                          <span>{targetName}</span>
+                        </h4>
+                        {appt.prospect ? (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                            Prospect
+                          </span>
+                        ) : appt.client ? (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                            Client
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {appt.title && appt.title !== targetName && (
+                        <p className="text-xs text-neutral-300 mt-1 font-medium">
+                          {appt.title}
+                        </p>
+                      )}
+
+                      {appt.notes && (
+                        <p className="text-[11px] text-neutral-400 mt-1 italic bg-neutral-900/60 p-2 rounded-lg border border-neutral-800/60">
+                          « {appt.notes} »
+                        </p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {sector && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-900 text-neutral-400 border border-neutral-800 font-medium">
+                            {sector}
+                          </span>
+                        )}
+
+                        {appt.location && (
+                          <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />
+                            <span>{appt.location}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Commercial + Actions */}
+                    <div className="pt-2 border-t border-neutral-850 flex flex-wrap items-center justify-between gap-2">
+                      {/* Commercial assigned badge */}
+                      <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${badge.bg} ${badge.border} ${badge.text}`}>
+                        <span className={`w-2 h-2 rounded-full ${badge.dot}`} />
+                        <span>Commercial : {appt.user?.name || "Non assigné"}</span>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5">
+                        {phone && (
+                          <>
+                            <a
+                              href={`tel:${phone}`}
+                              className="p-1.5 rounded-lg bg-neutral-800 hover:bg-emerald-600/20 text-neutral-300 hover:text-emerald-400 border border-neutral-700 transition"
+                              title={`Appeler ${phone}`}
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                            </a>
+                            <a
+                              href={`https://wa.me/${phone.replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-neutral-800 hover:bg-emerald-600/20 text-neutral-300 hover:text-emerald-400 border border-neutral-700 transition"
+                              title="Message WhatsApp"
+                            >
+                              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                            </a>
+                          </>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDayDetailsModalOpen(false);
+                            openAppointmentDetail(appt);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-xs shadow-blue-500/20 transition cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Gérer / Détails</span>
+                          <span className="text-[10px]">→</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteAppointment(appt.id, e)}
+                          className="p-1.5 rounded-lg bg-neutral-800 hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 border border-neutral-700 transition cursor-pointer"
+                          title="Supprimer ce rendez-vous"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal Footer */}
+          <div className="pt-3 border-t border-neutral-800 flex items-center justify-between gap-2">
+            <span className="text-xs text-neutral-400">
+              {selectedDayAppointments.length} rendez-vous affiché(s)
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setDayDetailsModalOpen(false)}>
+              Fermer
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* MODAL 1: DETAIL DU RENDEZ-VOUS (AU CLIC DEPUIS LE CALENDRIER) */}
       <Modal

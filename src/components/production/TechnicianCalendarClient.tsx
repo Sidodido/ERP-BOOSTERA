@@ -33,11 +33,15 @@ import {
   Kanban,
   ListFilter,
   Eye,
-  Target,
   Bookmark,
   Bell,
   Send,
   FileSpreadsheet,
+  Rocket,
+  BadgeCheck,
+  Wrench,
+  CreditCard,
+  Camera,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -47,8 +51,6 @@ import {
   updateTaskStatusAction,
   updateTaskAssigneeAction,
   createTaskAction,
-  saveClientEditorialThemeAction,
-  createManualSubjectTaskAction,
   triggerWeeklyReminderAction,
 } from "@/actions/production";
 import { toLocalDateString, formatDate, formatDateTime } from "@/lib/utils";
@@ -215,7 +217,7 @@ export function TechnicianCalendarClient({
   const [isUpdating, setIsUpdating] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // New task modal
+  // Unified Task Creation State (Tâches, Sujets, Shooting, Sponsoring, Google, Technique, Recouvrement)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [newTaskClientId, setNewTaskClientId] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -223,31 +225,12 @@ export function TechnicianCalendarClient({
   const [newTaskDueDate, setNewTaskDueDate] = useState(toLocalDateString(new Date()));
   const [newTaskPriority, setNewTaskPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
   const [newTaskAssigneeId, setNewTaskAssigneeId] = useState(currentUserId || "");
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
-
-  // New Theme modal state (Saisie manuelle des thèmes)
-  const [isNewThemeModalOpen, setIsNewThemeModalOpen] = useState(false);
-  const [themeClientId, setThemeClientId] = useState("");
-  const [themeWeekNumber, setThemeWeekNumber] = useState<number>(1);
-  const [themePillar, setThemePillar] = useState("Semaine 1 : Notoriété & Savoir-faire");
-  const [themeTitle, setThemeTitle] = useState("");
-  const [themeDescription, setThemeDescription] = useState("");
-  const [themeColor, setThemeColor] = useState("purple");
-  const [isSavingTheme, setIsSavingTheme] = useState(false);
-
-  // New Subject modal state (Saisie manuelle des sujets de publication)
-  const [isNewSubjectModalOpen, setIsNewSubjectModalOpen] = useState(false);
-  const [subjectClientId, setSubjectClientId] = useState("");
-  const [subjectThemeTitle, setSubjectThemeTitle] = useState("");
-  const [subjectWeekNumber, setSubjectWeekNumber] = useState<number>(1);
-  const [subjectTitle, setSubjectTitle] = useState("");
+  const [selectedTaskCategory, setSelectedTaskCategory] = useState<
+    "SPONSORING" | "SHOOTING" | "GOOGLE_CERTIF" | "PASSAGE_TECH" | "RECOUVREMENT" | "SUJET" | "CUSTOM"
+  >("CUSTOM");
   const [subjectFormat, setSubjectFormat] = useState<"REEL_9_16" | "CAROUSEL" | "STATIC_POST" | "STORY_INTERACTIVE" | "OTHER">("REEL_9_16");
-  const [subjectDueDate, setSubjectDueDate] = useState(toLocalDateString(new Date()));
   const [subjectHook, setSubjectHook] = useState("");
-  const [subjectScript, setSubjectScript] = useState("");
-  const [subjectAssigneeId, setSubjectAssigneeId] = useState(currentUserId || "");
-  const [subjectPriority, setSubjectPriority] = useState<TaskPriority>(TaskPriority.MEDIUM);
-  const [isCreatingSubject, setIsCreatingSubject] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
 
   // Weekly reminder state
   const [isSendingReminder, setIsSendingReminder] = useState(false);
@@ -289,23 +272,38 @@ export function TechnicianCalendarClient({
   // Helper to detect deliverable type icon
   const getDeliverableIcon = (title: string, description?: string | null) => {
     const text = `${title} ${description || ""}`.toLowerCase();
-    if (text.includes("shooting") || text.includes("tournage")) {
-      return <Video className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+    // 1. Shooting Photo & Vidéo
+    if (text.includes("shooting") || text.includes("tournage") || text.includes("captation")) {
+      return <Camera className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
     }
+    // 2. Lancement Sponsoring
+    if (text.includes("sponsor") || text.includes("sponsoring") || text.includes("ads") || text.includes("campagne")) {
+      return <Rocket className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
+    }
+    // 3. Certification Google
+    if (text.includes("google") || text.includes("certification") || text.includes("maps") || text.includes("gmb")) {
+      return <BadgeCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />;
+    }
+    // 4. Passage Technique
+    if (text.includes("passage technique") || text.includes("technique") || text.includes("installation") || text.includes("audit")) {
+      return <Wrench className="w-3.5 h-3.5 text-purple-400 shrink-0" />;
+    }
+    // 5. Recouvrement
+    if (text.includes("recouvrement") || text.includes("encaissement") || text.includes("facture") || text.includes("paiement") || text.includes("règlement")) {
+      return <CreditCard className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+    }
+    // Sujets & Livrables Réseaux
     if (text.includes("publication") || text.includes("post") || text.includes("réseaux") || text.includes("social")) {
       return <Sparkles className="w-3.5 h-3.5 text-sky-400 shrink-0" />;
     }
     if (text.includes("video") || text.includes("vidéo") || text.includes("reel") || text.includes("montage")) {
-      return <Video className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
+      return <Film className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
     }
     if (text.includes("design") || text.includes("maquette") || text.includes("carrousel") || text.includes("visuel") || text.includes("logo") || text.includes("affiche")) {
       return <Palette className="w-3.5 h-3.5 text-indigo-400 shrink-0" />;
     }
     if (text.includes("web") || text.includes("site") || text.includes("dev") || text.includes("landing") || text.includes("seo") || text.includes("domaine")) {
       return <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />;
-    }
-    if (text.includes("ads") || text.includes("sponsor") || text.includes("pub") || text.includes("facebook") || text.includes("instagram") || text.includes("campagne")) {
-      return <TrendingUp className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
     }
     return <Kanban className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
   };
@@ -566,11 +564,16 @@ export function TechnicianCalendarClient({
       const targetClient = activeClients.find((c) => c.id === newTaskClientId);
       const projectId = targetClient?.projects[0]?.id;
 
+      let fullDescription = newTaskDescription.trim();
+      if (selectedTaskCategory === "SUJET" && subjectHook.trim()) {
+        fullDescription = `🎯 Accroche / Hook (3 sec) : ${subjectHook.trim()}\n\n${fullDescription}`;
+      }
+
       const res = await createTaskAction({
         clientId: newTaskClientId,
         projectId: projectId,
         title: newTaskTitle.trim(),
-        description: newTaskDescription.trim() || undefined,
+        description: fullDescription || undefined,
         priority: newTaskPriority,
         dueDate: newTaskDueDate,
         assigneeId: newTaskAssigneeId || undefined,
@@ -584,6 +587,8 @@ export function TechnicianCalendarClient({
         setIsNewTaskModalOpen(false);
         setNewTaskTitle("");
         setNewTaskDescription("");
+        setSubjectHook("");
+        setSelectedTaskCategory("CUSTOM");
         router.refresh();
       }
     } catch (err: any) {
@@ -596,137 +601,108 @@ export function TechnicianCalendarClient({
     }
   };
 
-  // Helper pour ouvrir le modal de thème pré-rempli pour un client
-  const handleOpenThemeForClient = (clientId: string, weekNum: number = 1) => {
-    setThemeClientId(clientId);
-    setThemeWeekNumber(weekNum);
-    const defaultPillars = [
-      "Semaine 1 : Notoriété & Savoir-faire",
-      "Semaine 2 : Éducation & Conseils",
-      "Semaine 3 : Preuve Sociale & Avis",
-      "Semaine 4 : Offre Spéciale & Conversion",
-      "Semaine 5 : Coulisses & Présentation",
-    ];
-    setThemePillar(defaultPillars[weekNum - 1] || `Semaine ${weekNum}`);
+  // Modèles et pré-remplissage pour les catégories d'actions demandées
+  const applyTaskCategory = (
+    category: "SPONSORING" | "SHOOTING" | "GOOGLE_CERTIF" | "PASSAGE_TECH" | "RECOUVREMENT" | "SUJET" | "CUSTOM",
+    format?: "REEL_9_16" | "CAROUSEL" | "STATIC_POST" | "STORY_INTERACTIVE" | "OTHER"
+  ) => {
+    setSelectedTaskCategory(category);
 
-    const targetClient = activeClients.find((c) => c.id === clientId);
-    const existingTheme = targetClient?.themes?.[weekNum - 1];
-    if (existingTheme) {
-      setThemeTitle(existingTheme.title || "");
-      setThemeDescription(existingTheme.description || "");
-      setThemeColor(existingTheme.color || (weekNum === 1 ? "purple" : weekNum === 2 ? "blue" : weekNum === 3 ? "emerald" : "amber"));
-    } else {
-      setThemeTitle("");
-      setThemeDescription("");
-      setThemeColor(weekNum === 1 ? "purple" : weekNum === 2 ? "blue" : weekNum === 3 ? "emerald" : "amber");
-    }
-    setIsNewThemeModalOpen(true);
-  };
+    const findUser = (role?: string, nameSub?: string) => {
+      return users.find(
+        (u) =>
+          (role && u.role === role) ||
+          (nameSub && u.name.toLowerCase().includes(nameSub.toLowerCase()))
+      );
+    };
 
-  // Enregistrement manuel d'un thème
-  const handleSaveTheme = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!themeClientId) {
-      setFeedback({ type: "error", text: "Veuillez sélectionner un client." });
-      return;
-    }
-    if (!themeTitle.trim()) {
-      setFeedback({ type: "error", text: "Veuillez saisir le titre du thème." });
-      return;
-    }
-
-    setIsSavingTheme(true);
-    setFeedback(null);
-    try {
-      const res = await saveClientEditorialThemeAction({
-        clientId: themeClientId,
-        weekNumber: themeWeekNumber,
-        pillar: themePillar,
-        title: themeTitle.trim(),
-        description: themeDescription.trim() || undefined,
-        color: themeColor,
-        month: currentMonth + 1,
-        year: currentYear,
-      });
-
-      if (res.success) {
-        setFeedback({
-          type: "success",
-          text: `Thème Semaine ${themeWeekNumber} enregistré avec succès !`,
-        });
-        setIsNewThemeModalOpen(false);
-        setThemeTitle("");
-        setThemeDescription("");
-        router.refresh();
-      } else {
-        setFeedback({ type: "error", text: res.error || "Erreur enregistrement thème." });
+    switch (category) {
+      case "SPONSORING": {
+        setNewTaskTitle("🚀 Lancement du Sponsoring (Campagne Ads)");
+        setNewTaskPriority(TaskPriority.HIGH);
+        setNewTaskDescription(
+          "Paramétrage et lancement de la campagne sponsorisée : ciblage d'audience, visuels publicitaires, budget journalier et suivi du pixel."
+        );
+        break;
       }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Erreur serveur." });
-    } finally {
-      setIsSavingTheme(false);
+      case "SHOOTING": {
+        setNewTaskTitle("🎬 Shooting Photo & Vidéo sur site");
+        setNewTaskPriority(TaskPriority.HIGH);
+        setNewTaskDescription(
+          "Séance de tournage vidéo (formats verticaux 9:16) et shooting photos professionnelles sur place chez le client."
+        );
+        const toufikOrVideo = findUser("VIDEO_EDITOR", "toufik");
+        if (toufikOrVideo) setNewTaskAssigneeId(toufikOrVideo.id);
+        break;
+      }
+      case "GOOGLE_CERTIF": {
+        setNewTaskTitle("🌟 Certification Google (Validation Fiche Maps & Avis)");
+        setNewTaskPriority(TaskPriority.HIGH);
+        setNewTaskDescription(
+          "Création ou certification de la fiche Google My Business / Google Maps, optimisation SEO local, ajout de photos 360° et activation des avis."
+        );
+        const techUser = findUser("DEVELOPER") || findUser("TECH_LEAD");
+        if (techUser) setNewTaskAssigneeId(techUser.id);
+        break;
+      }
+      case "PASSAGE_TECH": {
+        setNewTaskTitle("🔧 Passage Technique sur site");
+        setNewTaskPriority(TaskPriority.MEDIUM);
+        setNewTaskDescription(
+          "Visite technique chez le client : recueil des accès, audit technique sur place, installation et vérification des livrables."
+        );
+        const techUser = findUser("TECH_LEAD") || findUser(undefined, "toufik");
+        if (techUser) setNewTaskAssigneeId(techUser.id);
+        break;
+      }
+      case "RECOUVREMENT": {
+        setNewTaskTitle("💰 Recouvrement — Règlement Abonnement");
+        setNewTaskPriority(TaskPriority.URGENT);
+        setNewTaskDescription(
+          "Suivi du règlement mensuel, relance client, encaissement (BaridiMob / Espèces / Virement / Chèque) et pointage de la facture."
+        );
+        const accountant = findUser("ACCOUNTANT") || findUser("ADMIN");
+        if (accountant) setNewTaskAssigneeId(accountant.id);
+        break;
+      }
+      case "SUJET": {
+        const fmt = format || subjectFormat;
+        const fmtPrefix =
+          fmt === "REEL_9_16"
+            ? "🎬 [Reel 9:16]"
+            : fmt === "CAROUSEL"
+            ? "📑 [Carrousel]"
+            : fmt === "STATIC_POST"
+            ? "🖼️ [Post Visuel]"
+            : fmt === "STORY_INTERACTIVE"
+            ? "📱 [Story]"
+            : "📄 [Livrable]";
+        setNewTaskTitle(`${fmtPrefix} `);
+        setNewTaskPriority(TaskPriority.MEDIUM);
+        if (!newTaskDescription || newTaskDescription.includes("Paramétrage") || newTaskDescription.includes("Visite")) {
+          setNewTaskDescription("Briefing du sujet, consignes de tournage/montage ou visuels souhaités pour la marque.");
+        }
+        const creativeUser = findUser("DESIGNER") || findUser("VIDEO_EDITOR");
+        if (creativeUser) setNewTaskAssigneeId(creativeUser.id);
+        break;
+      }
+      case "CUSTOM": {
+        setNewTaskTitle("");
+        setNewTaskPriority(TaskPriority.MEDIUM);
+        setNewTaskDescription("");
+        break;
+      }
     }
   };
 
-  // Helper pour ouvrir le modal de sujet pré-rempli
+  // Helper pour ouvrir le modal unifié pré-rempli en mode Sujet pour un client
   const handleOpenSubjectForClient = (clientId: string, weekNum: number = 1, themeTitleVal?: string) => {
-    setSubjectClientId(clientId);
-    setSubjectWeekNumber(weekNum);
-    const targetClient = activeClients.find((c) => c.id === clientId);
-    const defaultTheme = themeTitleVal || targetClient?.themes?.[weekNum - 1]?.title || "";
-    setSubjectThemeTitle(defaultTheme);
-    setSubjectTitle("");
-    setSubjectHook("");
-    setSubjectScript("");
-    setIsNewSubjectModalOpen(true);
-  };
-
-  // Création manuelle d'un sujet (tâche de production)
-  const handleCreateSubject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subjectClientId) {
-      setFeedback({ type: "error", text: "Veuillez sélectionner un client." });
-      return;
+    setNewTaskClientId(clientId);
+    applyTaskCategory("SUJET", "REEL_9_16");
+    if (themeTitleVal) {
+      setSubjectHook(themeTitleVal);
     }
-    if (!subjectTitle.trim()) {
-      setFeedback({ type: "error", text: "Veuillez saisir le titre du sujet." });
-      return;
-    }
-
-    setIsCreatingSubject(true);
-    setFeedback(null);
-    try {
-      const res = await createManualSubjectTaskAction({
-        clientId: subjectClientId,
-        themeTitle: subjectThemeTitle.trim() || undefined,
-        weekNumber: subjectWeekNumber,
-        title: subjectTitle.trim(),
-        format: subjectFormat,
-        dueDate: subjectDueDate,
-        hook: subjectHook.trim() || undefined,
-        scriptOrDescription: subjectScript.trim() || undefined,
-        assigneeId: subjectAssigneeId || undefined,
-        priority: subjectPriority,
-      });
-
-      if (res.success && res.task) {
-        setFeedback({
-          type: "success",
-          text: `Sujet "${subjectTitle}" planifié avec succès dans le calendrier !`,
-        });
-        setIsNewSubjectModalOpen(false);
-        setSubjectTitle("");
-        setSubjectHook("");
-        setSubjectScript("");
-        router.refresh();
-      } else {
-        setFeedback({ type: "error", text: res.error || "Erreur création sujet." });
-      }
-    } catch (err: any) {
-      setFeedback({ type: "error", text: err?.message || "Erreur serveur." });
-    } finally {
-      setIsCreatingSubject(false);
-    }
+    setIsNewTaskModalOpen(true);
   };
 
   // Déclenchement manuel du rappel début de semaine
@@ -830,44 +806,19 @@ export function TechnicianCalendarClient({
             Aujourd'hui
           </button>
 
-          {/* Bouton Nouveau Sujet */}
+          {/* Bouton Nouvelle Tâche Unifié */}
           <Button
             size="sm"
             onClick={() => {
-              if (activeClients.length > 0 && !subjectClientId) {
-                setSubjectClientId(activeClients[0].id);
+              if (activeClients.length > 0 && !newTaskClientId) {
+                setNewTaskClientId(activeClients[0].id);
               }
-              setIsNewSubjectModalOpen(true);
+              setIsNewTaskModalOpen(true);
             }}
-            className="gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-600/25 cursor-pointer"
-          >
-            <Film className="w-4 h-4" />
-            <span>+ Nouveau Sujet</span>
-          </Button>
-
-          {/* Bouton Nouveau Thème */}
-          <Button
-            size="sm"
-            onClick={() => {
-              if (activeClients.length > 0 && !themeClientId) {
-                setThemeClientId(activeClients[0].id);
-              }
-              setIsNewThemeModalOpen(true);
-            }}
-            className="gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-600/25 cursor-pointer"
-          >
-            <Target className="w-4 h-4" />
-            <span>+ Nouveau Thème</span>
-          </Button>
-
-          {/* Bouton Nouvelle Tâche Générale */}
-          <Button
-            size="sm"
-            onClick={() => setIsNewTaskModalOpen(true)}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25 cursor-pointer"
+            className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/25 cursor-pointer font-bold"
           >
             <Plus className="w-4 h-4" />
-            <span>Nouvelle Tâche</span>
+            <span>+ Nouvelle Tâche</span>
           </Button>
         </div>
       </div>
@@ -906,28 +857,17 @@ export function TechnicianCalendarClient({
             <span>Vue Thèmes & Sujets</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (activeClients.length > 0 && !themeClientId) setThemeClientId(activeClients[0].id);
-              setIsNewThemeModalOpen(true);
-            }}
-            className="px-3 py-1.5 rounded-xl bg-amber-600/25 hover:bg-amber-600/40 border border-amber-500/40 text-amber-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5 text-amber-300" />
-            <span>+ Thème</span>
-          </button>
 
           <button
             type="button"
             onClick={() => {
-              if (activeClients.length > 0 && !subjectClientId) setSubjectClientId(activeClients[0].id);
-              setIsNewSubjectModalOpen(true);
+              if (activeClients.length > 0 && !newTaskClientId) setNewTaskClientId(activeClients[0].id);
+              setIsNewTaskModalOpen(true);
             }}
-            className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-md shadow-purple-600/25 flex items-center gap-1.5 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md shadow-emerald-600/25 flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Sujet</span>
+            <span>+ Nouvelle Tâche</span>
           </button>
 
           <button
@@ -1379,13 +1319,48 @@ export function TechnicianCalendarClient({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSelectedDayStr(null)}
-              className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-neutral-800 text-neutral-300 hover:text-white transition"
-            >
-              Fermer l'aperçu du jour
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeClients.length > 0 && !newTaskClientId) {
+                    setNewTaskClientId(activeClients[0].id);
+                  }
+                  setNewTaskTitle("🎬 Shooting Photo & Vidéo sur site");
+                  setNewTaskPriority(TaskPriority.HIGH);
+                  setNewTaskDescription("Séance de tournage et captation photo/vidéo sur place chez le client.");
+                  if (selectedDayStr) setNewTaskDueDate(selectedDayStr);
+                  setIsNewTaskModalOpen(true);
+                }}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition flex items-center gap-1 cursor-pointer"
+              >
+                <Video className="w-3.5 h-3.5 text-rose-400" />
+                <span>+ Shooting</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeClients.length > 0 && !newTaskClientId) {
+                    setNewTaskClientId(activeClients[0].id);
+                  }
+                  if (selectedDayStr) setNewTaskDueDate(selectedDayStr);
+                  setIsNewTaskModalOpen(true);
+                }}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                <span>+ Tâche</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDayStr(null)}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-neutral-800 text-neutral-300 hover:text-white transition cursor-pointer"
+              >
+                Fermer
+              </button>
+            </div>
           </div>
 
           {selectedDayTasks.length === 0 ? (
@@ -1537,24 +1512,14 @@ export function TechnicianCalendarClient({
               <Button
                 size="sm"
                 onClick={() => {
-                  if (activeClients.length > 0 && !themeClientId) setThemeClientId(activeClients[0].id);
-                  setIsNewThemeModalOpen(true);
+                  if (activeClients.length > 0 && !newTaskClientId) setNewTaskClientId(activeClients[0].id);
+                  applyTaskCategory("SUJET", "REEL_9_16");
+                  setIsNewTaskModalOpen(true);
                 }}
-                className="gap-1 text-xs bg-amber-600 hover:bg-amber-500 text-white cursor-pointer"
+                className="gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer font-semibold"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ Définir un Thème</span>
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (activeClients.length > 0 && !subjectClientId) setSubjectClientId(activeClients[0].id);
-                  setIsNewSubjectModalOpen(true);
-                }}
-                className="gap-1 text-xs bg-purple-600 hover:bg-purple-500 text-white cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Planifier un Sujet</span>
+                <span>+ Nouvelle Tâche</span>
               </Button>
             </div>
           </div>
@@ -1670,18 +1635,10 @@ export function TechnicianCalendarClient({
                                   Semaine {weekNum}
                                 </span>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenThemeForClient(client.id, weekNum)}
-                                  className="text-[11px] text-neutral-400 hover:text-purple-300 font-medium transition cursor-pointer"
-                                  title="Modifier ou définir le thème"
-                                >
-                                  {hasTheme ? "Modifier" : "+ Thème"}
-                                </button>
                               </div>
 
                               {/* Affichage du Thème */}
-                              {hasTheme ? (
+                              {hasTheme && (
                                 <div className="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/25 space-y-1">
                                   <div className="text-[10px] font-bold text-purple-400 uppercase tracking-wider truncate">
                                     {theme?.pillar || `Semaine ${weekNum}`}
@@ -1695,14 +1652,6 @@ export function TechnicianCalendarClient({
                                     </p>
                                   )}
                                 </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenThemeForClient(client.id, weekNum)}
-                                  className="w-full py-3 px-2 rounded-xl border border-dashed border-neutral-800 hover:border-purple-500/40 text-center text-xs text-neutral-500 hover:text-purple-300 transition cursor-pointer block"
-                                >
-                                  + Définir le thème de la semaine
-                                </button>
                               )}
 
                               {/* Sujets planifiés pour cette semaine */}
@@ -1965,15 +1914,189 @@ export function TechnicianCalendarClient({
               </select>
             </div>
 
+            {/* SÉLECTEUR DE CATÉGORIES / MODÈLES D'ACTIONS */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-neutral-300 font-semibold text-xs">
+                  Modèles d'actions rapides (Cliquez pour pré-remplir)
+                </label>
+                {selectedTaskCategory !== "CUSTOM" && (
+                  <button
+                    type="button"
+                    onClick={() => applyTaskCategory("CUSTOM")}
+                    className="text-[11px] text-neutral-400 hover:text-white underline cursor-pointer"
+                  >
+                    Personnaliser
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {/* 1. Lancement Sponsoring */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("SPONSORING")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "SPONSORING"
+                      ? "bg-amber-500/20 border-amber-500 text-amber-200 ring-1 ring-amber-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-amber-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 shrink-0">
+                    <Rocket className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Lancement Sponsoring</div>
+                    <div className="text-[10px] text-neutral-400">Meta Ads / TikTok</div>
+                  </div>
+                </button>
+
+                {/* 2. Shooting Photo & Vidéo */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("SHOOTING")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "SHOOTING"
+                      ? "bg-rose-500/20 border-rose-500 text-rose-200 ring-1 ring-rose-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-rose-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-rose-500/20 text-rose-400 shrink-0">
+                    <Camera className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Shooting Photo/Vidéo</div>
+                    <div className="text-[10px] text-neutral-400">Captation sur site</div>
+                  </div>
+                </button>
+
+                {/* 3. Certification Google */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("GOOGLE_CERTIF")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "GOOGLE_CERTIF"
+                      ? "bg-blue-500/20 border-blue-500 text-blue-200 ring-1 ring-blue-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-blue-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400 shrink-0">
+                    <BadgeCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Certification Google</div>
+                    <div className="text-[10px] text-neutral-400">Fiche Maps & GMB</div>
+                  </div>
+                </button>
+
+                {/* 4. Passage Technique */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("PASSAGE_TECH")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "PASSAGE_TECH"
+                      ? "bg-purple-500/20 border-purple-500 text-purple-200 ring-1 ring-purple-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-purple-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-400 shrink-0">
+                    <Wrench className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Passage Technique</div>
+                    <div className="text-[10px] text-neutral-400">Visite & audit sur site</div>
+                  </div>
+                </button>
+
+                {/* 5. Recouvrement */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("RECOUVREMENT")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "RECOUVREMENT"
+                      ? "bg-emerald-500/20 border-emerald-500 text-emerald-200 ring-1 ring-emerald-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-emerald-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400 shrink-0">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Recouvrement</div>
+                    <div className="text-[10px] text-neutral-400">Paiement abonnement</div>
+                  </div>
+                </button>
+
+                {/* 6. Sujet / Publication */}
+                <button
+                  type="button"
+                  onClick={() => applyTaskCategory("SUJET")}
+                  className={`p-2.5 rounded-xl border text-left transition flex items-start gap-2 cursor-pointer ${
+                    selectedTaskCategory === "SUJET"
+                      ? "bg-sky-500/20 border-sky-500 text-sky-200 ring-1 ring-sky-500/50"
+                      : "bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-sky-500/40 hover:bg-neutral-800/80"
+                  }`}
+                >
+                  <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 shrink-0">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">Sujet / Publication</div>
+                    <div className="text-[10px] text-neutral-400">Reel, Carrousel, Post</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* OPTIONS SPÉCIFIQUES SI SUJET RÉSEAUX */}
+            {selectedTaskCategory === "SUJET" && (
+              <div className="p-3 rounded-xl bg-sky-950/25 border border-sky-500/30 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-neutral-300 font-semibold mb-1 text-[11px]">
+                      Format de publication
+                    </label>
+                    <select
+                      value={subjectFormat}
+                      onChange={(e) => {
+                        const fmt = e.target.value as any;
+                        setSubjectFormat(fmt);
+                        applyTaskCategory("SUJET", fmt);
+                      }}
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-hidden focus:border-sky-500"
+                    >
+                      <option value="REEL_9_16">🎬 Reel / Vidéo courte (9:16)</option>
+                      <option value="CAROUSEL">📑 Carrousel multi-pages</option>
+                      <option value="STATIC_POST">🖼️ Post Visuel Graphique</option>
+                      <option value="STORY_INTERACTIVE">📱 Story Interactive</option>
+                      <option value="OTHER">📄 Autre livrable</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-neutral-300 font-semibold mb-1 text-[11px]">
+                      Accroche / Hook (les 3 premières secondes)
+                    </label>
+                    <input
+                      type="text"
+                      value={subjectHook}
+                      onChange={(e) => setSubjectHook(e.target.value)}
+                      placeholder="Ex: Ne signez jamais avant d'avoir vérifié ceci !"
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-neutral-300 font-semibold mb-1">
-                Titre de la tâche (ex: Montage Reel 9:16, Maquette Carrousel) *
+                Titre de la tâche / livrable *
               </label>
               <input
                 type="text"
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="ex: Tournage Vidéo sur site / Création 3 Visuels Instagram"
+                placeholder="ex: Lancement Campagne Ads / Shooting sur site / Reel 9:16..."
                 required
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-emerald-500"
               />
@@ -2061,357 +2184,8 @@ export function TechnicianCalendarClient({
         </Modal>
       )}
 
-      {/* MODAL 3: NOUVEAU THÈME HEBDOMADAIRE (SAISIE MANUELLE) */}
-      {isNewThemeModalOpen && (
-        <Modal
-          isOpen={isNewThemeModalOpen}
-          onClose={() => setIsNewThemeModalOpen(false)}
-          title="Définir un Thème de la Semaine (Saisie Manuelle)"
-        >
-          <form onSubmit={handleSaveTheme} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Client sous contrat *
-              </label>
-              <select
-                value={themeClientId}
-                onChange={(e) => {
-                  setThemeClientId(e.target.value);
-                  const found = activeClients.find((c) => c.id === e.target.value);
-                  const ex = found?.themes?.[themeWeekNumber - 1];
-                  if (ex) {
-                    setThemeTitle(ex.title || "");
-                    setThemeDescription(ex.description || "");
-                  }
-                }}
-                required
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
-              >
-                <option value="">Sélectionnez un client...</option>
-                {activeClients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    🏢 {c.companyName} ({c.offerType})
-                  </option>
-                ))}
-              </select>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Semaine du mois *
-                </label>
-                <select
-                  value={themeWeekNumber}
-                  onChange={(e) => {
-                    const wk = parseInt(e.target.value, 10);
-                    setThemeWeekNumber(wk);
-                    const defaultPillars = [
-                      "Semaine 1 : Notoriété & Savoir-faire",
-                      "Semaine 2 : Éducation & Conseils",
-                      "Semaine 3 : Preuve Sociale & Avis",
-                      "Semaine 4 : Offre Spéciale & Conversion",
-                      "Semaine 5 : Coulisses & Présentation",
-                    ];
-                    setThemePillar(defaultPillars[wk - 1] || `Semaine ${wk}`);
-                    const found = activeClients.find((c) => c.id === themeClientId);
-                    const ex = found?.themes?.[wk - 1];
-                    if (ex) {
-                      setThemeTitle(ex.title || "");
-                      setThemeDescription(ex.description || "");
-                    }
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
-                >
-                  <option value={1}>Semaine 1</option>
-                  <option value={2}>Semaine 2</option>
-                  <option value={3}>Semaine 3</option>
-                  <option value={4}>Semaine 4</option>
-                  <option value={5}>Semaine 5</option>
-                </select>
-              </div>
 
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Couleur du badge
-                </label>
-                <select
-                  value={themeColor}
-                  onChange={(e) => setThemeColor(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-amber-500"
-                >
-                  <option value="purple">🟣 Violet (Notoriété)</option>
-                  <option value="blue">🔵 Bleu (Éducation)</option>
-                  <option value="emerald">🟢 Vert Émeraude (Preuve sociale)</option>
-                  <option value="amber">🟠 Ambre / Or (Offre commerciale)</option>
-                  <option value="rose">🔴 Rose / Rouge (Événement)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Axe / Pilier Stratégique
-              </label>
-              <input
-                type="text"
-                value={themePillar}
-                onChange={(e) => setThemePillar(e.target.value)}
-                placeholder="Ex: Notoriété & Savoir-faire"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Titre du Thème de la semaine *
-              </label>
-              <input
-                type="text"
-                value={themeTitle}
-                onChange={(e) => setThemeTitle(e.target.value)}
-                placeholder="Ex: Les 3 erreurs courantes lors d'un achat immobilier"
-                required
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 font-bold focus:outline-hidden focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Description / Objectif du thème (facultatif)
-              </label>
-              <textarea
-                value={themeDescription}
-                onChange={(e) => setThemeDescription(e.target.value)}
-                placeholder="Angle spécifique, cible visée ou message clé..."
-                rows={2}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-amber-500"
-              />
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsNewThemeModalOpen(false)}
-              >
-                Annuler
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isSavingTheme}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-bold"
-              >
-                {isSavingTheme ? "Enregistrement..." : "Enregistrer le Thème"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* MODAL 4: NOUVEAU SUJET DE PUBLICATION (SAISIE MANUELLE) */}
-      {isNewSubjectModalOpen && (
-        <Modal
-          isOpen={isNewSubjectModalOpen}
-          onClose={() => setIsNewSubjectModalOpen(false)}
-          title="Planifier un Nouveau Sujet de Publication"
-        >
-          <form onSubmit={handleCreateSubject} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Client sous contrat *
-              </label>
-              <select
-                value={subjectClientId}
-                onChange={(e) => {
-                  setSubjectClientId(e.target.value);
-                  const found = activeClients.find((c) => c.id === e.target.value);
-                  const themeForWeek = found?.themes?.[subjectWeekNumber - 1];
-                  if (themeForWeek?.title) {
-                    setSubjectThemeTitle(themeForWeek.title);
-                  }
-                }}
-                required
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-              >
-                <option value="">Sélectionnez un client...</option>
-                {activeClients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    🏢 {c.companyName} ({c.offerType})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Semaine
-                </label>
-                <select
-                  value={subjectWeekNumber}
-                  onChange={(e) => {
-                    const wk = parseInt(e.target.value, 10);
-                    setSubjectWeekNumber(wk);
-                    const found = activeClients.find((c) => c.id === subjectClientId);
-                    const themeForWeek = found?.themes?.[wk - 1];
-                    if (themeForWeek?.title) {
-                      setSubjectThemeTitle(themeForWeek.title);
-                    }
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-                >
-                  <option value={1}>Semaine 1</option>
-                  <option value={2}>Semaine 2</option>
-                  <option value={3}>Semaine 3</option>
-                  <option value={4}>Semaine 4</option>
-                  <option value={5}>Semaine 5</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Format de publication *
-                </label>
-                <select
-                  value={subjectFormat}
-                  onChange={(e) => setSubjectFormat(e.target.value as any)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-                >
-                  <option value="REEL_9_16">🎬 Reel / Vidéo courte (9:16)</option>
-                  <option value="CAROUSEL">📑 Carrousel multi-pages</option>
-                  <option value="STATIC_POST">🖼️ Post Visuel Graphique</option>
-                  <option value="STORY_INTERACTIVE">📱 Story Interactive</option>
-                  <option value="OTHER">📄 Autre livrable</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Thème de rattachement
-              </label>
-              <input
-                type="text"
-                value={subjectThemeTitle}
-                onChange={(e) => setSubjectThemeTitle(e.target.value)}
-                placeholder="Ex: Conseils & Éducation, ou Notoriété..."
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Titre du Sujet de publication *
-              </label>
-              <input
-                type="text"
-                value={subjectTitle}
-                onChange={(e) => setSubjectTitle(e.target.value)}
-                placeholder="Ex: Comment négocier le prix de son appartement sans stress"
-                required
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 font-bold focus:outline-hidden focus:border-purple-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Date de publication / Échéance *
-                </label>
-                <input
-                  type="date"
-                  value={subjectDueDate}
-                  onChange={(e) => setSubjectDueDate(e.target.value)}
-                  required
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-neutral-300 font-semibold mb-1">
-                  Priorité
-                </label>
-                <select
-                  value={subjectPriority}
-                  onChange={(e) => setSubjectPriority(e.target.value as any)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-                >
-                  <option value={TaskPriority.LOW}>Basse</option>
-                  <option value={TaskPriority.MEDIUM}>Moyenne</option>
-                  <option value={TaskPriority.HIGH}>Haute</option>
-                  <option value={TaskPriority.URGENT}>Urgente</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Accroche / Hook (les 3 premières secondes)
-              </label>
-              <input
-                type="text"
-                value={subjectHook}
-                onChange={(e) => setSubjectHook(e.target.value)}
-                placeholder="Ex: Ne signez jamais un compromis avant d'avoir vérifié ceci !"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Briefing, Script ou Consignes de tournage / montage
-              </label>
-              <textarea
-                value={subjectScript}
-                onChange={(e) => setSubjectScript(e.target.value)}
-                placeholder="Décrivez les étapes de la vidéo, les visuels souhaités ou le texte pour le carrousel..."
-                rows={3}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-hidden focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-neutral-300 font-semibold mb-1">
-                Technicien responsable (Monteur / Graphiste)
-              </label>
-              <select
-                value={subjectAssigneeId}
-                onChange={(e) => setSubjectAssigneeId(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-neutral-200 focus:outline-hidden focus:border-purple-500"
-              >
-                <option value="">Non assigné</option>
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    👤 {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-neutral-800">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setIsNewSubjectModalOpen(false)}
-              >
-                Annuler
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={isCreatingSubject}
-                className="bg-purple-600 hover:bg-purple-500 text-white font-bold"
-              >
-                {isCreatingSubject ? "Enregistrement..." : "Planifier le Sujet"}
-              </Button>
-            </div>
-          </form>
-        </Modal>
-      )}
     </div>
   );
 }

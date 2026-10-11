@@ -33,7 +33,6 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
 
   // Auto-sync absences & payroll deductions (-1 jour de salaire par absence non pointée)
   try {
-    // await syncDailyAbsences({ daysBack: 35, includeToday: true });
     await calculateAndSyncPayroll(currentMonth, currentYear);
   } catch (err) {
     console.error("Erreur auto-sync paie RH:", err);
@@ -505,10 +504,7 @@ export async function generatePayrollAction(month: number, year: number) {
     );
   }
 
-  // Ne pas déclencher de synchronisation rétroactive agressive d'absences automatiques au chargement RH
-  // await syncDailyAbsences({ daysBack: 35, includeToday: true });
-
-  // 2. Calculer et synchroniser les salaires avec déduction automatique (-1 jour par absence)
+  // Calculer et synchroniser les salaires avec déduction automatique (-1 jour par absence)
   const result = await calculateAndSyncPayroll(month, year);
 
   revalidatePath("/rh");

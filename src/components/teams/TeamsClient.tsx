@@ -6,13 +6,11 @@ import {
   Layers,
   Users,
   Target,
-  Award,
   Plus,
   CheckCircle2,
   TrendingUp,
   X,
   Briefcase,
-  Star,
   MessageSquare,
   RefreshCw,
   Flame,
@@ -26,7 +24,6 @@ import {
   createEmployeeGoalAction,
   updateEmployeeGoalAction,
   deleteEmployeeGoalAction,
-  createPerformanceReviewAction,
   syncGoalsAction,
 } from "@/actions/teams";
 
@@ -81,7 +78,7 @@ interface TeamsClientProps {
   year: number;
   departments: DepartmentData[];
   goals: GoalItem[];
-  recentReviews: ReviewItem[];
+  recentReviews?: ReviewItem[];
   employeesList: { id: string; name: string; position: string }[];
   initialTab?: string;
   userRole?: string;
@@ -92,7 +89,7 @@ export function TeamsClient({
   year,
   departments,
   goals,
-  recentReviews,
+  recentReviews = [],
   employeesList,
   initialTab,
   userRole = "ADMIN",
@@ -100,19 +97,18 @@ export function TeamsClient({
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const validTab = (t?: string | null): "DEPARTMENTS" | "GOALS" | "REVIEWS" => {
+  const validTab = (t?: string | null): "DEPARTMENTS" | "GOALS" => {
     if (!t) return "DEPARTMENTS";
     const upper = t.toUpperCase();
     if (upper === "GOALS" || upper === "OBJECTIFS") return "GOALS";
-    if (upper === "REVIEWS" || upper === "EVALUATIONS") return "REVIEWS";
     return "DEPARTMENTS";
   };
 
-  const [activeTab, setActiveTabState] = useState<"DEPARTMENTS" | "GOALS" | "REVIEWS">(
+  const [activeTab, setActiveTabState] = useState<"DEPARTMENTS" | "GOALS">(
     validTab(initialTab || searchParams.get("tab"))
   );
 
-  const setActiveTab = (tab: "DEPARTMENTS" | "GOALS" | "REVIEWS") => {
+  const setActiveTab = (tab: "DEPARTMENTS" | "GOALS") => {
     setActiveTabState(tab);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -139,19 +135,11 @@ export function TeamsClient({
 
   // Modals
   const [showGoalModal, setShowGoalModal] = useState(false);
-  const [showReviewModal, setShowReviewModal] = useState(false);
 
   // New Goal State
   const [goalEmpId, setGoalEmpId] = useState("");
   const [goalMetric, setGoalMetric] = useState("APPELS");
   const [goalTarget, setGoalTarget] = useState<number>(100);
-
-  // New Review State
-  const [revEmpId, setRevEmpId] = useState("");
-  const [revScore, setRevScore] = useState<number>(85);
-  const [revCommScore, setRevCommScore] = useState<number>(80);
-  const [revTechScore, setRevTechScore] = useState<number>(90);
-  const [revFeedback, setRevFeedback] = useState("");
 
   const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,30 +207,6 @@ export function TeamsClient({
     }
   };
 
-  const handleCreateReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!revEmpId) {
-      alert("Veuillez sélectionner un collaborateur");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        await createPerformanceReviewAction({
-          employeeId: revEmpId,
-          scorePercentage: revScore,
-          commercialScore: revCommScore,
-          technicalScore: revTechScore,
-          feedback: revFeedback,
-        });
-        setShowReviewModal(false);
-        router.refresh();
-      } catch (err: any) {
-        alert(err.message || "Erreur d'évaluation");
-      }
-    });
-  };
-
   const totalMembers = departments.reduce((acc, d) => acc + d.members.length, 0);
 
   return (
@@ -255,21 +219,15 @@ export function TeamsClient({
             Organisation des Équipes & Pôles
           </h1>
           <p className="text-sm text-neutral-400 mt-1">
-            Structuration opérationnelle de l'agence, suivi des objectifs mensuels et compétences.
+            Structuration opérationnelle de l'agence, suivi des pôles et des objectifs mensuels.
           </p>
         </div>
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowGoalModal(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-sm font-medium transition"
-          >
-            <Target className="w-4 h-4 text-indigo-400" /> Fixer Objectif
-          </button>
-          <button
-            onClick={() => setShowReviewModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
           >
-            <Award className="w-4 h-4" /> Évaluer Performance
+            <Target className="w-4 h-4" /> Fixer Objectif
           </button>
         </div>
       </div>
@@ -295,16 +253,6 @@ export function TeamsClient({
           }`}
         >
           Objectifs Mensuels ({goals.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("REVIEWS")}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
-            activeTab === "REVIEWS"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
-          }`}
-        >
-          Évaluations de Compétences ({recentReviews.length})
         </button>
       </div>
 
@@ -552,72 +500,6 @@ export function TeamsClient({
         </div>
       )}
 
-      {/* TAB 3: PERFORMANCE REVIEWS */}
-      {activeTab === "REVIEWS" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {recentReviews.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-neutral-400 bg-neutral-900/50 border border-neutral-800 rounded-2xl">
-                Aucune évaluation de performance enregistrée.
-              </div>
-            ) : (
-              recentReviews.map((r) => (
-                <div
-                  key={r.id}
-                  className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-5 space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-neutral-200">
-                        {r.employee.firstName} {r.employee.lastName}
-                      </div>
-                      <div className="text-xs text-neutral-400">{r.employee.position}</div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xl font-black font-mono text-emerald-400">
-                        {r.scorePercentage}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {(r.commercialScore !== null || r.technicalScore !== null) && (
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-neutral-800">
-                      {r.commercialScore !== null && (
-                        <div>
-                          <span className="text-neutral-500">Commercial :</span>{" "}
-                          <span className="font-mono font-semibold text-neutral-300">
-                            {r.commercialScore}%
-                          </span>
-                        </div>
-                      )}
-                      {r.technicalScore !== null && (
-                        <div>
-                          <span className="text-neutral-500">Technique :</span>{" "}
-                          <span className="font-mono font-semibold text-neutral-300">
-                            {r.technicalScore}%
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {r.feedback && (
-                    <div className="text-xs text-neutral-300 italic bg-neutral-950/60 p-2.5 rounded-xl border border-neutral-800/80">
-                      "{r.feedback}"
-                    </div>
-                  )}
-
-                  <div className="text-[11px] text-neutral-500 pt-1 flex justify-between">
-                    <span>Évalué par {r.reviewer.name}</span>
-                    <span>{new Date(r.reviewDate).toLocaleDateString("fr-FR")}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
       {/* MODAL: NEW GOAL */}
       {showGoalModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -703,122 +585,6 @@ export function TeamsClient({
                   className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
                 >
                   {isPending ? "Attribution..." : "Valider l'Objectif"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: NEW REVIEW */}
-      {showReviewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-6 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/50">
-              <div className="flex items-center gap-2.5">
-                <Award className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-lg font-bold text-neutral-100">
-                  Nouvelle Évaluation de Performance
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowReviewModal(false)}
-                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateReview} className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Collaborateur à Évaluer *
-                </label>
-                <select
-                  value={revEmpId}
-                  onChange={(e) => setRevEmpId(e.target.value)}
-                  required
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="">Sélectionner...</option>
-                  {employeesList.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name} ({e.position})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Score Global (%) *
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={revScore}
-                    onChange={(e) => setRevScore(Number(e.target.value))}
-                    required
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-neutral-200 font-mono text-center focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Commercial (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={revCommScore}
-                    onChange={(e) => setRevCommScore(Number(e.target.value))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-neutral-200 font-mono text-center focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                    Technique (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={revTechScore}
-                    onChange={(e) => setRevTechScore(Number(e.target.value))}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm text-neutral-200 font-mono text-center focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
-                  Appréciation & Recommandations
-                </label>
-                <textarea
-                  rows={3}
-                  value={revFeedback}
-                  onChange={(e) => setRevFeedback(e.target.value)}
-                  placeholder="Points forts, axes d'amélioration..."
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowReviewModal(false)}
-                  className="px-4 py-2 rounded-xl text-neutral-400 hover:text-white text-sm"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm transition shadow-lg shadow-indigo-600/20 disabled:opacity-50"
-                >
-                  {isPending ? "Enregistrement..." : "Valider l'Évaluation"}
                 </button>
               </div>
             </form>
