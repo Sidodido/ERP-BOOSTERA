@@ -823,65 +823,6 @@ export function TechnicianCalendarClient({
         </div>
       </div>
 
-      {/* BANDEAU RAPPEL DÉBUT DE SEMAINE : Remplissage des Thèmes & Sujets */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-950/60 via-neutral-900 to-indigo-950/50 border border-purple-500/30 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center justify-center shrink-0 shadow-inner">
-            <Bell className="w-5 h-5 text-purple-400 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                🔔 Rappel Début de Semaine
-              </span>
-              <span className="text-xs text-neutral-400 font-medium">
-                {activeClients.length} clients sous contrat
-              </span>
-            </div>
-            <h3 className="text-sm font-bold text-neutral-100 mt-0.5">
-              Remplissez manuellement les thèmes et sujets de publications pour la semaine
-            </h3>
-            <p className="text-xs text-neutral-400">
-              Définissez les axes stratégiques et les livrables (Reels, Carrousels, Maquettes) pour chaque client sous contrat.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setViewMode("themes")}
-            className="px-3 py-1.5 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/40 text-purple-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Bookmark className="w-3.5 h-3.5 text-purple-300" />
-            <span>Vue Thèmes & Sujets</span>
-          </button>
-
-
-          <button
-            type="button"
-            onClick={() => {
-              if (activeClients.length > 0 && !newTaskClientId) setNewTaskClientId(activeClients[0].id);
-              setIsNewTaskModalOpen(true);
-            }}
-            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-md shadow-emerald-600/25 flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Nouvelle Tâche</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleTriggerWeeklyReminder}
-            disabled={isSendingReminder}
-            className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition cursor-pointer disabled:opacity-50"
-            title="Envoyer la notification de début de semaine à toute l'équipe"
-          >
-            <Send className={`w-3.5 h-3.5 ${isSendingReminder ? "animate-spin text-purple-400" : ""}`} />
-          </button>
-        </div>
-      </div>
-
       {/* Feedback message */}
       {feedback && (
         <div
