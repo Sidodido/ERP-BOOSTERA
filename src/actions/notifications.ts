@@ -4,6 +4,105 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { Role } from "@prisma/client";
+import { sendNotificationEmail } from "@/lib/email";
+
+/**
+ * Créer une notification en base de données et envoyer automatiquement un e-mail au destinataire
+ */
+export async function createNotificationWithEmail(params: {
+  userId: string;
+  title: string;
+  message: string;
+  type: string;
+  link?: string | null;
+  sendEmailAlert?: boolean;
+}) {
+  const notif = await prisma.notification.create({
+    data: {
+      userId: params.userId,
+      title: params.title,
+      message: params.message,
+      type: params.type,
+      link: params.link,
+    },
+  });
+
+  if (params.sendEmailAlert !== false) {
+    (async () => {
+      try {
+        const recipient = await prisma.user.findUnique({
+          where: { id: params.userId },
+          select: { email: true, name: true, isActive: true },
+        });
+        if (recipient && recipient.isActive && recipient.email) {
+          await sendNotificationEmail({
+            to: recipient.email,
+            userName: recipient.name,
+            title: params.title,
+            message: params.message,
+            link: params.link,
+            type: params.type,
+          });
+        }
+      } catch (err) {
+        console.warn("Échec envoi e-mail de notification:", err);
+      }
+    })();
+  }
+
+  return notif;
+}
+
+/**
+ * Créer plusieurs notifications en base de données et envoyer les e-mails automatiques à tous les destinataires
+ */
+export async function createManyNotificationsWithEmail(
+  notificationsData: Array<{
+    userId: string;
+    title: string;
+    message: string;
+    type: string;
+    link?: string | null;
+  }>,
+  sendEmailAlert: boolean = true
+) {
+  if (notificationsData.length === 0) return { count: 0 };
+
+  const result = await prisma.notification.createMany({
+    data: notificationsData,
+  });
+
+  if (sendEmailAlert) {
+    (async () => {
+      try {
+        const userIds = [...new Set(notificationsData.map((n) => n.userId))];
+        const users = await prisma.user.findMany({
+          where: { id: { in: userIds }, isActive: true },
+          select: { id: true, email: true, name: true },
+        });
+        const userMap = new Map(users.map((u) => [u.id, u]));
+
+        for (const notif of notificationsData) {
+          const user = userMap.get(notif.userId);
+          if (user?.email) {
+            await sendNotificationEmail({
+              to: user.email,
+              userName: user.name,
+              title: notif.title,
+              message: notif.message,
+              link: notif.link,
+              type: notif.type,
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        console.warn("Échec envoi e-mails groupés de notification:", err);
+      }
+    })();
+  }
+
+  return result;
+}
 
 export async function getUserNotificationsAction() {
   const user = await requireAuth();
@@ -114,7 +213,7 @@ export async function clearAllNotificationsAction() {
 
 /**
  * Dispatch automatic task notification:
- * Règle métier : Notifier UNIQUEMENT la personne sélectionnée dans "Assigné à".
+ * Règle métier : Notifier UNIQUEMENT la personne sélectionnée dans "Assigné à" par notification et par e-mail.
  */
 export async function dispatchTaskNotifications(params: {
   taskId: string;
@@ -131,14 +230,12 @@ export async function dispatchTaskNotifications(params: {
   if (!assigneeId) return;
 
   try {
-    await prisma.notification.create({
-      data: {
-        userId: assigneeId,
-        title: "📌 Nouvelle tâche assignée",
-        message: `La tâche "${taskTitle}" vous a été assignée sur le projet ${projectName} (${projectCode}).`,
-        type: "TASK",
-        link: `/projets/${projectId}`,
-      },
+    await createNotificationWithEmail({
+      userId: assigneeId,
+      title: "📌 Nouvelle tâche assignée",
+      message: `La tâche "${taskTitle}" vous a été assignée sur le projet ${projectName} (${projectCode}).`,
+      type: "TASK",
+      link: `/projets/${projectId}`,
     });
   } catch (err) {
     console.warn("Error dispatching task notification:", err);
@@ -182,15 +279,15 @@ export async function dispatchAppointmentCreatedNotifications(params: {
 
     const message = `Rendez-vous "${params.title}"${targetLabel} prévu le ${dateStr}${locLabel} (planifié par ${params.creatorName}${assignedLabel}).`;
 
-    await prisma.notification.createMany({
-      data: users.map((u) => ({
+    await createManyNotificationsWithEmail(
+      users.map((u) => ({
         userId: u.id,
         title: "📅 Nouveau Rendez-vous planifié",
         message,
         type: "APPOINTMENT",
         link: "/rendez-vous",
-      })),
-    });
+      }))
+    );
   } catch (err) {
     console.warn("Erreur notification rendez-vous:", err);
   }
@@ -227,15 +324,15 @@ export async function dispatchClientCreatedNotifications(params: {
 
     const message = `Le client "${params.companyName}"${packLabel}${feeLabel} a été enregistré avec succès par ${params.creatorName}${assignedLabel}.`;
 
-    await prisma.notification.createMany({
-      data: users.map((u) => ({
+    await createManyNotificationsWithEmail(
+      users.map((u) => ({
         userId: u.id,
         title: "🎉 Nouveau Client créé",
         message,
         type: "CLIENT",
         link: "/clients",
-      })),
-    });
+      }))
+    );
   } catch (err) {
     console.warn("Erreur notification client:", err);
   }
@@ -309,9 +406,7 @@ export async function dispatchWeeklyThemesReminderNotifications() {
       link: "/calendrier-technicien",
     }));
 
-    await prisma.notification.createMany({
-      data: notificationsData,
-    });
+    await createManyNotificationsWithEmail(notificationsData);
 
     return { success: true, count: notificationsData.length };
   } catch (err) {

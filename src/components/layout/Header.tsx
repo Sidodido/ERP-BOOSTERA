@@ -17,7 +17,14 @@ import {
   Database,
   Palette,
   Sparkles,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import {
+  playNotificationSound,
+  isNotificationSoundEnabled,
+  setNotificationSoundEnabled,
+} from "@/lib/sound";
 import { logoutAction } from "@/actions/auth";
 import {
   getUserNotificationsAction,
@@ -60,6 +67,9 @@ export function Header({ userName, userRole }: HeaderProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const notifRef = useRef<HTMLDivElement>(null);
+  const isInitialFetch = useRef<boolean>(true);
+  const prevUnreadCount = useRef<number>(0);
+  const [soundEnabled, setSoundEnabledState] = useState<boolean>(true);
 
   // User Dropdown State
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -69,11 +79,35 @@ export function Header({ userName, userRole }: HeaderProps) {
     userRole?.toLowerCase().includes("admin") ||
     userRole?.toLowerCase().includes("directeur");
 
+  useEffect(() => {
+    setSoundEnabledState(isNotificationSoundEnabled());
+  }, []);
+
+  const handleToggleSound = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextVal = !soundEnabled;
+    setSoundEnabledState(nextVal);
+    setNotificationSoundEnabled(nextVal);
+    if (nextVal) {
+      playNotificationSound(true); // aperçu sonore immédiat
+    }
+  };
+
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await getUserNotificationsAction();
       setNotifications(res.notifications);
       setUnreadCount(res.unreadCount);
+
+      if (isInitialFetch.current) {
+        isInitialFetch.current = false;
+        prevUnreadCount.current = res.unreadCount;
+      } else {
+        if (res.unreadCount > prevUnreadCount.current) {
+          playNotificationSound();
+        }
+        prevUnreadCount.current = res.unreadCount;
+      }
     } catch {
       // Ignored if user session expires
     }
@@ -82,7 +116,27 @@ export function Header({ userName, userRole }: HeaderProps) {
   useEffect(() => {
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+
+    const handleSync = () => {
+      fetchNotifications();
+    };
+
+    window.addEventListener("crm:new-notification", handleSync);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("crm_notifications_sync");
+      bc.onmessage = () => {
+        playNotificationSound();
+        fetchNotifications();
+      };
+    } catch {}
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("crm:new-notification", handleSync);
+      if (bc) bc.close();
+    };
   }, [fetchNotifications]);
 
   // Click outside listeners
@@ -219,17 +273,40 @@ export function Header({ userName, userRole }: HeaderProps) {
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleMarkAllRead}
-                    disabled={isPending}
-                    className="text-[10px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                    onClick={handleToggleSound}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-medium flex items-center gap-1 border transition cursor-pointer ${
+                      soundEnabled
+                        ? "text-emerald-400 bg-emerald-950/40 border-emerald-800/40 hover:bg-emerald-900/50"
+                        : "text-neutral-400 bg-neutral-800/60 border-neutral-700/50 hover:bg-neutral-800"
+                    }`}
+                    title={
+                      soundEnabled
+                        ? "Son activé (cliquez pour tester le carillon sonore)"
+                        : "Son désactivé (cliquez pour réactiver le son)"
+                    }
                   >
-                    <CheckCheck className="w-3 h-3" />
-                    <span>Tout marquer comme lu</span>
+                    {soundEnabled ? (
+                      <Volume2 className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <VolumeX className="w-3 h-3 text-neutral-400" />
+                    )}
+                    <span>{soundEnabled ? "Son Actif 🔔" : "Muet 🔕"}</span>
                   </button>
-                )}
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      disabled={isPending}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <CheckCheck className="w-3 h-3" />
+                      <span>Tout marquer comme lu</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2 text-xs overflow-y-auto max-h-96 pr-1 custom-scrollbar">

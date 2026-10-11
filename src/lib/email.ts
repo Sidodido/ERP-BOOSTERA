@@ -344,3 +344,80 @@ export async function sendPasswordResetEmail(to: string, name: string, resetUrl:
     html: baseEmailTemplate("Réinitialisation de mot de passe — BOOSTERA", content),
   });
 }
+
+export async function sendNotificationEmail(params: {
+  to: string;
+  userName?: string;
+  title: string;
+  message: string;
+  link?: string | null;
+  type?: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://erp.boostera.dz";
+  const actionUrl = params.link
+    ? params.link.startsWith("http")
+      ? params.link
+      : `${appUrl}${params.link.startsWith("/") ? "" : "/"}${params.link}`
+    : appUrl;
+
+  const typeLabels: Record<string, string> = {
+    TASK: "📌 NOUVELLE TÂCHE ASSIGNÉE",
+    APPOINTMENT: "📅 RENDEZ-VOUS PLANIFIÉ",
+    CLIENT: "🎉 NOUVEAU CLIENT ENREGISTRÉ",
+    CHAT: "💬 MESSAGE PRIVÉ",
+    FOLLOWUP: "⏰ RELANCE CLIENT",
+    CALL: "📞 APPEL COMMERCIAL",
+    PAYMENT: "💰 FACTURATION & PAIEMENT",
+    WEEKLY_THEMES_REMINDER: "🔔 RAPPEL HEBDOMADAIRE DE PRODUCTION",
+    SYSTEM: "⚙️ NOTIFICATION SYSTÈME",
+  };
+
+  const badgeText = (params.type && typeLabels[params.type]) || "🔔 NOTIFICATION BOOSTERA ERP";
+
+  const content = `
+    <div style="display: inline-block; padding: 4px 10px; background-color: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: #60a5fa; font-size: 11px; font-weight: 700; margin-bottom: 12px; letter-spacing: 0.5px;">
+      ${badgeText}
+    </div>
+    <h2 style="font-size: 18px; font-weight: 700; color: #ffffff; margin-top: 0; margin-bottom: 12px; line-height: 1.4;">
+      ${params.title}
+    </h2>
+    <p style="margin-bottom: 18px; color: #94a3b8; font-size: 14px; line-height: 1.6;">
+      Bonjour <strong>${params.userName || "Collaborateur"}</strong>,<br>
+      Une nouvelle notification a été émise à votre attention sur votre compte BOOSTERA ERP :
+    </p>
+
+    <div style="background-color: #0c101a; border: 1px solid #1f293d; border-radius: 12px; padding: 18px; margin: 20px 0; font-size: 14px; color: #f1f5f9; line-height: 1.6; border-left: 4px solid #3b82f6;">
+      ${params.message}
+    </div>
+
+    ${
+      params.link
+        ? `
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${actionUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
+        VOIR DANS L'ERP BOOSTERA
+      </a>
+    </div>
+    `
+        : `
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${appUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #2563eb, #3b82f6); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);">
+        ACCÉDER À L'ERP
+      </a>
+    </div>
+    `
+    }
+
+    <p style="font-size: 12px; color: #64748b; margin-top: 25px;">
+      Vous recevez cette notification automatique car vous êtes membre de l'équipe BOOSTERA.
+    </p>
+  `;
+
+  return sendEmail({
+    to: params.to,
+    subject: `[${params.title}] — BOOSTERA ERP`,
+    html: baseEmailTemplate(params.title, content),
+    text: `${params.title}\n\nBonjour ${params.userName || "Collaborateur"},\n\n${params.message}\n\nLien : ${actionUrl}`,
+  });
+}
+

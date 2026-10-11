@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
+import { createNotificationWithEmail } from "@/actions/notifications";
 
 export interface ChatUserItem {
   id: string;
@@ -145,14 +146,12 @@ export async function sendMessageAction(data: {
     try {
       if (data.recipientId !== user.id) {
         const notifMsg = fileUrl && !cleanContent ? "📷 Photo partagée" : finalContent;
-        await prisma.notification.create({
-          data: {
-            userId: data.recipientId,
-            title: `💬 Message privé de ${user.name}`,
-            message: notifMsg.length > 80 ? notifMsg.slice(0, 77) + "..." : notifMsg,
-            type: "CHAT",
-            link: `/chat?dm=${user.id}`,
-          },
+        await createNotificationWithEmail({
+          userId: data.recipientId,
+          title: `💬 Message privé de ${user.name}`,
+          message: notifMsg.length > 80 ? notifMsg.slice(0, 77) + "..." : notifMsg,
+          type: "CHAT",
+          link: `/chat?dm=${user.id}`,
         });
       }
     } catch (err) {

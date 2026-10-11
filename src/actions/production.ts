@@ -5,7 +5,11 @@ import { requireAuth } from "@/lib/auth";
 import { createAuditLog } from "@/lib/audit";
 import { TaskStatus, TaskPriority } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { dispatchTaskNotifications, dispatchWeeklyThemesReminderNotifications } from "@/actions/notifications";
+import {
+  dispatchTaskNotifications,
+  dispatchWeeklyThemesReminderNotifications,
+  createNotificationWithEmail,
+} from "@/actions/notifications";
 import { getStoredEditorialPlan, saveEditorialPlanToNotes, getMonthKey } from "@/lib/utils";
 import { WEEKLY_QUOTAS_BY_OFFER } from "@/lib/aiContentGenerator";
 
@@ -307,14 +311,12 @@ export async function updateTaskAction(
   });
 
   if (data.assigneeId && data.assigneeId !== user.id) {
-    await prisma.notification.create({
-      data: {
-        userId: data.assigneeId,
-        title: "📌 Tâche assignée",
-        message: `La tâche "${task.title}" vous a été assignée sur le projet ${task.project.name}.`,
-        type: "TASK",
-        link: `/projets/${task.projectId}`,
-      },
+    await createNotificationWithEmail({
+      userId: data.assigneeId,
+      title: "📌 Tâche assignée",
+      message: `La tâche "${task.title}" vous a été assignée sur le projet ${task.project.name}.`,
+      type: "TASK",
+      link: `/projets/${task.projectId}`,
     }).catch(() => {});
   }
 
