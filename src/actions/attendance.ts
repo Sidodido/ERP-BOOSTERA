@@ -90,6 +90,108 @@ async function ensureEmployeeForUser(userId: string) {
   return employee;
 }
 
+export interface BreakSessionItem {
+  id: string;
+  startTime: string;
+  endTime: string | null;
+  durationMinutes: number;
+  reason: string;
+  isOngoing: boolean;
+}
+
+export interface DayBreakSummary {
+  date: string;
+  dayLabel: string;
+  totalMinutes: number;
+  sessionsCount: number;
+  sessions: BreakSessionItem[];
+  isExceeded: boolean;
+}
+
+function pairBreakLogs(
+  logs: { id: string; action: string; createdAt: Date; details: string | null }[],
+  now: Date
+): BreakSessionItem[] {
+  const sessions: BreakSessionItem[] = [];
+  let currentStart: { id: string; createdAt: Date; reason: string } | null = null;
+
+  for (const log of logs) {
+    let detailsObj: any = {};
+    try {
+      detailsObj = JSON.parse(log.details || "{}");
+    } catch {}
+
+    if (log.action === "PAUSE_START") {
+      if (currentStart) {
+        const dur = Math.max(
+          1,
+          Math.floor((log.createdAt.getTime() - currentStart.createdAt.getTime()) / 60000)
+        );
+        sessions.push({
+          id: currentStart.id,
+          startTime: currentStart.createdAt.toISOString(),
+          endTime: log.createdAt.toISOString(),
+          durationMinutes: dur,
+          reason: currentStart.reason,
+          isOngoing: false,
+        });
+      }
+      currentStart = {
+        id: log.id,
+        createdAt: log.createdAt,
+        reason: detailsObj.reason || "Pause standard",
+      };
+    } else if (log.action === "PAUSE_END") {
+      if (currentStart) {
+        const dur =
+          detailsObj.durationMinutes ??
+          Math.max(
+            1,
+            Math.floor((log.createdAt.getTime() - currentStart.createdAt.getTime()) / 60000)
+          );
+        sessions.push({
+          id: log.id,
+          startTime: currentStart.createdAt.toISOString(),
+          endTime: log.createdAt.toISOString(),
+          durationMinutes: dur,
+          reason: detailsObj.reason || currentStart.reason,
+          isOngoing: false,
+        });
+        currentStart = null;
+      } else {
+        const startIso = detailsObj.startTime
+          ? new Date(detailsObj.startTime).toISOString()
+          : log.createdAt.toISOString();
+        sessions.push({
+          id: log.id,
+          startTime: startIso,
+          endTime: log.createdAt.toISOString(),
+          durationMinutes: detailsObj.durationMinutes || 0,
+          reason: detailsObj.reason || "Pause standard",
+          isOngoing: false,
+        });
+      }
+    }
+  }
+
+  if (currentStart) {
+    const dur = Math.max(
+      0,
+      Math.floor((now.getTime() - currentStart.createdAt.getTime()) / 60000)
+    );
+    sessions.push({
+      id: currentStart.id,
+      startTime: currentStart.createdAt.toISOString(),
+      endTime: null,
+      durationMinutes: dur,
+      reason: currentStart.reason,
+      isOngoing: true,
+    });
+  }
+
+  return sessions;
+}
+
 /**
  * Get attendance for today and recent history for the currently logged in user
  */
@@ -99,6 +201,7 @@ export async function getMyAttendanceAction() {
     return {
       authenticated: false,
       today: null,
+      todayBreaks: [] as BreakSessionItem[],
       recentHistory: [],
     };
   }
@@ -138,41 +241,32 @@ export async function getMyAttendanceAction() {
     );
   }
 
-  // Check active break status
-  const recentBreakLogs = await prisma.auditLog.findMany({
+  // Check break logs for today
+  const todayBreakLogs = await prisma.auditLog.findMany({
     where: {
       userId: user.id,
       action: { in: ["PAUSE_START", "PAUSE_END"] },
       createdAt: { gte: today },
     },
-    orderBy: { createdAt: "desc" },
-    take: 1,
+    orderBy: { createdAt: "asc" },
   });
 
-  const activeBreak =
-    recentBreakLogs.length > 0 && recentBreakLogs[0].action === "PAUSE_START"
-      ? {
-          isOnBreak: true,
-          startTime: recentBreakLogs[0].createdAt.toISOString(),
-          reason: (() => {
-            try {
-              const d = JSON.parse(recentBreakLogs[0].details || "{}");
-              return d.reason || "Pause";
-            } catch {
-              return "Pause";
-            }
-          })(),
-          elapsedMinutes: Math.max(
-            0,
-            Math.floor((now.getTime() - new Date(recentBreakLogs[0].createdAt).getTime()) / 60000)
-          ),
-        }
-      : {
-          isOnBreak: false,
-          startTime: null,
-          reason: null,
-          elapsedMinutes: 0,
-        };
+  const todayBreaks = pairBreakLogs(todayBreakLogs, now);
+  const ongoingBreak = todayBreaks.find((b) => b.isOngoing);
+
+  const activeBreak = ongoingBreak
+    ? {
+        isOnBreak: true,
+        startTime: ongoingBreak.startTime,
+        reason: ongoingBreak.reason,
+        elapsedMinutes: ongoingBreak.durationMinutes,
+      }
+    : {
+        isOnBreak: false,
+        startTime: null,
+        reason: null,
+        elapsedMinutes: 0,
+      };
 
   return {
     authenticated: true,
@@ -183,6 +277,8 @@ export async function getMyAttendanceAction() {
       department: employee.department,
     },
     activeBreak,
+    todayBreaks,
+
     today: todayAttendance
       ? {
           id: todayAttendance.id,
@@ -600,3 +696,105 @@ export async function autoSyncDailyAbsencesAction(options?: {
     ...result,
   };
 }
+
+/**
+ * Récupère l'historique complet des pauses du collaborateur connecté
+ * avec regroupement par jour, durée cumulée et détection des dépassements.
+ */
+export async function getMyBreaksHistoryAction(daysCount: number = 14) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const employee = await ensureEmployeeForUser(user.id);
+  const now = new Date();
+  const pastDate = new Date(now.getTime() - daysCount * 24 * 60 * 60 * 1000);
+  pastDate.setHours(0, 0, 0, 0);
+
+  // 1. Récupérer tous les logs de pause de l'utilisateur sur la période
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      userId: user.id,
+      action: { in: ["PAUSE_START", "PAUSE_END"] },
+      createdAt: { gte: pastDate },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const sessions = pairBreakLogs(logs, now);
+
+  // 2. Récupérer les présences de l'employé sur la période pour concilier les totaux
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      employeeId: employee.id,
+      date: { gte: pastDate },
+    },
+  });
+
+  const attBreakMap = new Map<string, number>();
+  for (const att of attendances) {
+    const key = att.date.toISOString().split("T")[0];
+    attBreakMap.set(key, att.breakMinutes);
+  }
+
+  // 3. Regrouper les sessions par jour (YYYY-MM-DD)
+  const grouped: Record<string, BreakSessionItem[]> = {};
+  for (const s of sessions) {
+    const dayKey = s.startTime.split("T")[0];
+    if (!grouped[dayKey]) grouped[dayKey] = [];
+    grouped[dayKey].push(s);
+  }
+
+  // Assurer que les jours où un attendance a du breakMinutes soient aussi inclus
+  for (const [dateKey] of attBreakMap.entries()) {
+    if (!grouped[dateKey]) {
+      grouped[dateKey] = [];
+    }
+  }
+
+  const history: DayBreakSummary[] = Object.keys(grouped)
+    .sort((a, b) => b.localeCompare(a)) // Les plus récents en premier
+    .map((dateStr) => {
+      const daySessions = grouped[dateStr] || [];
+      const sumSessions = daySessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+      const attMinutes = attBreakMap.get(dateStr) || 0;
+      const totalMinutes = Math.max(sumSessions, attMinutes);
+
+      const d = new Date(dateStr + "T00:00:00");
+      const dayLabel = d.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+
+      return {
+        date: dateStr,
+        dayLabel,
+        totalMinutes,
+        sessionsCount: daySessions.length,
+        // Tri décroissant pour avoir la pause la plus récente en haut
+        sessions: [...daySessions].sort(
+          (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+        ),
+        isExceeded: totalMinutes > 60,
+      };
+    });
+
+  const totalMinutesAll = history.reduce((acc, d) => acc + d.totalMinutes, 0);
+  const totalBreaksCount = history.reduce((acc, d) => acc + d.sessionsCount, 0);
+  const daysWithBreaks = history.filter((d) => d.totalMinutes > 0).length;
+  const averageMinutesPerDay = daysWithBreaks > 0 ? Math.round(totalMinutesAll / daysWithBreaks) : 0;
+  const exceededDaysCount = history.filter((d) => d.isExceeded).length;
+
+  return {
+    success: true,
+    history,
+    stats: {
+      totalMinutesAll,
+      totalBreaksCount,
+      averageMinutesPerDay,
+      exceededDaysCount,
+      daysCount: history.length,
+    },
+  };
+}
+

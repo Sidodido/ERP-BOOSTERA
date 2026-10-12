@@ -111,3 +111,91 @@ export function playNotificationSound(force = false): void {
     console.warn("Échec lecture son notification:", err);
   }
 }
+
+/**
+ * Joue un son d'avertissement doux (deux notes successives d'alerte)
+ */
+export function playWarningSound(force = false): void {
+  if (typeof window === "undefined") return;
+  if (!force && !isNotificationSoundEnabled()) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    const startTime = ctx.currentTime;
+    const notes = [
+      { freq: 523.25, time: 0.0, duration: 0.18, gain: 0.22 }, // C5
+      { freq: 659.25, time: 0.14, duration: 0.28, gain: 0.25 }, // E5
+    ];
+
+    notes.forEach(({ freq, time, duration, gain }) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, startTime + time);
+
+      gainNode.gain.setValueAtTime(0.0001, startTime + time);
+      gainNode.gain.exponentialRampToValueAtTime(gain, startTime + time + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + time + duration);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(startTime + time);
+      osc.stop(startTime + time + duration);
+    });
+  } catch (err) {
+    console.warn("Échec lecture son warning:", err);
+  }
+}
+
+/**
+ * Joue un son d'alerte critique / urgent (trois impulsions insistantes)
+ */
+export function playUrgentSound(force = false): void {
+  if (typeof window === "undefined") return;
+  if (!force && !isNotificationSoundEnabled()) return;
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+
+    const startTime = ctx.currentTime;
+    const pulses = [
+      { freq: 880.0, time: 0.0, duration: 0.12, gain: 0.28 },  // A5
+      { freq: 880.0, time: 0.16, duration: 0.12, gain: 0.28 }, // A5
+      { freq: 1046.5, time: 0.32, duration: 0.30, gain: 0.32 }, // C6
+    ];
+
+    pulses.forEach(({ freq, time, duration, gain }) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, startTime + time);
+
+      gainNode.gain.setValueAtTime(0.0001, startTime + time);
+      gainNode.gain.exponentialRampToValueAtTime(gain, startTime + time + 0.015);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + time + duration);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start(startTime + time);
+      osc.stop(startTime + time + duration);
+    });
+  } catch (err) {
+    console.warn("Échec lecture son urgent:", err);
+  }
+}
+
