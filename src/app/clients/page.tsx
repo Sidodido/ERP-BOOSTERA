@@ -14,6 +14,11 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
+  // Section réservée exclusivement aux administrateurs
+  if (user.role !== "ADMIN" && user.role !== "SALES_DIRECTOR") {
+    redirect("/dashboard");
+  }
+
   const resolvedParams = searchParams ? await searchParams : {};
   const clients = await getClients();
 

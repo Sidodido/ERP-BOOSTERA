@@ -145,7 +145,6 @@ const COMMERCIAL_NAV_GROUPS: NavGroup[] = [
       { label: "Appels", href: "/appels", icon: PhoneCall },
       { label: "Rendez-vous", href: "/rendez-vous", icon: Calendar },
       { label: "Relances", href: "/relances", icon: Clock },
-      { label: "Clients", href: "/clients", icon: Users },
     ],
   },
 ];
@@ -165,7 +164,6 @@ const TECHNICIAN_NAV_GROUPS: NavGroup[] = [
       { label: "Projets Web & Mobile", href: "/projets", icon: Briefcase, badge: "Tech" },
       { label: "Production", href: "/production", icon: Kanban },
       { label: "Calendrier Tâches", href: "/calendrier-technicien", icon: CalendarDays, badge: "Mois" },
-      { label: "Clients", href: "/clients", icon: Users },
       { label: "Documents", href: "/documents", icon: FileText },
     ],
   },

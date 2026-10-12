@@ -14,9 +14,9 @@ export default async function ClientDetailPage({ params }: PageProps) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  // La fiche 360° n'est pas accessible au rôle commercial
-  if (user.role === "SALES_REP") {
-    redirect("/clients");
+  // Section réservée exclusivement aux administrateurs
+  if (user.role !== "ADMIN" && user.role !== "SALES_DIRECTOR") {
+    redirect("/dashboard");
   }
 
   const { id } = await params;
