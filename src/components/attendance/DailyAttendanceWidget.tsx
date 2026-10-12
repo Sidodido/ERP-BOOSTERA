@@ -23,6 +23,9 @@ import {
   Info,
   Flame,
   ShieldAlert,
+  Users,
+  Search,
+  RefreshCw,
 } from "lucide-react";
 import {
   getMyAttendanceAction,
@@ -34,6 +37,10 @@ import {
   BreakSessionItem,
   DayBreakSummary,
 } from "@/actions/attendance";
+import {
+  getTodayAllUsersBreaksAction,
+  type EmployeeTodayBreak,
+} from "@/actions/rh";
 import {
   playNotificationSound,
   playWarningSound,
@@ -105,7 +112,9 @@ export function DailyAttendanceWidget() {
   const [liveElapsedBreakMinutes, setLiveElapsedBreakMinutes] = useState<number>(0);
 
   // Breaks History Modal
+  // Breaks History & Team Breaks Modal
   const [showBreaksHistoryModal, setShowBreaksHistoryModal] = useState<boolean>(false);
+  const [modalTab, setModalTab] = useState<"MY_BREAKS" | "ALL_USERS">("ALL_USERS");
   const [historyDaysCount, setHistoryDaysCount] = useState<number>(14);
   const [breaksHistoryData, setBreaksHistoryData] = useState<{
     history: DayBreakSummary[];
@@ -119,6 +128,21 @@ export function DailyAttendanceWidget() {
   } | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+
+  // All Users Breaks State (Pauses Aujourd'hui pour tous les utilisateurs)
+  const [allUsersBreaksData, setAllUsersBreaksData] = useState<{
+    breaks: EmployeeTodayBreak[];
+    kpis: {
+      totalEmployees: number;
+      clockedInCount: number;
+      currentlyOnBreak: number;
+      totalCompanyBreakMinutes: number;
+      exceededCount: number;
+    };
+  } | null>(null);
+  const [isLoadingAllUsersBreaks, setIsLoadingAllUsersBreaks] = useState<boolean>(false);
+  const [allUsersSearch, setAllUsersSearch] = useState<string>("");
+  const [expandedAllUserEmployeeId, setExpandedAllUserEmployeeId] = useState<string | null>(null);
 
   // Audio Alerts state
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -336,9 +360,31 @@ export function DailyAttendanceWidget() {
     }
   };
 
-  const openBreaksHistoryModal = () => {
+  const loadAllUsersBreaks = async () => {
+    setIsLoadingAllUsersBreaks(true);
+    try {
+      const res = await getTodayAllUsersBreaksAction();
+      if (res && res.success) {
+        setAllUsersBreaksData({
+          breaks: res.breaks,
+          kpis: res.kpis,
+        });
+      }
+    } catch (err) {
+      console.error("Erreur chargement pauses tous utilisateurs:", err);
+    } finally {
+      setIsLoadingAllUsersBreaks(false);
+    }
+  };
+
+  const openBreaksHistoryModal = (targetTab: "MY_BREAKS" | "ALL_USERS" = "ALL_USERS") => {
+    setModalTab(targetTab);
     setShowBreaksHistoryModal(true);
-    loadBreaksHistory(historyDaysCount);
+    if (targetTab === "MY_BREAKS") {
+      loadBreaksHistory(historyDaysCount);
+    } else {
+      loadAllUsersBreaks();
+    }
   };
 
   const isClockedIn = !!data?.today?.clockIn;
@@ -363,9 +409,9 @@ export function DailyAttendanceWidget() {
   // Warning metrics calculation
   const currentElapsed = data?.activeBreak?.isOnBreak ? liveElapsedBreakMinutes : 0;
   const totalBreaksMinutesToday = (data?.today?.breakMinutes || 0) + currentElapsed;
-  const quotaLimit = 60; // 60 min daily recommended
+  const quotaLimit = 40; // 40 min daily limit
   const isDailyQuotaExceeded = totalBreaksMinutesToday > quotaLimit;
-  const isDailyQuotaHigh = totalBreaksMinutesToday > 90;
+  const isDailyQuotaHigh = totalBreaksMinutesToday > 60;
 
   const activeReason = (data?.activeBreak?.reason || "").toLowerCase();
   const isActiveLunch = activeReason.includes("déjeuner") || activeReason.includes("dejeuner");
@@ -648,7 +694,7 @@ export function DailyAttendanceWidget() {
             </div>
           )}
 
-          {/* DAILY QUOTA WARNING BANNER (> 60 min ou > 90 min) */}
+          {/* DAILY QUOTA WARNING BANNER (> 40 min ou > 60 min) */}
           {isDailyQuotaExceeded && (
             <div
               className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
@@ -660,13 +706,13 @@ export function DailyAttendanceWidget() {
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>
-                  <strong>Quota journalier de pause dépassé :</strong>{" "}
-                  {totalBreaksMinutesToday} min cumulées aujourd'hui (quota recommandé de 60 min
-                  dépassé de +{totalBreaksMinutesToday - quotaLimit} min).
+                  <strong>Limite quotidienne de pause dépassée :</strong>{" "}
+                  {totalBreaksMinutesToday} min cumulées aujourd'hui (consigne de ne pas dépasser 40 min/jour
+                  dépassée de +{totalBreaksMinutesToday - quotaLimit} min).
                 </span>
               </div>
               <span className="font-mono font-bold text-[11px] shrink-0 px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800">
-                {totalBreaksMinutesToday}m / 60m
+                {totalBreaksMinutesToday}m / 40m
               </span>
             </div>
           )}
@@ -805,21 +851,21 @@ export function DailyAttendanceWidget() {
             <div className="mt-3 pt-3 border-t border-neutral-800/60">
               <div className="flex items-center justify-between text-[11px] text-neutral-400 mb-1.5">
                 <span className="flex items-center gap-1.5">
-                  <span>Quota quotidien conseillé :</span>
+                  <span>Ne pas dépasser 40 min/jour :</span>
                   <strong
                     className={
                       isDailyQuotaExceeded
                         ? "text-rose-400"
-                        : totalBreaksMinutesToday >= 45
+                        : totalBreaksMinutesToday >= 30
                         ? "text-amber-400"
                         : "text-emerald-400"
                     }
                   >
-                    {totalBreaksMinutesToday} min / 60 min
+                    {totalBreaksMinutesToday} min / 40 min
                   </strong>
                 </span>
                 <span className="font-mono text-[10px]">
-                  {Math.round((totalBreaksMinutesToday / 60) * 100)}%
+                  {Math.round((totalBreaksMinutesToday / 40) * 100)}%
                 </span>
               </div>
               <div className="w-full bg-neutral-950 rounded-full h-1.5 overflow-hidden border border-neutral-800/80">
@@ -827,12 +873,12 @@ export function DailyAttendanceWidget() {
                   className={`h-full rounded-full transition-all duration-500 ${
                     isDailyQuotaExceeded
                       ? "bg-rose-500"
-                      : totalBreaksMinutesToday >= 45
+                      : totalBreaksMinutesToday >= 30
                       ? "bg-amber-500"
                       : "bg-emerald-500"
                   }`}
                   style={{
-                    width: `${Math.min(100, Math.round((totalBreaksMinutesToday / 60) * 100))}%`,
+                    width: `${Math.min(100, Math.round((totalBreaksMinutesToday / 40) * 100))}%`,
                   }}
                 />
               </div>
@@ -857,14 +903,25 @@ export function DailyAttendanceWidget() {
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={openBreaksHistoryModal}
-                className="py-1 px-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-amber-300/90 hover:text-amber-200 text-[11px] font-medium transition flex items-center gap-1.5 cursor-pointer"
-              >
-                <History className="w-3.5 h-3.5 text-amber-400" />
-                <span>Historique & Bilan des Pauses</span>
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => openBreaksHistoryModal("ALL_USERS")}
+                  className="py-1 px-2.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 hover:text-indigo-200 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Users className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Pauses Aujourd'hui (Tous)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openBreaksHistoryModal("MY_BREAKS")}
+                  className="py-1 px-2.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-amber-300/90 hover:text-amber-200 text-[11px] font-medium transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <History className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Mon Historique</span>
+                </button>
+              </div>
             </div>
 
             {/* Sub-drawer: Today's Break Sessions List */}
@@ -1008,10 +1065,10 @@ export function DailyAttendanceWidget() {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
-                    Historique & Bilan de mes Pauses
+                    Suivi & Bilan des Pauses
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Suivi de vos temps de repos quotidiens, respect des quotas et alertes de dépassement
+                    Suivi quotidien des pauses, alertes en direct et registre de l'équipe
                   </p>
                 </div>
               </div>
@@ -1025,256 +1082,580 @@ export function DailyAttendanceWidget() {
               </button>
             </div>
 
-            {/* Modal Subheader: Period Selectors */}
-            <div className="px-5 py-3 border-b border-neutral-800/80 bg-neutral-900 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                {[7, 14, 30].map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => {
-                      setHistoryDaysCount(d);
-                      loadBreaksHistory(d);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
-                      historyDaysCount === d
-                        ? "bg-amber-600 text-neutral-950 shadow-sm"
-                        : "bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800"
-                    }`}
-                  >
-                    {d} derniers jours
-                  </button>
-                ))}
-              </div>
+            {/* Modal Tab Switcher */}
+            <div className="px-5 pt-2.5 border-b border-neutral-800 bg-neutral-900 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab("ALL_USERS");
+                  loadAllUsersBreaks();
+                }}
+                className={`pb-2.5 px-1.5 text-xs font-bold transition flex items-center gap-2 border-b-2 cursor-pointer ${
+                  modalTab === "ALL_USERS"
+                    ? "border-indigo-500 text-indigo-400"
+                    : "border-transparent text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>Pauses Aujourd'hui (Tous les Utilisateurs)</span>
+                {allUsersBreaksData?.kpis?.currentlyOnBreak ? (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                    {allUsersBreaksData.kpis.currentlyOnBreak} en pause
+                  </span>
+                ) : null}
+              </button>
 
-              <div className="text-xs text-neutral-400 flex items-center gap-2">
-                <span>Quota de référence :</span>
-                <span className="font-semibold text-neutral-200 px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800">
-                  60 min / jour
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalTab("MY_BREAKS");
+                  loadBreaksHistory(historyDaysCount);
+                }}
+                className={`pb-2.5 px-1.5 text-xs font-bold transition flex items-center gap-2 border-b-2 cursor-pointer ${
+                  modalTab === "MY_BREAKS"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-neutral-400 hover:text-neutral-200"
+                }`}
+              >
+                <History className="w-4 h-4" />
+                <span>Mon Historique Personnel</span>
+              </button>
             </div>
 
-            {/* Modal Body: KPIs & Day by Day List */}
-            <div className="p-5 overflow-y-auto space-y-5 flex-1">
-              {isLoadingHistory ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-3 text-neutral-400">
-                  <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
-                  <span className="text-xs font-medium">Chargement de votre historique des pauses...</span>
-                </div>
-              ) : (
-                <>
-                  {/* KPI Summary Cards */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
-                      <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                        Total Cumulé
-                      </span>
-                      <div className="font-mono text-lg font-bold text-amber-400">
-                        {formatHoursMins(breaksHistoryData?.stats.totalMinutesAll || 0)}
-                      </div>
-                      <span className="text-[10px] text-neutral-500">
-                        Sur la période sélectionnée
-                      </span>
-                    </div>
-
-                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
-                      <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                        Moyenne / Jour
-                      </span>
-                      <div className="font-mono text-lg font-bold text-neutral-200">
-                        {breaksHistoryData?.stats.averageMinutesPerDay || 0} min
-                      </div>
-                      <span className="text-[10px] text-neutral-500">
-                        Par jour avec pauses
-                      </span>
-                    </div>
-
-                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
-                      <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                        Nombre de Pauses
-                      </span>
-                      <div className="font-mono text-lg font-bold text-indigo-400">
-                        {breaksHistoryData?.stats.totalBreaksCount || 0}
-                      </div>
-                      <span className="text-[10px] text-neutral-500">
-                        Sessions enregistrées
-                      </span>
-                    </div>
-
-                    <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
-                      <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                        Dépassements &gt; 60m
-                      </span>
-                      <div
-                        className={`font-mono text-lg font-bold ${
-                          (breaksHistoryData?.stats.exceededDaysCount || 0) > 0
-                            ? "text-rose-400"
-                            : "text-emerald-400"
-                        }`}
-                      >
-                        {breaksHistoryData?.stats.exceededDaysCount || 0} j
-                      </div>
-                      <span className="text-[10px] text-neutral-500">
-                        {(breaksHistoryData?.stats.exceededDaysCount || 0) === 0
-                          ? "Tous quotas respectés 🎉"
-                          : "Jours avec dépassement"}
-                      </span>
-                    </div>
+            {/* TAB 1: ALL USERS TODAY BREAKS */}
+            {modalTab === "ALL_USERS" && (
+              <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                {/* Top Toolbar */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-500" />
+                    <input
+                      type="text"
+                      value={allUsersSearch}
+                      onChange={(e) => setAllUsersSearch(e.target.value)}
+                      placeholder="Rechercher un collaborateur, poste..."
+                      className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                    />
                   </div>
 
-                  {/* Day by Day List */}
-                  <div className="space-y-2">
-                    <div className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
-                      Détail des journées ({breaksHistoryData?.history.length || 0}) :
+                  <button
+                    type="button"
+                    onClick={loadAllUsersBreaks}
+                    disabled={isLoadingAllUsersBreaks}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-850 text-neutral-300 border border-neutral-800 text-xs font-semibold transition cursor-pointer self-start sm:self-auto"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAllUsersBreaks ? "animate-spin text-indigo-400" : ""}`} />
+                    <span>Actualiser</span>
+                  </button>
+                </div>
+
+                {isLoadingAllUsersBreaks ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-3 text-neutral-400">
+                    <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                    <span className="text-xs font-medium">Chargement des pauses de l'équipe...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* KPI Summary Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                        <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                          En Poste Aujourd'hui
+                        </span>
+                        <div className="font-mono text-lg font-bold text-emerald-400">
+                          {allUsersBreaksData?.kpis?.clockedInCount || 0} / {allUsersBreaksData?.kpis?.totalEmployees || 0}
+                        </div>
+                        <span className="text-[10px] text-neutral-500">Collaborateurs pointés</span>
+                      </div>
+
+                      <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                        <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                          En Pause Active
+                        </span>
+                        <div className="font-mono text-lg font-bold text-amber-400 flex items-center gap-1.5">
+                          <span>{allUsersBreaksData?.kpis?.currentlyOnBreak || 0}</span>
+                          {(allUsersBreaksData?.kpis?.currentlyOnBreak || 0) > 0 && (
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                          )}
+                        </div>
+                        <span className="text-[10px] text-neutral-500">En pause en ce moment</span>
+                      </div>
+
+                      <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                        <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                          Total Pauses Entreprise
+                        </span>
+                        <div className="font-mono text-lg font-bold text-indigo-400">
+                          {formatHoursMins(allUsersBreaksData?.kpis?.totalCompanyBreakMinutes || 0)}
+                        </div>
+                        <span className="text-[10px] text-neutral-500">Cumulé aujourd'hui</span>
+                      </div>
+
+                      <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                        <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                          Dépassements &gt; 40m
+                        </span>
+                        <div
+                          className={`font-mono text-lg font-bold ${
+                            (allUsersBreaksData?.kpis?.exceededCount || 0) > 0
+                              ? "text-rose-400"
+                              : "text-emerald-400"
+                          }`}
+                        >
+                          {allUsersBreaksData?.kpis?.exceededCount || 0}
+                        </div>
+                        <span className="text-[10px] text-neutral-500">
+                          {(allUsersBreaksData?.kpis?.exceededCount || 0) === 0
+                            ? "Tous quotas respectés 🎉"
+                            : "Collaborateurs au-delà de 40m"}
+                        </span>
+                      </div>
                     </div>
 
-                    {breaksHistoryData?.history && breaksHistoryData.history.length > 0 ? (
-                      <div className="space-y-2">
-                        {breaksHistoryData.history.map((day) => {
-                          const isExp = expandedDay === day.date;
-                          return (
-                            <div
-                              key={day.date}
-                              className={`rounded-xl border transition-all ${
-                                day.isExceeded
-                                  ? "bg-amber-950/20 border-amber-800/60"
-                                  : "bg-neutral-950 border-neutral-800/80"
-                              }`}
-                            >
-                              {/* Day Row Header */}
-                              <div
-                                onClick={() => setExpandedDay(isExp ? null : day.date)}
-                                className="p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
-                              >
-                                <div className="flex items-center gap-3">
+                    {/* All Users List */}
+                    <div className="space-y-2">
+                      <div className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                        Statut des collaborateurs ({allUsersBreaksData?.breaks?.length || 0}) :
+                      </div>
+
+                      {allUsersBreaksData?.breaks && allUsersBreaksData.breaks.length > 0 ? (
+                        <div className="space-y-2">
+                          {allUsersBreaksData.breaks
+                            .filter((b) => {
+                              if (!allUsersSearch.trim()) return true;
+                              const q = allUsersSearch.toLowerCase();
+                              return (
+                                b.firstName.toLowerCase().includes(q) ||
+                                b.lastName.toLowerCase().includes(q) ||
+                                b.position.toLowerCase().includes(q)
+                              );
+                            })
+                            .map((b) => {
+                              const isExp = expandedAllUserEmployeeId === b.employeeId;
+                              return (
+                                <div
+                                  key={b.employeeId}
+                                  className={`rounded-xl border transition-all ${
+                                    b.isCritical
+                                      ? "bg-rose-950/30 border-rose-800/70"
+                                      : b.isOnBreak
+                                      ? "bg-amber-950/25 border-amber-800/60"
+                                      : b.isExceeded
+                                      ? "bg-amber-950/15 border-amber-800/40"
+                                      : "bg-neutral-950 border-neutral-800/80"
+                                  }`}
+                                >
+                                  {/* Row Header */}
                                   <div
-                                    className={`w-2.5 h-2.5 rounded-full ${
-                                      day.isExceeded
-                                        ? "bg-rose-500"
-                                        : day.totalMinutes > 0
-                                        ? "bg-emerald-500"
-                                        : "bg-neutral-600"
-                                    }`}
-                                  />
-                                  <div>
-                                    <div className="text-xs font-bold text-neutral-200 capitalize">
-                                      {day.dayLabel}
-                                    </div>
-                                    <div className="text-[11px] text-neutral-400">
-                                      {day.sessionsCount} pause(s) enregistrée(s)
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-3">
-                                  <div className="text-right">
-                                    <div className="font-mono text-sm font-bold text-neutral-200">
-                                      {formatHoursMins(day.totalMinutes)}
-                                    </div>
-                                    <div className="text-[10px]">
-                                      {day.isExceeded ? (
-                                        <span className="text-rose-400 font-semibold">
-                                          ⚠️ Dépassement (+{day.totalMinutes - 60}m)
-                                        </span>
-                                      ) : (
-                                        <span className="text-emerald-400 font-semibold">
-                                          ✓ Quota respecté
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="text-neutral-500">
-                                    {isExp ? (
-                                      <ChevronUp className="w-4 h-4" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4" />
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Expanded Sessions for Day */}
-                              {isExp && (
-                                <div className="px-4 pb-3 pt-1 border-t border-neutral-800/60 space-y-1.5 bg-neutral-950/40">
-                                  {day.sessions && day.sessions.length > 0 ? (
-                                    day.sessions.map((s, sIdx) => {
-                                      const isLunch = s.reason.toLowerCase().includes("déjeuner");
-                                      const sessLimit = isLunch ? 45 : 15;
-                                      const sessOver = s.durationMinutes > sessLimit;
-
-                                      return (
-                                        <div
-                                          key={s.id || sIdx}
-                                          className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between text-xs"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-amber-400">☕</span>
-                                            <span className="font-medium text-neutral-200">
-                                              {s.reason}
+                                    onClick={() =>
+                                      setExpandedAllUserEmployeeId(
+                                        isExp ? null : b.employeeId
+                                      )
+                                    }
+                                    className="p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 cursor-pointer select-none"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-xs text-neutral-200 shrink-0">
+                                        {b.firstName[0]}
+                                        {b.lastName[0]}
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs font-bold text-neutral-200">
+                                            {b.firstName} {b.lastName}
+                                          </span>
+                                          {b.department && (
+                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900 border border-neutral-800 text-neutral-400">
+                                              {b.department}
                                             </span>
-                                            <span className="text-[11px] font-mono text-neutral-500">
-                                              ({formatTimeOnly(s.startTime)} →{" "}
-                                              {s.isOngoing ? "En cours..." : formatTimeOnly(s.endTime)})
-                                            </span>
-                                          </div>
-                                          <div className="flex items-center gap-2">
-                                            <span
-                                              className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold ${
-                                                sessOver
-                                                  ? "bg-amber-950 text-amber-300 border border-amber-800"
-                                                  : "bg-emerald-950 text-emerald-400 border border-emerald-800/40"
-                                              }`}
-                                            >
-                                              {s.durationMinutes} min{" "}
-                                              {sessOver && `(seuil ${sessLimit}m)`}
-                                            </span>
-                                          </div>
+                                          )}
                                         </div>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="text-xs text-neutral-500 italic py-1">
-                                      Aucune session individuelle détaillée trouvée.
+                                        <div className="text-[11px] text-neutral-400 mt-0.5">
+                                          {b.position}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 sm:gap-4 justify-between sm:justify-end">
+                                      {/* Live status badge */}
+                                      <div>
+                                        {b.isOnBreak ? (
+                                          <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse flex items-center gap-1.5">
+                                            <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>
+                                              En Pause ({b.currentBreakElapsedMinutes}m) •{" "}
+                                              {b.currentBreakReason || "Standard"}
+                                            </span>
+                                          </span>
+                                        ) : b.clockIn && !b.clockOut ? (
+                                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
+                                            🟢 Au poste
+                                          </span>
+                                        ) : b.clockOut ? (
+                                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-900 text-neutral-400 border border-neutral-800">
+                                            Sortie pointée
+                                          </span>
+                                        ) : (
+                                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-neutral-900 text-neutral-500 border border-neutral-800">
+                                            Non pointé
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Total break time today */}
+                                      <div className="text-right min-w-[90px]">
+                                        <div className="font-mono text-xs font-bold text-neutral-200">
+                                          {b.totalBreakMinutes} min / 40m
+                                        </div>
+                                        <div className="text-[10px]">
+                                          {b.isExceeded ? (
+                                            <span className="text-rose-400 font-semibold">
+                                              ⚠️ +{b.totalBreakMinutes - 40}m
+                                            </span>
+                                          ) : b.totalBreakMinutes > 0 ? (
+                                            <span className="text-emerald-400">
+                                              {b.sessionsCount} pause(s)
+                                            </span>
+                                          ) : (
+                                            <span className="text-neutral-500">0 pause</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="text-neutral-500">
+                                        {isExp ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded break details */}
+                                  {isExp && (
+                                    <div className="px-4 pb-3 pt-1 border-t border-neutral-800/60 space-y-1.5 bg-neutral-950/40">
+                                      {b.sessions && b.sessions.length > 0 ? (
+                                        b.sessions.map((s, sIdx) => {
+                                          const isLunch = s.reason
+                                            .toLowerCase()
+                                            .includes("déjeuner");
+                                          const sessLimit = isLunch ? 45 : 15;
+                                          const isOver = s.durationMinutes > sessLimit;
+
+                                          return (
+                                            <div
+                                              key={s.id || sIdx}
+                                              className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between text-xs"
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-amber-400">☕</span>
+                                                <span className="font-medium text-neutral-200">
+                                                  {s.reason}
+                                                </span>
+                                                <span className="text-[11px] font-mono text-neutral-500">
+                                                  ({formatTimeOnly(s.startTime)} →{" "}
+                                                  {s.isOngoing
+                                                    ? "En cours..."
+                                                    : formatTimeOnly(s.endTime)}
+                                                  )
+                                                </span>
+                                              </div>
+                                              <div>
+                                                <span
+                                                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold ${
+                                                    s.isOngoing
+                                                      ? "bg-amber-950 text-amber-300 border border-amber-800 animate-pulse"
+                                                      : isOver
+                                                      ? "bg-amber-950 text-amber-300 border border-amber-800"
+                                                      : "bg-emerald-950 text-emerald-400 border border-emerald-800/40"
+                                                  }`}
+                                                >
+                                                  {s.durationMinutes} min{" "}
+                                                  {s.isOngoing && "(En cours)"}
+                                                  {isOver && !s.isOngoing && `(seuil ${sessLimit}m)`}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="text-xs text-neutral-500 italic py-1">
+                                          Aucune pause enregistrée pour ce collaborateur aujourd'hui.
+                                        </div>
+                                      )}
                                     </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-neutral-500 italic py-6 text-center">
-                        Aucun historique de pause enregistré sur cette période.
-                      </div>
-                    )}
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-neutral-500 italic py-6 text-center">
+                          Aucun collaborateur trouvé.
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: MY BREAKS HISTORY */}
+            {modalTab === "MY_BREAKS" && (
+              <>
+                {/* Modal Subheader: Period Selectors */}
+                <div className="px-5 py-3 border-b border-neutral-800/80 bg-neutral-900 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    {[7, 14, 30].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => {
+                          setHistoryDaysCount(d);
+                          loadBreaksHistory(d);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                          historyDaysCount === d
+                            ? "bg-amber-600 text-neutral-950 shadow-sm"
+                            : "bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800"
+                        }`}
+                      >
+                        {d} derniers jours
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Policy and Recommendations Notice */}
-                  <div className="bg-neutral-950/80 border border-neutral-800 rounded-xl p-3.5 space-y-2 text-xs text-neutral-400">
-                    <div className="font-bold text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
-                      <Info className="w-3.5 h-3.5 text-indigo-400" />
-                      Règles & Bonnes Pratiques de Repos BOOSTERA :
-                    </div>
-                    <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-400 pl-1">
-                      <li>
-                        <strong>Pause courte / Café :</strong> 15 minutes conseillées par session.
-                      </li>
-                      <li>
-                        <strong>Pause Déjeuner :</strong> 45 minutes recommandées pour le repas.
-                      </li>
-                      <li>
-                        <strong>Quota Quotidien :</strong> 60 minutes de pause cumulée par jour de travail.
-                      </li>
-                      <li>
-                        <strong>Alertes & Notifications :</strong> Des alertes visuelles et sonores vous informent dès qu'un seuil est dépassé afin de préserver votre temps de travail et la précision des fiches RH.
-                      </li>
-                    </ul>
+                  <div className="text-xs text-neutral-400 flex items-center gap-2">
+                    <span>Quota de référence :</span>
+                    <span className="font-semibold text-neutral-200 px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800">
+                      40 min / jour
+                    </span>
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+
+                {/* Modal Body: KPIs & Day by Day List */}
+                <div className="p-5 overflow-y-auto space-y-5 flex-1">
+                  {isLoadingHistory ? (
+                    <div className="py-12 flex flex-col items-center justify-center gap-3 text-neutral-400">
+                      <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                      <span className="text-xs font-medium">Chargement de votre historique des pauses...</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* KPI Summary Cards */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                          <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                            Total Cumulé
+                          </span>
+                          <div className="font-mono text-lg font-bold text-amber-400">
+                            {formatHoursMins(breaksHistoryData?.stats.totalMinutesAll || 0)}
+                          </div>
+                          <span className="text-[10px] text-neutral-500">
+                            Sur la période sélectionnée
+                          </span>
+                        </div>
+
+                        <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                          <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                            Moyenne / Jour
+                          </span>
+                          <div className="font-mono text-lg font-bold text-neutral-200">
+                            {breaksHistoryData?.stats.averageMinutesPerDay || 0} min
+                          </div>
+                          <span className="text-[10px] text-neutral-500">
+                            Par jour avec pauses
+                          </span>
+                        </div>
+
+                        <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                          <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                            Nombre de Pauses
+                          </span>
+                          <div className="font-mono text-lg font-bold text-indigo-400">
+                            {breaksHistoryData?.stats.totalBreaksCount || 0}
+                          </div>
+                          <span className="text-[10px] text-neutral-500">
+                            Sessions enregistrées
+                          </span>
+                        </div>
+
+                        <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800/80 space-y-1">
+                          <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                            Dépassements &gt; 40m
+                          </span>
+                          <div
+                            className={`font-mono text-lg font-bold ${
+                              (breaksHistoryData?.stats.exceededDaysCount || 0) > 0
+                                ? "text-rose-400"
+                                : "text-emerald-400"
+                            }`}
+                          >
+                            {breaksHistoryData?.stats.exceededDaysCount || 0} j
+                          </div>
+                          <span className="text-[10px] text-neutral-500">
+                            {(breaksHistoryData?.stats.exceededDaysCount || 0) === 0
+                              ? "Tous quotas respectés 🎉"
+                              : "Jours avec dépassement"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Day by Day List */}
+                      <div className="space-y-2">
+                        <div className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
+                          Détail des journées ({breaksHistoryData?.history.length || 0}) :
+                        </div>
+
+                        {breaksHistoryData?.history && breaksHistoryData.history.length > 0 ? (
+                          <div className="space-y-2">
+                            {breaksHistoryData.history.map((day) => {
+                              const isExp = expandedDay === day.date;
+                              return (
+                                <div
+                                  key={day.date}
+                                  className={`rounded-xl border transition-all ${
+                                    day.isExceeded
+                                      ? "bg-amber-950/20 border-amber-800/60"
+                                      : "bg-neutral-950 border-neutral-800/80"
+                                  }`}
+                                >
+                                  {/* Day Row Header */}
+                                  <div
+                                    onClick={() => setExpandedDay(isExp ? null : day.date)}
+                                    className="p-3.5 flex items-center justify-between gap-3 cursor-pointer select-none"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`w-2.5 h-2.5 rounded-full ${
+                                          day.isExceeded
+                                            ? "bg-rose-500"
+                                            : day.totalMinutes > 0
+                                            ? "bg-emerald-500"
+                                            : "bg-neutral-600"
+                                        }`}
+                                      />
+                                      <div>
+                                        <div className="text-xs font-bold text-neutral-200 capitalize">
+                                          {day.dayLabel}
+                                        </div>
+                                        <div className="text-[11px] text-neutral-400">
+                                          {day.sessionsCount} pause(s) enregistrée(s)
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                      <div className="text-right">
+                                        <div className="font-mono text-sm font-bold text-neutral-200">
+                                          {formatHoursMins(day.totalMinutes)}
+                                        </div>
+                                        <div className="text-[10px]">
+                                          {day.isExceeded ? (
+                                            <span className="text-rose-400 font-semibold">
+                                              ⚠️ Dépassement (+{day.totalMinutes - 40}m)
+                                            </span>
+                                          ) : (
+                                            <span className="text-emerald-400 font-semibold">
+                                              ✓ Quota respecté
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="text-neutral-500">
+                                        {isExp ? (
+                                          <ChevronUp className="w-4 h-4" />
+                                        ) : (
+                                          <ChevronDown className="w-4 h-4" />
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded Sessions for Day */}
+                                  {isExp && (
+                                    <div className="px-4 pb-3 pt-1 border-t border-neutral-800/60 space-y-1.5 bg-neutral-950/40">
+                                      {day.sessions && day.sessions.length > 0 ? (
+                                        day.sessions.map((s, sIdx) => {
+                                          const isLunch = s.reason.toLowerCase().includes("déjeuner");
+                                          const sessLimit = isLunch ? 45 : 15;
+                                          const sessOver = s.durationMinutes > sessLimit;
+
+                                          return (
+                                            <div
+                                              key={s.id || sIdx}
+                                              className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between text-xs"
+                                            >
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-amber-400">☕</span>
+                                                <span className="font-medium text-neutral-200">
+                                                  {s.reason}
+                                                </span>
+                                                <span className="text-[11px] font-mono text-neutral-500">
+                                                  ({formatTimeOnly(s.startTime)} →{" "}
+                                                  {s.isOngoing ? "En cours..." : formatTimeOnly(s.endTime)})
+                                                </span>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <span
+                                                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold ${
+                                                    sessOver
+                                                      ? "bg-amber-950 text-amber-300 border border-amber-800"
+                                                      : "bg-emerald-950 text-emerald-400 border border-emerald-800/40"
+                                                  }`}
+                                                >
+                                                  {s.durationMinutes} min{" "}
+                                                  {sessOver && `(seuil ${sessLimit}m)`}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })
+                                      ) : (
+                                        <div className="text-xs text-neutral-500 italic py-1">
+                                          Aucune session individuelle détaillée trouvée.
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-neutral-500 italic py-6 text-center">
+                            Aucun historique de pause enregistré sur cette période.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Policy and Recommendations Notice */}
+                      <div className="bg-neutral-950/80 border border-neutral-800 rounded-xl p-3.5 space-y-2 text-xs text-neutral-400">
+                        <div className="font-bold text-neutral-300 flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                          <Info className="w-3.5 h-3.5 text-indigo-400" />
+                          Règles & Bonnes Pratiques de Repos BOOSTERA :
+                        </div>
+                        <ul className="list-disc list-inside space-y-1 text-[11px] text-neutral-400 pl-1">
+                          <li>
+                            <strong>Pause courte / Café :</strong> 15 minutes conseillées par session.
+                          </li>
+                          <li>
+                            <strong>Pause Déjeuner :</strong> 45 minutes recommandées pour le repas.
+                          </li>
+                          <li>
+                            <strong>Quota Quotidien :</strong> Ne pas dépasser 40 minutes de pause cumulée par jour de travail.
+                          </li>
+                          <li>
+                            <strong>Alertes & Notifications :</strong> Des alertes visuelles et sonores vous informent dès qu'un seuil est dépassé afin de préserver votre temps de travail et la précision des fiches RH.
+                          </li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Modal Footer */}
             <div className="px-5 py-3 border-t border-neutral-800 flex justify-end bg-neutral-950/70">

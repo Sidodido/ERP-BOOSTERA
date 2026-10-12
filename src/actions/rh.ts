@@ -18,6 +18,8 @@ import {
   getAvailablePayrollCycles,
   calculateAndSyncPayroll,
 } from "@/lib/payroll";
+import { pairBreakLogs, type EmployeeTodayBreak } from "@/lib/break-utils";
+export type { EmployeeTodayBreak };
 
 export async function getRhDataAction(monthParam?: number, yearParam?: number) {
   const user = await getCurrentUser();
@@ -575,6 +577,108 @@ export async function getMonthlyAttendancesAction(month: number, year: number) {
       ...att,
       breakMinutes: Number(att.breakMinutes),
     })),
+  };
+}
+
+/**
+ * Récupère les pauses du jour de l'ensemble des collaborateurs en temps réel
+ * avec le statut en cours, durée cumulée et dépassements.
+ */
+export async function getTodayAllUsersBreaksAction() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const now = new Date();
+  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+  // 1. Tous les employés actifs
+  const employees = await prisma.employee.findMany({
+    where: { isActive: true },
+    include: {
+      user: {
+        select: { id: true, name: true, role: true, avatarUrl: true },
+      },
+    },
+    orderBy: { lastName: "asc" },
+  });
+
+  // 2. Pointages d'aujourd'hui
+  const attendances = await prisma.attendance.findMany({
+    where: { date: todayStart },
+  });
+  const attMap = new Map(attendances.map((a) => [a.employeeId, a]));
+
+  // 3. Audit logs de pause d'aujourd'hui
+  const breakLogs = await prisma.auditLog.findMany({
+    where: {
+      action: { in: ["PAUSE_START", "PAUSE_END"] },
+      createdAt: { gte: todayStart },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const logsByUser = new Map<string, typeof breakLogs>();
+  for (const log of breakLogs) {
+    if (!log.userId) continue;
+    if (!logsByUser.has(log.userId)) {
+      logsByUser.set(log.userId, []);
+    }
+    logsByUser.get(log.userId)!.push(log);
+  }
+
+  const list: EmployeeTodayBreak[] = employees.map((emp) => {
+    const userLogs = emp.userId ? logsByUser.get(emp.userId) || [] : [];
+    const sessions = pairBreakLogs(userLogs, now);
+    const ongoing = sessions.find((s) => s.isOngoing);
+    const att = attMap.get(emp.id);
+
+    const sumMinutes = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+    const totalBreakMinutes = Math.max(sumMinutes, att?.breakMinutes || 0);
+    const currentElapsed = ongoing ? ongoing.durationMinutes : 0;
+    const isOver = totalBreakMinutes > 40;
+    const isCrit = ongoing ? ongoing.durationMinutes >= 120 : false;
+
+    let clockInStr: string | null = att?.clockIn ? att.clockIn.toISOString() : null;
+    let clockOutStr: string | null = att?.clockOut ? att.clockOut.toISOString() : null;
+
+    return {
+      employeeId: emp.id,
+      userId: emp.userId,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      position: emp.position,
+      department: emp.department,
+      avatarUrl: emp.user?.avatarUrl || null,
+      clockIn: clockInStr,
+      clockOut: clockOutStr,
+      status: att ? att.status : "ABSENT",
+      isOnBreak: !!ongoing,
+      currentBreakReason: ongoing?.reason || null,
+      currentBreakElapsedMinutes: currentElapsed,
+      currentBreakStartTime: ongoing?.startTime || null,
+      totalBreakMinutes,
+      sessionsCount: sessions.length,
+      sessions: [...sessions].reverse(),
+      isExceeded: isOver,
+      isCritical: isCrit,
+    };
+  });
+
+  const currentlyOnBreak = list.filter((e) => e.isOnBreak).length;
+  const totalCompanyBreakMinutes = list.reduce((acc, e) => acc + e.totalBreakMinutes, 0);
+  const exceededCount = list.filter((e) => e.isExceeded).length;
+  const clockedInCount = list.filter((e) => Boolean(e.clockIn)).length;
+
+  return {
+    success: true,
+    breaks: list,
+    kpis: {
+      totalEmployees: list.length,
+      clockedInCount,
+      currentlyOnBreak,
+      totalCompanyBreakMinutes,
+      exceededCount,
+    },
   };
 }
 

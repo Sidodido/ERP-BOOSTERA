@@ -31,6 +31,7 @@ import {
   ChevronDown,
   LayoutGrid,
   List,
+  Coffee,
 } from "lucide-react";
 import {
   createEmployeeAction,
@@ -43,6 +44,8 @@ import {
   markSalaryPaidAction,
   getTodayAttendancesAction,
   getMonthlyAttendancesAction,
+  getTodayAllUsersBreaksAction,
+  type EmployeeTodayBreak,
 } from "@/actions/rh";
 import {
   createEmployeeGoalAction,
@@ -361,11 +364,46 @@ export function RhClient({
   const [kpisState, setKpisState] = useState(kpis);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Vue des pauses quotidiennes de tous les collaborateurs
+  const [dailyAttendanceSubView, setDailyAttendanceSubView] = useState<"ATTENDANCE" | "BREAKS">("ATTENDANCE");
+  const [allUsersBreaks, setAllUsersBreaks] = useState<EmployeeTodayBreak[]>([]);
+  const [allUsersBreaksKpis, setAllUsersBreaksKpis] = useState<{
+    totalEmployees: number;
+    clockedInCount: number;
+    currentlyOnBreak: number;
+    totalCompanyBreakMinutes: number;
+    exceededCount: number;
+  } | null>(null);
+  const [isLoadingAllUsersBreaks, setIsLoadingAllUsersBreaks] = useState<boolean>(false);
+  const [breaksSearchQuery, setBreaksSearchQuery] = useState<string>("");
+  const [expandedBreakEmployeeId, setExpandedBreakEmployeeId] = useState<string | null>(null);
+
+  const loadAllUsersBreaks = async () => {
+    setIsLoadingAllUsersBreaks(true);
+    try {
+      const res = await getTodayAllUsersBreaksAction();
+      if (res && res.success) {
+        setAllUsersBreaks(res.breaks);
+        setAllUsersBreaksKpis(res.kpis);
+      }
+    } catch (err) {
+      console.error("Erreur chargement pauses RH:", err);
+    } finally {
+      setIsLoadingAllUsersBreaks(false);
+    }
+  };
+
   useEffect(() => {
     setAttendancesList(attendances);
     setMonthlyAttendancesList(monthlyAttendances);
     setKpisState(kpis);
   }, [attendances, monthlyAttendances, kpis]);
+
+  useEffect(() => {
+    if (activeTab === "ATTENDANCE" && dailyAttendanceSubView === "BREAKS") {
+      loadAllUsersBreaks();
+    }
+  }, [activeTab, dailyAttendanceSubView]);
 
   const syncAttendances = async () => {
     try {
@@ -378,6 +416,9 @@ export function RhClient({
           presentToday: res.kpis.presentToday,
           absentToday: res.kpis.absentToday,
         }));
+      }
+      if (dailyAttendanceSubView === "BREAKS") {
+        await loadAllUsersBreaks();
       }
     } catch (err) {
       console.error("Erreur auto-sync pointages:", err);
@@ -1201,12 +1242,52 @@ export function RhClient({
       {activeTab === "ATTENDANCE" && (
         <div className="space-y-4">
           <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-400" />
-              <span className="text-sm font-semibold text-neutral-200">
-                Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
-              </span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-400" />
+                <span className="text-sm font-semibold text-neutral-200">
+                  Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
+                </span>
+              </div>
+
+              {/* Sub-view switcher: Pointages vs Pauses Aujourd'hui */}
+              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDailyAttendanceSubView("ATTENDANCE")}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    dailyAttendanceSubView === "ATTENDANCE"
+                      ? "bg-indigo-600 text-white shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Pointages</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDailyAttendanceSubView("BREAKS");
+                    loadAllUsersBreaks();
+                  }}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                    dailyAttendanceSubView === "BREAKS"
+                      ? "bg-amber-600 text-neutral-950 font-bold shadow-sm"
+                      : "text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <Coffee className="w-3.5 h-3.5" />
+                  <span>Pauses Aujourd'hui (Tous)</span>
+                  {allUsersBreaksKpis?.currentlyOnBreak ? (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                      {allUsersBreaksKpis.currentlyOnBreak}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
             </div>
+
             <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800/40 dark:text-emerald-400 text-[11px] font-medium">
                 <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? "animate-ping" : "animate-pulse"}`} />
@@ -1245,71 +1326,104 @@ export function RhClient({
             </div>
           )}
 
-          <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
-                    <th className="py-3.5 px-4">Collaborateur</th>
-                    <th className="py-3.5 px-4">Poste</th>
-                    <th className="py-3.5 px-4">Statut Aujourd'hui</th>
-                    <th className="py-3.5 px-4">Heure d'Entrée</th>
-                    <th className="py-3.5 px-4">Heure de Sortie</th>
-                    {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800/60">
-                  {employees
-                    .filter((e) => e.isActive)
-                    .map((emp) => {
-                      const att = attendancesList.find((a) => a.employeeId === emp.id);
-                      const isTodayWeekend = [5, 6].includes(new Date().getDay()); // Vendredi (5) et Samedi (6)
-                      const isPresent = att && (att.status === "PRESENT" || Boolean(att.clockIn));
-                      const isLate = att && att.status === "LATE";
-                      const isOnLeave = att && att.status === "ON_LEAVE";
-                      const isHalfDay = att && att.status === "HALF_DAY";
-                      const isWeekend = isTodayWeekend && !isPresent && !isLate && !isOnLeave;
-                      const status = isWeekend ? "WEEKEND" : (att ? att.status : "ABSENT");
+          {/* SOUS-VUE 1 : TABLEAU DES POINTAGES */}
+          {dailyAttendanceSubView === "ATTENDANCE" && (
+            <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                      <th className="py-3.5 px-4">Collaborateur</th>
+                      <th className="py-3.5 px-4">Poste</th>
+                      <th className="py-3.5 px-4">Statut Aujourd'hui</th>
+                      <th className="py-3.5 px-4">Heure d'Entrée</th>
+                      <th className="py-3.5 px-4">Heure de Sortie</th>
+                      <th className="py-3.5 px-4 text-center">Pauses Aujourd'hui</th>
+                      {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60">
+                    {employees
+                      .filter((e) => e.isActive)
+                      .map((emp) => {
+                        const att = attendancesList.find((a) => a.employeeId === emp.id);
+                        const isTodayWeekend = [5, 6].includes(new Date().getDay());
+                        const isPresent = att && (att.status === "PRESENT" || Boolean(att.clockIn));
+                        const isLate = att && att.status === "LATE";
+                        const isOnLeave = att && att.status === "ON_LEAVE";
+                        const isHalfDay = att && att.status === "HALF_DAY";
+                        const isWeekend = isTodayWeekend && !isPresent && !isLate && !isOnLeave;
+                        const status = isWeekend ? "WEEKEND" : (att ? att.status : "ABSENT");
 
-                      return (
-                        <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
-                          <td className="py-3 px-4 font-semibold text-neutral-200">
-                            <div className="flex items-center gap-2">
-                              <span>{emp.firstName} {emp.lastName}</span>
-                              {att?.notes && (
-                                <span
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-normal truncate max-w-[150px]"
-                                  title={att.notes}
+                        return (
+                          <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
+                            <td className="py-3 px-4 font-semibold text-neutral-200">
+                              <div className="flex items-center gap-2">
+                                <span>{emp.firstName} {emp.lastName}</span>
+                                {att?.notes && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-normal truncate max-w-[150px]"
+                                    title={att.notes}
+                                  >
+                                    {att.notes}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-neutral-400 text-xs">
+                              {emp.position}
+                            </td>
+                            <td className="py-3 px-4">
+                              {isPrivileged ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditAttendanceModal(emp, att)}
+                                  className={`group inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer hover:scale-105 active:scale-95 transition ${
+                                    isPresent
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30 hover:border-emerald-500/50"
+                                      : isLate
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30 hover:border-amber-500/50"
+                                      : isOnLeave
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30 hover:border-blue-500/50"
+                                      : isHalfDay
+                                      ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30 hover:border-purple-500/50"
+                                      : isWeekend
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30 hover:border-rose-500/50"
+                                  }`}
+                                  title="Modifier le pointage et le statut de ce collaborateur"
                                 >
-                                  {att.notes}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-neutral-400 text-xs">
-                            {emp.position}
-                          </td>
-                          <td className="py-3 px-4">
-                            {isPrivileged ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditAttendanceModal(emp, att)}
-                                className={`group inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer hover:scale-105 active:scale-95 transition ${
-                                  isPresent
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30 hover:border-emerald-500/50"
-                                    : isLate
-                                    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30 hover:border-amber-500/50"
-                                    : isOnLeave
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30 hover:border-blue-500/50"
-                                    : isHalfDay
-                                    ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30 hover:border-purple-500/50"
-                                    : isWeekend
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
-                                    : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30 hover:border-rose-500/50"
-                                }`}
-                                title="Modifier le pointage et le statut de ce collaborateur"
-                              >
-                                <span>
+                                  <span>
+                                    {isPresent
+                                      ? "Présent"
+                                      : isLate
+                                      ? "En retard"
+                                      : isOnLeave
+                                      ? "En congé"
+                                      : isHalfDay
+                                      ? "Demi-journée"
+                                      : isWeekend
+                                      ? "Week-end (Chômé & payé)"
+                                      : "Absent (-1j paye)"}
+                                  </span>
+                                  <Edit2 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition" />
+                                </button>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                    isPresent
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
+                                      : isLate
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
+                                      : isOnLeave
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                      : isHalfDay
+                                      ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30"
+                                      : isWeekend
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
+                                  }`}
+                                >
                                   {isPresent
                                     ? "Présent"
                                     : isLate
@@ -1322,82 +1436,306 @@ export function RhClient({
                                     ? "Week-end (Chômé & payé)"
                                     : "Absent (-1j paye)"}
                                 </span>
-                                <Edit2 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition" />
-                              </button>
-                            ) : (
-                              <span
-                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                  isPresent
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
-                                    : isLate
-                                    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
-                                    : isOnLeave
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
-                                    : isHalfDay
-                                    ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30"
-                                    : isWeekend
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
-                                    : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
-                                }`}
-                              >
-                                {isPresent
-                                  ? "Présent"
-                                  : isLate
-                                  ? "En retard"
-                                  : isOnLeave
-                                  ? "En congé"
-                                  : isHalfDay
-                                  ? "Demi-journée"
-                                  : isWeekend
-                                  ? "Week-end (Chômé & payé)"
-                                  : "Absent (-1j paye)"}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-xs text-neutral-400">
-                            {att?.clockIn ? (
-                              new Date(att.clockIn).toLocaleTimeString("fr-FR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            ) : isWeekend ? (
-                              <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="py-3 px-4 font-mono text-xs text-amber-400">
-                            {att?.clockOut ? (
-                              new Date(att.clockOut).toLocaleTimeString("fr-FR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })
-                            ) : isWeekend ? (
-                              <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          {isPrivileged && (
-                            <td className="py-3 px-4 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditAttendanceModal(emp, att)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-600 border border-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-indigo-950/40 dark:text-neutral-300 dark:hover:text-indigo-300 dark:border-neutral-700/50 dark:hover:border-indigo-500/30 text-xs font-semibold transition cursor-pointer"
-                                title="Modifier le pointage"
-                              >
-                                <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
-                                <span>Modifier</span>
-                              </button>
+                              )}
                             </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
+                            <td className="py-3 px-4 font-mono text-xs text-neutral-400">
+                              {att?.clockIn ? (
+                                new Date(att.clockIn).toLocaleTimeString("fr-FR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              ) : isWeekend ? (
+                                <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-xs text-amber-400">
+                              {att?.clockOut ? (
+                                new Date(att.clockOut).toLocaleTimeString("fr-FR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              ) : isWeekend ? (
+                                <span className="text-neutral-500 font-sans italic text-xs">Repos</span>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {att && att.breakMinutes > 0 ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold ${
+                                    att.breakMinutes > 60
+                                      ? "bg-rose-950/70 text-rose-300 border border-rose-800"
+                                      : att.breakMinutes >= 45
+                                      ? "bg-amber-950/70 text-amber-300 border border-amber-800"
+                                      : "bg-emerald-950/60 text-emerald-400 border border-emerald-800/40"
+                                  }`}
+                                  title={`${att.breakMinutes} min de pause cumulée aujourd'hui`}
+                                >
+                                  <Coffee className="w-3 h-3 text-amber-400" />
+                                  <span>{att.breakMinutes} min</span>
+                                  {att.breakMinutes > 60 && <span className="text-[10px]">⚠️</span>}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-500 font-mono text-xs">0 min</span>
+                              )}
+                            </td>
+                            {isPrivileged && (
+                              <td className="py-3 px-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditAttendanceModal(emp, att)}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-600 border border-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-indigo-950/40 dark:text-neutral-300 dark:hover:text-indigo-300 dark:border-neutral-700/50 dark:hover:border-indigo-500/30 text-xs font-semibold transition cursor-pointer"
+                                  title="Modifier le pointage"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span>Modifier</span>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* SOUS-VUE 2 : TABLEAU DÉTAILLÉ DES PAUSES AUJOURD'HUI DE TOUS LES COLLABORATEURS */}
+          {dailyAttendanceSubView === "BREAKS" && (
+            <div className="space-y-4">
+              {/* KPIs Pauses de l'Équipe */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm space-y-1">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    En Poste Aujourd'hui
+                  </span>
+                  <div className="font-mono text-xl font-bold text-emerald-400">
+                    {allUsersBreaksKpis?.clockedInCount || 0} / {allUsersBreaksKpis?.totalEmployees || 0}
+                  </div>
+                  <p className="text-[10px] text-neutral-500">Collaborateurs pointés</p>
+                </div>
+
+                <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm space-y-1">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    En Pause Active
+                  </span>
+                  <div className="font-mono text-xl font-bold text-amber-400 flex items-center gap-2">
+                    <span>{allUsersBreaksKpis?.currentlyOnBreak || 0}</span>
+                    {(allUsersBreaksKpis?.currentlyOnBreak || 0) > 0 && (
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-neutral-500">En pause en direct</p>
+                </div>
+
+                <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm space-y-1">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    Cumul Pauses Entreprise
+                  </span>
+                  <div className="font-mono text-xl font-bold text-indigo-400">
+                    {allUsersBreaksKpis?.totalCompanyBreakMinutes
+                      ? `${Math.floor(allUsersBreaksKpis.totalCompanyBreakMinutes / 60)}h ${String(allUsersBreaksKpis.totalCompanyBreakMinutes % 60).padStart(2, "0")}m`
+                      : "0 min"}
+                  </div>
+                  <p className="text-[10px] text-neutral-500">Temps total de repos</p>
+                </div>
+
+                <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm space-y-1">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    Dépassements &gt; 40m
+                  </span>
+                  <div
+                    className={`font-mono text-xl font-bold ${
+                      (allUsersBreaksKpis?.exceededCount || 0) > 0 ? "text-rose-400" : "text-emerald-400"
+                    }`}
+                  >
+                    {allUsersBreaksKpis?.exceededCount || 0}
+                  </div>
+                  <p className="text-[10px] text-neutral-500">
+                    {(allUsersBreaksKpis?.exceededCount || 0) === 0 ? "Tous quotas respectés 🎉" : "Au-dessus de 40 min"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Barre de Recherche & Filtre */}
+              <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-neutral-500" />
+                  <input
+                    type="text"
+                    value={breaksSearchQuery}
+                    onChange={(e) => setBreaksSearchQuery(e.target.value)}
+                    placeholder="Rechercher un collaborateur, un poste..."
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => loadAllUsersBreaks()}
+                  disabled={isLoadingAllUsersBreaks}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-850 text-neutral-300 border border-neutral-800 text-xs font-semibold transition cursor-pointer"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAllUsersBreaks ? "animate-spin text-indigo-400" : ""}`} />
+                  <span>Actualiser les pauses</span>
+                </button>
+              </div>
+
+              {/* Table détaillée des pauses */}
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                        <th className="py-3.5 px-4">Collaborateur</th>
+                        <th className="py-3.5 px-4">Poste & Pôle</th>
+                        <th className="py-3.5 px-4">Statut en Direct</th>
+                        <th className="py-3.5 px-4 text-center">Cumul Aujourd'hui</th>
+                        <th className="py-3.5 px-4 text-center">Sessions</th>
+                        <th className="py-3.5 px-4 text-right">Détail Sessions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {allUsersBreaks
+                        .filter((b) => {
+                          if (!breaksSearchQuery.trim()) return true;
+                          const q = breaksSearchQuery.toLowerCase();
+                          return (
+                            b.firstName.toLowerCase().includes(q) ||
+                            b.lastName.toLowerCase().includes(q) ||
+                            b.position.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((b) => {
+                          const isExp = expandedBreakEmployeeId === b.employeeId;
+                          return (
+                            <React.Fragment key={b.employeeId}>
+                              <tr className="hover:bg-neutral-800/30 transition">
+                                <td className="py-3 px-4 font-semibold text-neutral-200">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-7 h-7 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-xs text-neutral-300 shrink-0">
+                                      {b.firstName[0]}{b.lastName[0]}
+                                    </div>
+                                    <span>{b.firstName} {b.lastName}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-xs text-neutral-400">
+                                  <div>{b.position}</div>
+                                  {b.department && <div className="text-[10px] text-neutral-500">{b.department}</div>}
+                                </td>
+                                <td className="py-3 px-4">
+                                  {b.isOnBreak ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                                      <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>En Pause ({b.currentBreakElapsedMinutes} min) — {b.currentBreakReason}</span>
+                                    </span>
+                                  ) : b.clockIn && !b.clockOut ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
+                                      🟢 Au poste
+                                    </span>
+                                  ) : b.clockOut ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-neutral-900 text-neutral-400 border border-neutral-800">
+                                      Journée terminée
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-neutral-900 text-neutral-500 border border-neutral-800">
+                                      Non pointé
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-center font-mono">
+                                  <div className="text-xs font-bold text-neutral-200">
+                                    {b.totalBreakMinutes} min / 40m
+                                  </div>
+                                  <div className="text-[10px] mt-0.5">
+                                    {b.isExceeded ? (
+                                      <span className="text-rose-400 font-semibold">⚠️ Dépassement (+{b.totalBreakMinutes - 40}m)</span>
+                                    ) : (
+                                      <span className="text-emerald-400">✓ Conforme</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-4 text-center font-mono text-xs text-neutral-300">
+                                  {b.sessionsCount} pause{b.sessionsCount > 1 ? "s" : ""}
+                                </td>
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedBreakEmployeeId(isExp ? null : b.employeeId)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-850 text-neutral-300 border border-neutral-800 text-xs font-medium transition cursor-pointer"
+                                  >
+                                    <span>{isExp ? "Masquer" : "Voir"} ({b.sessionsCount})</span>
+                                    {isExp ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                  </button>
+                                </td>
+                              </tr>
+                              {isExp && (
+                                <tr className="bg-neutral-950/50">
+                                  <td colSpan={6} className="p-3">
+                                    <div className="space-y-1.5 pl-4">
+                                      <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                                        Détail des pauses aujourd'hui pour {b.firstName} {b.lastName} :
+                                      </div>
+                                      {b.sessions && b.sessions.length > 0 ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                          {b.sessions.map((s, idx) => {
+                                            const isLunch = s.reason.toLowerCase().includes("déjeuner");
+                                            const lim = isLunch ? 45 : 15;
+                                            const isOver = s.durationMinutes > lim;
+                                            return (
+                                              <div
+                                                key={s.id || idx}
+                                                className="bg-neutral-900 p-2.5 rounded-xl border border-neutral-850 text-xs space-y-1"
+                                              >
+                                                <div className="flex items-center justify-between">
+                                                  <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
+                                                    <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                                                    {s.reason}
+                                                  </span>
+                                                  <span
+                                                    className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                                                      s.isOngoing
+                                                        ? "bg-amber-950 text-amber-300 border border-amber-800 animate-pulse"
+                                                        : isOver
+                                                        ? "bg-amber-950 text-amber-300 border border-amber-800"
+                                                        : "bg-emerald-950 text-emerald-400 border border-emerald-800/40"
+                                                    }`}
+                                                  >
+                                                    {s.durationMinutes} min {s.isOngoing && "(En cours)"}
+                                                  </span>
+                                                </div>
+                                                <div className="text-[11px] font-mono text-neutral-400">
+                                                  {new Date(s.startTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} →{" "}
+                                                  {s.endTime
+                                                    ? new Date(s.endTime).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                                                    : "En cours..."}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="text-xs text-neutral-500 italic">
+                                          Aucune session individuelle de pause trouvée pour aujourd'hui.
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
