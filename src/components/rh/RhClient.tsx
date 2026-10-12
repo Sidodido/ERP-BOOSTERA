@@ -511,7 +511,17 @@ export function RhClient({
   // Modals
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<EmployeeItem | null>(null);
+
+  // Formulaire Pointage Admin
+  const [attendanceModalEmp, setAttendanceModalEmp] = useState<EmployeeItem | null>(null);
+  const [attFormEmpId, setAttFormEmpId] = useState("");
+  const [attFormStatus, setAttFormStatus] = useState<AttendanceStatus>("PRESENT");
+  const [attFormClockIn, setAttFormClockIn] = useState("");
+  const [attFormClockOut, setAttFormClockOut] = useState("");
+  const [attFormNotes, setAttFormNotes] = useState("");
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
 
   // New Employee Form
   const [newUserId, setNewUserId] = useState("");
@@ -626,6 +636,94 @@ export function RhClient({
         alert(err.message || "Erreur lors de la modification");
       }
     });
+  };
+
+  const handleOpenEditAttendanceModal = (emp: EmployeeItem, att?: AttendanceItem) => {
+    setAttendanceModalEmp(emp);
+    setAttFormEmpId(emp.id);
+
+    if (att) {
+      setAttFormStatus(att.status);
+      setAttFormClockIn(
+        att.clockIn
+          ? new Date(att.clockIn).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+          : ""
+      );
+      setAttFormClockOut(
+        att.clockOut
+          ? new Date(att.clockOut).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+          : ""
+      );
+      setAttFormNotes(att.notes || "");
+    } else {
+      setAttFormStatus("PRESENT");
+      setAttFormClockIn("08:30");
+      setAttFormClockOut("");
+      setAttFormNotes("");
+    }
+    setShowAttendanceModal(true);
+  };
+
+  const handleOpenNewAttendanceModal = () => {
+    setAttendanceModalEmp(null);
+    const firstActive = employees.find((e) => e.isActive);
+    setAttFormEmpId(firstActive ? firstActive.id : "");
+    setAttFormStatus("PRESENT");
+    setAttFormClockIn("08:30");
+    setAttFormClockOut("17:00");
+    setAttFormNotes("");
+    setShowAttendanceModal(true);
+  };
+
+  const handleSaveAttendance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmpId = attendanceModalEmp?.id || attFormEmpId;
+    if (!targetEmpId) {
+      alert("Veuillez sélectionner un collaborateur");
+      return;
+    }
+
+    try {
+      setIsSavingAttendance(true);
+      const res = await recordAttendanceAction({
+        employeeId: targetEmpId,
+        status: attFormStatus,
+        clockInTime: attFormClockIn,
+        clockOutTime: attFormClockOut,
+        notes: attFormNotes,
+      });
+
+      if (res.success && res.attendance) {
+        setAttendancesList((prev) => {
+          const index = prev.findIndex((a) => a.employeeId === targetEmpId);
+          if (index >= 0) {
+            const updated = [...prev];
+            updated[index] = res.attendance as any;
+            return updated;
+          } else {
+            return [res.attendance as any, ...prev];
+          }
+        });
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("crm:attendance-updated"));
+          try {
+            const bc = new BroadcastChannel("crm_attendance_sync");
+            bc.postMessage({ timestamp: Date.now(), employeeId: targetEmpId });
+            bc.close();
+          } catch {}
+        }
+
+        setShowAttendanceModal(false);
+        syncAttendances();
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error("Erreur enregistrement pointage:", err);
+      alert(err.message || "Erreur lors de l'enregistrement du pointage");
+    } finally {
+      setIsSavingAttendance(false);
+    }
   };
 
   const handleQuickAttendance = (employeeId: string, status: AttendanceStatus) => {
@@ -980,7 +1078,7 @@ export function RhClient({
                 Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
               </span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/60 dark:border-emerald-800/40 dark:text-emerald-400 text-[11px] font-medium">
                 <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isSyncing ? "animate-ping" : "animate-pulse"}`} />
                 <span>Synchronisé en direct</span>
@@ -995,6 +1093,17 @@ export function RhClient({
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-indigo-400" : ""}`} />
                 <span>Actualiser</span>
               </button>
+              {isPrivileged && (
+                <button
+                  type="button"
+                  onClick={handleOpenNewAttendanceModal}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                  title="Ajuster ou enregistrer manuellement un pointage"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Ajuster un pointage</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1017,6 +1126,7 @@ export function RhClient({
                     <th className="py-3.5 px-4">Statut Aujourd'hui</th>
                     <th className="py-3.5 px-4">Heure d'Entrée</th>
                     <th className="py-3.5 px-4">Heure de Sortie</th>
+                    {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-800/60">
@@ -1028,41 +1138,92 @@ export function RhClient({
                       const isPresent = att && (att.status === "PRESENT" || Boolean(att.clockIn));
                       const isLate = att && att.status === "LATE";
                       const isOnLeave = att && att.status === "ON_LEAVE";
+                      const isHalfDay = att && att.status === "HALF_DAY";
                       const isWeekend = isTodayWeekend && !isPresent && !isLate && !isOnLeave;
                       const status = isWeekend ? "WEEKEND" : (att ? att.status : "ABSENT");
 
                       return (
                         <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
                           <td className="py-3 px-4 font-semibold text-neutral-200">
-                            {emp.firstName} {emp.lastName}
+                            <div className="flex items-center gap-2">
+                              <span>{emp.firstName} {emp.lastName}</span>
+                              {att?.notes && (
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-normal truncate max-w-[150px]"
+                                  title={att.notes}
+                                >
+                                  {att.notes}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-neutral-400 text-xs">
                             {emp.position}
                           </td>
                           <td className="py-3 px-4">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                isPresent
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
+                            {isPrivileged ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditAttendanceModal(emp, att)}
+                                className={`group inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold cursor-pointer hover:scale-105 active:scale-95 transition ${
+                                  isPresent
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30 hover:border-emerald-500/50"
+                                    : isLate
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30 hover:border-amber-500/50"
+                                    : isOnLeave
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30 hover:border-blue-500/50"
+                                    : isHalfDay
+                                    ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30 hover:border-purple-500/50"
+                                    : isWeekend
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30 hover:border-rose-500/50"
+                                }`}
+                                title="Modifier le pointage et le statut de ce collaborateur"
+                              >
+                                <span>
+                                  {isPresent
+                                    ? "Présent"
+                                    : isLate
+                                    ? "En retard"
+                                    : isOnLeave
+                                    ? "En congé"
+                                    : isHalfDay
+                                    ? "Demi-journée"
+                                    : isWeekend
+                                    ? "Week-end (Chômé & payé)"
+                                    : "Absent (-1j paye)"}
+                                </span>
+                                <Edit2 className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 transition" />
+                              </button>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                  isPresent
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
+                                    : isLate
+                                    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
+                                    : isOnLeave
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                    : isHalfDay
+                                    ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30"
+                                    : isWeekend
+                                    ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
+                                    : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
+                                }`}
+                              >
+                                {isPresent
+                                  ? "Présent"
                                   : isLate
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
+                                  ? "En retard"
                                   : isOnLeave
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                  ? "En congé"
+                                  : isHalfDay
+                                  ? "Demi-journée"
                                   : isWeekend
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/30"
-                                  : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
-                              }`}
-                            >
-                              {isPresent
-                                ? "Présent"
-                                : isLate
-                                ? "En retard"
-                                : isOnLeave
-                                ? "En congé"
-                                : isWeekend
-                                ? "Week-end (Chômé & payé)"
-                                : "Absent (-1j paye)"}
-                            </span>
+                                  ? "Week-end (Chômé & payé)"
+                                  : "Absent (-1j paye)"}
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-4 font-mono text-xs text-neutral-400">
                             {att?.clockIn ? (
@@ -1088,6 +1249,19 @@ export function RhClient({
                               "—"
                             )}
                           </td>
+                          {isPrivileged && (
+                            <td className="py-3 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditAttendanceModal(emp, att)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-600 border border-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-indigo-950/40 dark:text-neutral-300 dark:hover:text-indigo-300 dark:border-neutral-700/50 dark:hover:border-indigo-500/30 text-xs font-semibold transition cursor-pointer"
+                                title="Modifier le pointage"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>Modifier</span>
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1728,6 +1902,248 @@ export function RhClient({
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT ATTENDANCE (ADMIN) */}
+      {showAttendanceModal && (
+        <div
+          onClick={() => setShowAttendanceModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="cursor-default bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="p-5 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-neutral-100">
+                    {attendanceModalEmp
+                      ? `Modifier le pointage · ${attendanceModalEmp.firstName} ${attendanceModalEmp.lastName}`
+                      : "Ajuster un pointage"}
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAttendanceModal(false)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAttendance} className="p-6 space-y-4">
+              {/* Collaborateur (si création/ajustement sans employé pré-sélectionné) */}
+              {!attendanceModalEmp && (
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                    Collaborateur <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={attFormEmpId}
+                    onChange={(e) => setAttFormEmpId(e.target.value)}
+                    required
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="">Sélectionner un collaborateur...</option>
+                    {employees
+                      .filter((e) => e.isActive)
+                      .map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.firstName} {emp.lastName} — {emp.position}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Sélection du statut avec boutons interactifs clairs */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                  Statut du collaborateur aujourd'hui <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    {
+                      key: "PRESENT" as AttendanceStatus,
+                      label: "Présent",
+                      color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                      active: "ring-2 ring-emerald-500 bg-emerald-500/20 text-emerald-200 border-emerald-500",
+                      defaultIn: "08:30",
+                      defaultOut: "17:00",
+                    },
+                    {
+                      key: "LATE" as AttendanceStatus,
+                      label: "En retard",
+                      color: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+                      active: "ring-2 ring-amber-500 bg-amber-500/20 text-amber-200 border-amber-500",
+                      defaultIn: "09:45",
+                      defaultOut: "17:00",
+                    },
+                    {
+                      key: "ABSENT" as AttendanceStatus,
+                      label: "Absent (-1j paye)",
+                      color: "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                      active: "ring-2 ring-rose-500 bg-rose-500/20 text-rose-200 border-rose-500",
+                      defaultIn: "",
+                      defaultOut: "",
+                    },
+                    {
+                      key: "ON_LEAVE" as AttendanceStatus,
+                      label: "En congé",
+                      color: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+                      active: "ring-2 ring-blue-500 bg-blue-500/20 text-blue-200 border-blue-500",
+                      defaultIn: "",
+                      defaultOut: "",
+                    },
+                    {
+                      key: "HALF_DAY" as AttendanceStatus,
+                      label: "Demi-journée",
+                      color: "border-purple-500/30 bg-purple-500/10 text-purple-300",
+                      active: "ring-2 ring-purple-500 bg-purple-500/20 text-purple-200 border-purple-500",
+                      defaultIn: "08:30",
+                      defaultOut: "12:30",
+                    },
+                  ].map((s) => {
+                    const isSelected = attFormStatus === s.key;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => {
+                          setAttFormStatus(s.key);
+                          if (s.key === "ABSENT" || s.key === "ON_LEAVE") {
+                            setAttFormClockIn("");
+                            setAttFormClockOut("");
+                          } else {
+                            if (!attFormClockIn && s.defaultIn) setAttFormClockIn(s.defaultIn);
+                            if (!attFormClockOut && s.defaultOut) setAttFormClockOut(s.defaultOut);
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border text-xs font-semibold transition text-left flex flex-col justify-between cursor-pointer ${
+                          isSelected ? s.active : `${s.color} hover:opacity-85`
+                        }`}
+                      >
+                        <span className="font-bold">{s.label}</span>
+                        {isSelected && <span className="text-[10px] opacity-80 mt-0.5">● Actif</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Heures d'entrée et de sortie */}
+              {attFormStatus !== "ABSENT" && attFormStatus !== "ON_LEAVE" ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Heure d'entrée
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={attFormClockIn}
+                        onChange={(e) => setAttFormClockIn(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                      {attFormClockIn && (
+                        <button
+                          type="button"
+                          onClick={() => setAttFormClockIn("")}
+                          className="absolute right-2 top-2.5 text-xs text-neutral-500 hover:text-neutral-300 px-1"
+                          title="Effacer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                      Heure de sortie (Optionnel)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={attFormClockOut}
+                        onChange={(e) => setAttFormClockOut(e.target.value)}
+                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                      {attFormClockOut && (
+                        <button
+                          type="button"
+                          onClick={() => setAttFormClockOut("")}
+                          className="absolute right-2 top-2.5 text-xs text-neutral-500 hover:text-neutral-300 px-1"
+                          title="Effacer"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-neutral-950/60 border border-neutral-800 text-neutral-400 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <span>
+                    Pour le statut <strong>{attFormStatus === "ABSENT" ? "Absent (-1j paye)" : "En congé"}</strong>, les heures de pointage sont réinitialisées et aucune heure n'est requise.
+                  </span>
+                </div>
+              )}
+
+              {/* Justification / Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Motif / Remarque administrative (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  value={attFormNotes}
+                  onChange={(e) => setAttFormNotes(e.target.value)}
+                  placeholder="Ex : Retard justifié transport, présence validée par direction..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              {/* Actions du modal */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAttendanceModal(false)}
+                  disabled={isSavingAttendance}
+                  className="px-4 py-2.5 rounded-xl border border-neutral-700 text-neutral-300 hover:bg-neutral-800 text-sm font-semibold transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingAttendance || (!attendanceModalEmp && !attFormEmpId)}
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition shadow-lg shadow-indigo-600/20 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                >
+                  {isSavingAttendance ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Enregistrement...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Enregistrer les modifications</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

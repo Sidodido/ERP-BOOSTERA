@@ -352,47 +352,122 @@ export async function recordAttendanceAction(data: {
   employeeId: string;
   status: AttendanceStatus;
   clockInTime?: string;
+  clockOutTime?: string;
   notes?: string;
+  date?: string;
 }) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Non authentifié");
+  if (user.role !== "ADMIN" && user.role !== "SALES_DIRECTOR" && user.role !== "HR") {
+    throw new Error("Accès réservé aux administrateurs");
+  }
 
   const now = new Date();
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  let targetDate: Date;
+  let year = now.getFullYear();
+  let month = now.getMonth();
+  let day = now.getDate();
+
+  if (data.date) {
+    const [y, m, d] = data.date.split("-").map(Number);
+    year = y;
+    month = m - 1;
+    day = d;
+    targetDate = new Date(Date.UTC(y, m - 1, d));
+  } else {
+    targetDate = new Date(Date.UTC(year, month, day));
+  }
 
   let clockInDate: Date | null = null;
-  if (data.clockInTime) {
+  if (data.status === "ABSENT" || data.status === "ON_LEAVE") {
+    clockInDate = null;
+  } else if (data.clockInTime && data.clockInTime.trim() !== "") {
     const [hours, minutes] = data.clockInTime.split(":").map(Number);
-    clockInDate = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes));
+    clockInDate = new Date(year, month, day, hours, minutes, 0);
   } else if (data.status === "PRESENT" || data.status === "LATE") {
     clockInDate = now;
   }
+
+  let clockOutDate: Date | null = null;
+  if (data.status === "ABSENT" || data.status === "ON_LEAVE") {
+    clockOutDate = null;
+  } else if (data.clockOutTime && data.clockOutTime.trim() !== "") {
+    const [hours, minutes] = data.clockOutTime.split(":").map(Number);
+    clockOutDate = new Date(year, month, day, hours, minutes, 0);
+  }
+
+  const defaultNote =
+    data.status === "ABSENT"
+      ? "Marqué absent par la direction"
+      : data.status === "LATE"
+      ? "Retard validé par l'administrateur"
+      : "Pointage ajusté par l'administrateur";
 
   const attendance = await prisma.attendance.upsert({
     where: {
       employeeId_date: {
         employeeId: data.employeeId,
-        date: today,
+        date: targetDate,
       },
     },
     create: {
       employeeId: data.employeeId,
-      date: today,
+      date: targetDate,
       status: data.status,
-      clockIn: data.status === "ABSENT" ? null : clockInDate,
-      notes: data.notes || (data.status === "ABSENT" ? "Marqué absent par la direction" : null),
+      clockIn: clockInDate,
+      clockOut: clockOutDate,
+      notes: data.notes || defaultNote,
     },
     update: {
       status: data.status,
-      clockIn: data.status === "ABSENT" ? null : (clockInDate || undefined),
-      clockOut: data.status === "ABSENT" ? null : undefined,
-      notes: data.notes || (data.status === "ABSENT" ? "Marqué absent par la direction" : undefined),
+      clockIn: clockInDate,
+      clockOut: clockOutDate,
+      notes: data.notes !== undefined ? (data.notes || null) : defaultNote,
+    },
+    include: {
+      employee: {
+        select: { id: true, firstName: true, lastName: true, position: true },
+      },
     },
   });
 
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "ADMIN_UPDATE_ATTENDANCE",
+        module: "HR",
+        entityId: attendance.id,
+        details: JSON.stringify({
+          employeeId: data.employeeId,
+          status: data.status,
+          clockInTime: data.clockInTime,
+          clockOutTime: data.clockOutTime,
+          notes: data.notes,
+        }),
+      },
+    });
+  } catch {}
+
+  try {
+    const { month: cycleMonth, year: cycleYear } = getPayrollCycleForDate(targetDate);
+    await calculateAndSyncPayroll(cycleMonth, cycleYear);
+  } catch (err) {
+    console.warn("Calcul paie post-attendance:", err);
+  }
+
   revalidatePath("/rh");
   revalidatePath("/dashboard");
-  return { success: true, attendanceId: attendance.id };
+  revalidatePath("/parametres");
+
+  return {
+    success: true,
+    attendanceId: attendance.id,
+    attendance: {
+      ...attendance,
+      breakMinutes: Number(attendance.breakMinutes || 0),
+    },
+  };
 }
 
 /**
