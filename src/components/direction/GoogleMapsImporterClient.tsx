@@ -616,7 +616,7 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
               : "";
           setFeedback({
             type: "success",
-            message: `🎉 ${res.imported} prospects importés avec succès dans le CRM${rotationMsg} ! (${res.duplicatesCount} doublons automatiquement ignorés).`,
+            message: `🎉 ${res.imported} prospects importés avec succès dans le CRM${rotationMsg} ! (${res.duplicatesCount} doublons automatiquement ignorés). Actualisation de la page...`,
           });
           // Update list status
           setProspects((prev) =>
@@ -627,6 +627,11 @@ export function GoogleMapsImporterClient({ salesUsers, currentUserId }: GoogleMa
             )
           );
           setSelectedIds({});
+
+          // Rechargement automatique de la page demandé
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
         } else {
           setFeedback({ type: "error", message: res.error || "Erreur lors de l'import." });
         }
