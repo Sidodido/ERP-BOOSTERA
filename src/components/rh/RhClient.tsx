@@ -1225,7 +1225,7 @@ export function RhClient({
               {isPrivileged && (
                 <button
                   type="button"
-                  onClick={handleOpenNewAttendanceModal}
+                  onClick={() => handleOpenNewAttendanceModal()}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
                   title="Ajuster ou enregistrer manuellement un pointage"
                 >
