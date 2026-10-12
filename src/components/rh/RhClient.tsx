@@ -23,6 +23,14 @@ import {
   Layers,
   Target,
   Flame,
+  Download,
+  Search,
+  Filter,
+  Eye,
+  ChevronLeft,
+  ChevronDown,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import {
   createEmployeeAction,
@@ -34,6 +42,7 @@ import {
   generatePayrollAction,
   markSalaryPaidAction,
   getTodayAttendancesAction,
+  getMonthlyAttendancesAction,
 } from "@/actions/rh";
 import {
   createEmployeeGoalAction,
@@ -96,11 +105,12 @@ interface AttendanceItem {
   id: string;
   employeeId: string;
   status: AttendanceStatus;
+  date?: Date | string;
   clockIn?: Date | string | null;
   clockOut?: Date | string | null;
   breakMinutes: number;
   notes?: string | null;
-  employee: { id: string; firstName: string; lastName: string; position: string };
+  employee: { id: string; firstName: string; lastName: string; position: string; department?: DepartmentType };
 }
 
 interface LeaveItem {
@@ -169,6 +179,7 @@ export type RhTab =
   | "DEPARTMENTS"
   | "GOALS"
   | "ATTENDANCE"
+  | "MONTHLY_ATTENDANCE"
   | "LEAVES"
   | "PAYROLL";
 
@@ -179,6 +190,7 @@ interface RhClientProps {
   availableCycles?: AvailablePayrollCycleClient[];
   employees: EmployeeItem[];
   attendances: AttendanceItem[];
+  monthlyAttendances?: AttendanceItem[];
   leaveRequests: LeaveItem[];
   salaryPayments: SalaryItem[];
   commissions: CommissionItem[];
@@ -294,6 +306,7 @@ export function RhClient({
   availableCycles = [],
   employees,
   attendances,
+  monthlyAttendances = [],
   leaveRequests,
   salaryPayments,
   commissions = [],
@@ -311,12 +324,16 @@ export function RhClient({
       const upper = initialTab.toUpperCase();
       if (upper === "DEPARTMENTS" || upper === "POLES") return "DEPARTMENTS";
       if (upper === "GOALS" || upper === "OBJECTIFS") return "GOALS";
+      if (upper === "MONTHLY" || upper === "MENSUEL" || upper === "MONTHLY_ATTENDANCE" || upper === "POINTAGE_MENSUEL") {
+        return "MONTHLY_ATTENDANCE";
+      }
       if (
         [
           "DIRECTORY",
           "DEPARTMENTS",
           "GOALS",
           "ATTENDANCE",
+          "MONTHLY_ATTENDANCE",
           "LEAVES",
           "PAYROLL",
         ].includes(upper)
@@ -332,13 +349,23 @@ export function RhClient({
 
   // État local réactif pour la synchronisation automatique en temps réel des pointages
   const [attendancesList, setAttendancesList] = useState<AttendanceItem[]>(attendances);
+  const [monthlyAttendancesList, setMonthlyAttendancesList] = useState<AttendanceItem[]>(monthlyAttendances);
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<number>(month);
+  const [selectedYearFilter, setSelectedYearFilter] = useState<number>(year);
+  const [monthlyDeptFilter, setMonthlyDeptFilter] = useState<string>("ALL");
+  const [monthlyEmployeeFilter, setMonthlyEmployeeFilter] = useState<string>("ALL");
+  const [monthlyStatusFilter, setMonthlyStatusFilter] = useState<string>("ALL");
+  const [monthlySearch, setMonthlySearch] = useState<string>("");
+  const [monthlyViewMode, setMonthlyViewMode] = useState<"SUMMARY" | "MATRIX" | "LOG">("SUMMARY");
+  const [isLoadingMonthly, setIsLoadingMonthly] = useState<boolean>(false);
   const [kpisState, setKpisState] = useState(kpis);
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     setAttendancesList(attendances);
+    setMonthlyAttendancesList(monthlyAttendances);
     setKpisState(kpis);
-  }, [attendances, kpis]);
+  }, [attendances, monthlyAttendances, kpis]);
 
   const syncAttendances = async () => {
     try {
@@ -517,6 +544,7 @@ export function RhClient({
   // Formulaire Pointage Admin
   const [attendanceModalEmp, setAttendanceModalEmp] = useState<EmployeeItem | null>(null);
   const [attFormEmpId, setAttFormEmpId] = useState("");
+  const [attFormDate, setAttFormDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [attFormStatus, setAttFormStatus] = useState<AttendanceStatus>("PRESENT");
   const [attFormClockIn, setAttFormClockIn] = useState("");
   const [attFormClockOut, setAttFormClockOut] = useState("");
@@ -638,9 +666,15 @@ export function RhClient({
     });
   };
 
-  const handleOpenEditAttendanceModal = (emp: EmployeeItem, att?: AttendanceItem) => {
+  const handleOpenEditAttendanceModal = (emp: EmployeeItem, att?: AttendanceItem, dateStr?: string) => {
     setAttendanceModalEmp(emp);
     setAttFormEmpId(emp.id);
+    const initialDate =
+      dateStr ||
+      (att?.date
+        ? new Date(att.date).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0]);
+    setAttFormDate(initialDate);
 
     if (att) {
       setAttFormStatus(att.status);
@@ -664,15 +698,75 @@ export function RhClient({
     setShowAttendanceModal(true);
   };
 
-  const handleOpenNewAttendanceModal = () => {
+  const handleOpenNewAttendanceModal = (dateStr?: string) => {
     setAttendanceModalEmp(null);
     const firstActive = employees.find((e) => e.isActive);
     setAttFormEmpId(firstActive ? firstActive.id : "");
+    setAttFormDate(dateStr || new Date().toISOString().split("T")[0]);
     setAttFormStatus("PRESENT");
     setAttFormClockIn("08:30");
     setAttFormClockOut("17:00");
     setAttFormNotes("");
     setShowAttendanceModal(true);
+  };
+
+  const handleChangeMonthlyPeriod = async (newMonth: number, newYear: number) => {
+    setSelectedMonthFilter(newMonth);
+    setSelectedYearFilter(newYear);
+    try {
+      setIsLoadingMonthly(true);
+      const res = await getMonthlyAttendancesAction(newMonth, newYear);
+      if (res.success) {
+        setMonthlyAttendancesList(res.attendances as any);
+      }
+    } catch (err) {
+      console.error("Erreur chargement pointages mensuels:", err);
+    } finally {
+      setIsLoadingMonthly(false);
+    }
+  };
+
+  const handleExportMonthlyCSV = () => {
+    const activeEmps = employees.filter((e) => e.isActive);
+    const rows = [
+      ["Collaborateur", "Poste", "Departement", "Date", "Statut", "Arrivee", "Sortie", "Notes"],
+    ];
+
+    monthlyAttendancesList.forEach((att) => {
+      const emp = activeEmps.find((e) => e.id === att.employeeId);
+      if (!emp) return;
+      const dateStr = att.date ? new Date(att.date).toLocaleDateString("fr-FR") : "";
+      const clockIn = att.clockIn
+        ? new Date(att.clockIn).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      const clockOut = att.clockOut
+        ? new Date(att.clockOut).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+        : "";
+      rows.push([
+        `${emp.firstName} ${emp.lastName}`,
+        emp.position,
+        emp.department,
+        dateStr,
+        att.status,
+        clockIn,
+        clockOut,
+        (att.notes || "").replace(/"/g, '""'),
+      ]);
+    });
+
+    const csvContent =
+      "\uFEFF" +
+      rows
+        .map((row) => row.map((cell) => `"${cell}"`).join(";"))
+        .join("\r\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `pointages-mensuels-${selectedMonthFilter}-${selectedYearFilter}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleSaveAttendance = async (e: React.FormEvent) => {
@@ -691,17 +785,41 @@ export function RhClient({
         clockInTime: attFormClockIn,
         clockOutTime: attFormClockOut,
         notes: attFormNotes,
+        date: attFormDate,
       });
 
       if (res.success && res.attendance) {
-        setAttendancesList((prev) => {
-          const index = prev.findIndex((a) => a.employeeId === targetEmpId);
+        // Mettre à jour la liste journalière si la date correspond à aujourd'hui
+        const isToday =
+          new Date(attFormDate).toDateString() === new Date().toDateString();
+        if (isToday) {
+          setAttendancesList((prev) => {
+            const index = prev.findIndex((a) => a.employeeId === targetEmpId);
+            if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = res.attendance as any;
+              return updated;
+            } else {
+              return [res.attendance as any, ...prev];
+            }
+          });
+        }
+
+        // Mettre à jour la liste mensuelle
+        setMonthlyAttendancesList((prev) => {
+          const targetDateOnly = new Date(attFormDate).toISOString().split("T")[0];
+          const index = prev.findIndex(
+            (a) =>
+              a.employeeId === targetEmpId &&
+              a.date &&
+              new Date(a.date).toISOString().split("T")[0] === targetDateOnly
+          );
           if (index >= 0) {
             const updated = [...prev];
-            updated[index] = res.attendance as any;
+            updated[index] = { ...res.attendance, date: attFormDate } as any;
             return updated;
           } else {
-            return [res.attendance as any, ...prev];
+            return [{ ...res.attendance, date: attFormDate } as any, ...prev];
           }
         });
 
@@ -972,6 +1090,17 @@ export function RhClient({
           }`}
         >
           Pointage Quotidien
+        </button>
+        <button
+          onClick={() => handleSelectTab("MONTHLY_ATTENDANCE")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition shrink-0 flex items-center gap-2 ${
+            activeTab === "MONTHLY_ATTENDANCE"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+              : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50"
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          Pointage Mensuel
         </button>
         <button
           onClick={() => handleSelectTab("LEAVES")}
@@ -1271,6 +1400,712 @@ export function RhClient({
           </div>
         </div>
       )}
+
+      {/* TAB 2b: MONTHLY ATTENDANCE */}
+      {activeTab === "MONTHLY_ATTENDANCE" && (() => {
+        // Mois civil sélectionné
+        const totalDaysInMonth = new Date(selectedYearFilter, selectedMonthFilter, 0).getDate();
+        const daysInMonth = Array.from(
+          { length: totalDaysInMonth },
+          (_, i) => new Date(selectedYearFilter, selectedMonthFilter - 1, i + 1)
+        );
+
+        // Filtrage des collaborateurs actifs
+        const activeEmployees = employees.filter((emp) => {
+          if (!emp.isActive) return false;
+          if (monthlyDeptFilter !== "ALL" && emp.department !== monthlyDeptFilter) return false;
+          if (monthlyEmployeeFilter !== "ALL" && emp.id !== monthlyEmployeeFilter) return false;
+          if (monthlySearch.trim() !== "") {
+            const q = monthlySearch.toLowerCase();
+            const fullName = `${emp.firstName} ${emp.lastName}`.toLowerCase();
+            const pos = emp.position.toLowerCase();
+            if (!fullName.includes(q) && !pos.includes(q)) return false;
+          }
+          return true;
+        });
+
+        // Filtrage des pointages mensuels
+        const filteredMonthlyAttendances = monthlyAttendancesList.filter((att) => {
+          if (monthlyDeptFilter !== "ALL" && att.employee.department && att.employee.department !== monthlyDeptFilter) return false;
+          if (monthlyEmployeeFilter !== "ALL" && att.employeeId !== monthlyEmployeeFilter) return false;
+          if (monthlyStatusFilter !== "ALL" && att.status !== monthlyStatusFilter) return false;
+          if (monthlySearch.trim() !== "") {
+            const q = monthlySearch.toLowerCase();
+            const fullName = `${att.employee.firstName} ${att.employee.lastName}`.toLowerCase();
+            if (!fullName.includes(q)) return false;
+          }
+          return true;
+        });
+
+        // Calcul des KPI globaux
+        const totalPresents = monthlyAttendancesList.filter(
+          (a) => a.status === "PRESENT" || (a.status === "LATE" && Boolean(a.clockIn))
+        ).length;
+        const totalLates = monthlyAttendancesList.filter((a) => a.status === "LATE").length;
+        const totalAbsents = monthlyAttendancesList.filter((a) => a.status === "ABSENT").length;
+        const totalLeaves = monthlyAttendancesList.filter((a) => a.status === "ON_LEAVE").length;
+        const totalHalfDays = monthlyAttendancesList.filter((a) => a.status === "HALF_DAY").length;
+        const totalWorked = totalPresents + totalLates + totalHalfDays * 0.5;
+        const evaluatedBase = totalPresents + totalLates + totalHalfDays + totalAbsents;
+        const globalRate = evaluatedBase > 0 ? Math.round((totalWorked / evaluatedBase) * 100) : 100;
+
+        return (
+          <div className="space-y-5">
+            {/* Header / Command Bar */}
+            <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-neutral-100 flex items-center gap-2">
+                    <span>Pointage & Émargement Mensuel</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-950/60 text-indigo-400 border border-indigo-800/40 font-mono">
+                      {selectedMonthFilter.toString().padStart(2, "0")}/{selectedYearFilter}
+                    </span>
+                  </h2>
+                  <p className="text-xs text-neutral-400">
+                    Registre complet des présences, retards, absences décomptées et congés.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action buttons & Selectors */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Sélecteur de mois/cycle */}
+                <select
+                  value={`${selectedMonthFilter}-${selectedYearFilter}`}
+                  onChange={(e) => {
+                    const [m, y] = e.target.value.split("-").map(Number);
+                    handleChangeMonthlyPeriod(m, y);
+                  }}
+                  disabled={isLoadingMonthly}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+                >
+                  {availableCycles.map((c) => (
+                    <option key={`${c.month}-${c.year}`} value={`${c.month}-${c.year}`}>
+                      {c.label} {c.isCurrent ? "(Mois en cours)" : ""}
+                    </option>
+                  ))}
+                  {!availableCycles.some((c) => c.month === selectedMonthFilter && c.year === selectedYearFilter) && (
+                    <option value={`${selectedMonthFilter}-${selectedYearFilter}`}>
+                      Mois {selectedMonthFilter}/{selectedYearFilter}
+                    </option>
+                  )}
+                </select>
+
+                {/* Switcher de vue */}
+                <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-xl p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setMonthlyViewMode("SUMMARY")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                      monthlyViewMode === "SUMMARY"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                    title="Synthèse par collaborateur"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Synthèse</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMonthlyViewMode("MATRIX")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                      monthlyViewMode === "MATRIX"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                    title="Matrice Calendrier (1 à 31)"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Calendrier</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMonthlyViewMode("LOG")}
+                    className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
+                      monthlyViewMode === "LOG"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                    title="Journal chronologique"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Journal</span>
+                  </button>
+                </div>
+
+                {/* Export CSV */}
+                <button
+                  type="button"
+                  onClick={handleExportMonthlyCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 border border-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 dark:text-neutral-300 dark:border-transparent text-xs font-semibold transition cursor-pointer"
+                  title="Exporter le registre mensuel en fichier Excel / CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Export Excel</span>
+                </button>
+
+                {/* Bouton Pointer / Ajuster (Admin) */}
+                {isPrivileged && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenNewAttendanceModal()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition cursor-pointer"
+                    title="Ajuster ou saisir un pointage manuellement"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ajuster pointage</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* KPI Cards Mensuels */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Présences</span>
+                  <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <UserCheck className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+                <div className="text-xl font-bold font-mono text-neutral-100 mt-2">{totalPresents}</div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">journées pointées</p>
+              </div>
+
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Retards</span>
+                  <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <Clock className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+                <div className="text-xl font-bold font-mono text-amber-400 mt-2">{totalLates}</div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">arrivées tardives</p>
+              </div>
+
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Absences (-1j)</span>
+                  <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+                <div className="text-xl font-bold font-mono text-rose-400 mt-2">{totalAbsents}</div>
+                <p className="text-[10px] text-rose-400/80 mt-0.5">décomptées du salaire</p>
+              </div>
+
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Congés</span>
+                  <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <Calendar className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+                <div className="text-xl font-bold font-mono text-blue-400 mt-2">{totalLeaves}</div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">jours validés</p>
+              </div>
+
+              <div className="bg-neutral-900/80 border border-neutral-800 rounded-2xl p-3.5 shadow-sm col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Assiduité</span>
+                  <span className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+                <div className="text-xl font-bold font-mono text-indigo-300 mt-2">{globalRate}%</div>
+                <div className="w-full bg-neutral-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      globalRate >= 90 ? "bg-emerald-500" : globalRate >= 75 ? "bg-amber-500" : "bg-rose-500"
+                    }`}
+                    style={{ width: `${globalRate}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Barre de Filtres & Recherche */}
+            <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-3 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-500" />
+                <input
+                  type="text"
+                  value={monthlySearch}
+                  onChange={(e) => setMonthlySearch(e.target.value)}
+                  placeholder="Rechercher un collaborateur, un poste..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                />
+                {monthlySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setMonthlySearch("")}
+                    className="absolute right-2.5 top-2 text-xs text-neutral-500 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs">
+                <Filter className="w-3.5 h-3.5 text-neutral-400" />
+                <select
+                  value={monthlyDeptFilter}
+                  onChange={(e) => setMonthlyDeptFilter(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">Tous les pôles</option>
+                  {DEPARTMENTS.map((d) => (
+                    <option key={d.key} value={d.key}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <select
+                value={monthlyEmployeeFilter}
+                onChange={(e) => setMonthlyEmployeeFilter(e.target.value)}
+                className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500 max-w-[180px] truncate"
+              >
+                <option value="ALL">Tous les collaborateurs</option>
+                {employees
+                  .filter((e) => e.isActive)
+                  .map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName}
+                    </option>
+                  ))}
+              </select>
+
+              {monthlyViewMode === "LOG" && (
+                <select
+                  value={monthlyStatusFilter}
+                  onChange={(e) => setMonthlyStatusFilter(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-800 rounded-xl px-2.5 py-1.5 text-xs text-neutral-200 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="ALL">Tous les statuts</option>
+                  <option value="PRESENT">Présent</option>
+                  <option value="LATE">En retard</option>
+                  <option value="ABSENT">Absent (-1j paye)</option>
+                  <option value="ON_LEAVE">En congé</option>
+                  <option value="HALF_DAY">Demi-journée</option>
+                </select>
+              )}
+
+              {isLoadingMonthly && (
+                <span className="flex items-center gap-1.5 text-xs text-indigo-400 font-medium">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Chargement...</span>
+                </span>
+              )}
+            </div>
+
+            {/* VUE 1 : SYNTHÈSE COLLABORATEURS */}
+            {monthlyViewMode === "SUMMARY" && (
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                        <th className="py-3.5 px-4">Collaborateur</th>
+                        <th className="py-3.5 px-4">Poste & Pôle</th>
+                        <th className="py-3.5 px-4 text-center">Présents</th>
+                        <th className="py-3.5 px-4 text-center">Retards</th>
+                        <th className="py-3.5 px-4 text-center">Absences (-1j)</th>
+                        <th className="py-3.5 px-4 text-center">Congés</th>
+                        <th className="py-3.5 px-4 text-center">Demi-j.</th>
+                        <th className="py-3.5 px-4">Taux Présence</th>
+                        {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {activeEmployees.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="py-10 text-center text-neutral-400 text-sm">
+                            Aucun collaborateur trouvé pour ces critères de filtre.
+                          </td>
+                        </tr>
+                      ) : (
+                        activeEmployees.map((emp) => {
+                          const empAtts = monthlyAttendancesList.filter((a) => a.employeeId === emp.id);
+                          const pCount = empAtts.filter((a) => a.status === "PRESENT" || (a.status === "LATE" && Boolean(a.clockIn))).length;
+                          const lCount = empAtts.filter((a) => a.status === "LATE").length;
+                          const aCount = empAtts.filter((a) => a.status === "ABSENT").length;
+                          const cCount = empAtts.filter((a) => a.status === "ON_LEAVE").length;
+                          const hCount = empAtts.filter((a) => a.status === "HALF_DAY").length;
+                          const totalWork = pCount + lCount + hCount * 0.5;
+                          const totalBase = pCount + lCount + hCount + aCount;
+                          const rate = totalBase > 0 ? Math.round((totalWork / totalBase) * 100) : 100;
+
+                          return (
+                            <tr key={emp.id} className="hover:bg-neutral-800/30 transition">
+                              <td className="py-3 px-4 font-semibold text-neutral-200">
+                                <div>{emp.firstName} {emp.lastName}</div>
+                                {emp.email && <div className="text-[11px] text-neutral-500 font-normal">{emp.email}</div>}
+                              </td>
+                              <td className="py-3 px-4 text-xs">
+                                <div className="text-neutral-300">{emp.position}</div>
+                                <div className="text-neutral-500">{emp.department}</div>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                                  {pCount} j
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono ${
+                                  lCount > 0
+                                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                    : "text-neutral-500"
+                                }`}>
+                                  {lCount} j
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono ${
+                                  aCount > 0
+                                    ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                    : "text-neutral-500"
+                                }`}>
+                                  {aCount} j
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono ${
+                                  cCount > 0
+                                    ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                    : "text-neutral-500"
+                                }`}>
+                                  {cCount} j
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold font-mono ${
+                                  hCount > 0
+                                    ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                                    : "text-neutral-500"
+                                }`}>
+                                  {hCount} j
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 w-44">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between text-xs font-mono">
+                                    <span className={rate >= 90 ? "text-emerald-400 font-bold" : rate >= 75 ? "text-amber-400 font-bold" : "text-rose-400 font-bold"}>
+                                      {rate}%
+                                    </span>
+                                    <span className="text-[10px] text-neutral-500">{totalWork}/{totalBase || 1} j</span>
+                                  </div>
+                                  <div className="w-full bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        rate >= 90 ? "bg-emerald-500" : rate >= 75 ? "bg-amber-500" : "bg-rose-500"
+                                      }`}
+                                      style={{ width: `${rate}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </td>
+                              {isPrivileged && (
+                                <td className="py-3 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setMonthlyEmployeeFilter(emp.id);
+                                        setMonthlyViewMode("MATRIX");
+                                      }}
+                                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition cursor-pointer"
+                                      title="Voir la grille calendrier de ce collaborateur"
+                                    >
+                                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditAttendanceModal(emp)}
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 text-xs font-semibold transition cursor-pointer"
+                                      title="Ajuster un pointage pour ce collaborateur"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      <span>Ajuster</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* VUE 2 : MATRICE CALENDRIER (JOUR 1 À 31) */}
+            {monthlyViewMode === "MATRIX" && (
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="p-3 bg-neutral-950/60 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-400">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-neutral-200">Légende :</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                      <strong>P</strong> Présent
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                      <strong>R</strong> Retard
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-500/10 text-rose-300 border border-rose-500/30">
+                      <strong>A</strong> Absent (-1j)
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
+                      <strong>C</strong> Congé
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700">
+                      <strong>WE</strong> Repos Vendredi/Samedi
+                    </span>
+                  </div>
+                  {isPrivileged && (
+                    <span className="text-[11px] text-indigo-400 font-medium">
+                      💡 Cliquez sur n'importe quel jour pour ajuster ou modifier le pointage
+                    </span>
+                  )}
+                </div>
+
+                <div className="overflow-x-auto max-h-[600px]">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 z-20 bg-neutral-950/95 backdrop-blur-md">
+                      <tr className="border-b border-neutral-800 text-neutral-400 uppercase font-semibold">
+                        <th className="py-3 px-4 min-w-[180px] sticky left-0 z-30 bg-neutral-950">
+                          Collaborateur
+                        </th>
+                        {daysInMonth.map((day) => {
+                          const isWeekend = [5, 6].includes(day.getDay());
+                          const dayNum = day.getDate();
+                          const dayLetter = ["D", "L", "M", "M", "J", "V", "S"][day.getDay()];
+                          return (
+                            <th
+                              key={dayNum}
+                              className={`py-2 px-1 text-center min-w-[34px] border-l border-neutral-800/40 ${
+                                isWeekend ? "bg-blue-950/20 text-blue-300" : ""
+                              }`}
+                            >
+                              <div className="font-bold">{dayNum}</div>
+                              <div className="text-[9px] opacity-60">{dayLetter}</div>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {activeEmployees.map((emp) => (
+                        <tr key={emp.id} className="hover:bg-neutral-800/20 transition">
+                          <td className="py-2.5 px-4 font-semibold text-neutral-200 sticky left-0 z-10 bg-neutral-900 border-r border-neutral-800">
+                            <div className="truncate max-w-[160px]">{emp.firstName} {emp.lastName}</div>
+                            <div className="text-[10px] text-neutral-500 font-normal truncate max-w-[160px]">{emp.position}</div>
+                          </td>
+                          {daysInMonth.map((day) => {
+                            const isWeekend = [5, 6].includes(day.getDay());
+                            const dayDateStr = day.toISOString().split("T")[0];
+                            const att = monthlyAttendancesList.find((a) => {
+                              if (a.employeeId !== emp.id) return false;
+                              if (!a.date) return false;
+                              return new Date(a.date).toISOString().split("T")[0] === dayDateStr;
+                            });
+
+                            const isPresent = att && (att.status === "PRESENT" || Boolean(att.clockIn));
+                            const isLate = att && att.status === "LATE";
+                            const isOnLeave = att && att.status === "ON_LEAVE";
+                            const isHalfDay = att && att.status === "HALF_DAY";
+                            const isAbsent = att && att.status === "ABSENT";
+                            const isFuture = day.getTime() > new Date().getTime();
+
+                            let cellBadge = "—";
+                            let cellClass = "text-neutral-600";
+                            let cellTitle = `${day.toLocaleDateString("fr-FR")} : Non pointé`;
+
+                            if (isPresent) {
+                              cellBadge = "P";
+                              cellClass = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : Présent ${att?.clockIn ? `(${new Date(att.clockIn).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })})` : ""}`;
+                            } else if (isLate) {
+                              cellBadge = "R";
+                              cellClass = "bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : En retard ${att?.clockIn ? `(${new Date(att.clockIn).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })})` : ""}`;
+                            } else if (isOnLeave) {
+                              cellBadge = "C";
+                              cellClass = "bg-blue-500/20 text-blue-300 border border-blue-500/40 font-bold";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : En congé`;
+                            } else if (isHalfDay) {
+                              cellBadge = "½";
+                              cellClass = "bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : Demi-journée`;
+                            } else if (isAbsent) {
+                              cellBadge = "A";
+                              cellClass = "bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : Absent (-1j paye)`;
+                            } else if (isWeekend) {
+                              cellBadge = "WE";
+                              cellClass = "bg-blue-950/20 text-blue-400/50 font-normal";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : Week-end repos payé`;
+                            } else if (isFuture) {
+                              cellBadge = "·";
+                              cellClass = "text-neutral-700";
+                              cellTitle = `${day.toLocaleDateString("fr-FR")} : À venir`;
+                            }
+
+                            return (
+                              <td
+                                key={day.getDate()}
+                                className={`p-1 text-center border-l border-neutral-800/30 ${
+                                  isWeekend ? "bg-blue-950/10" : ""
+                                }`}
+                              >
+                                {isPrivileged ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditAttendanceModal(emp, att, dayDateStr)}
+                                    className={`w-7 h-7 rounded-lg inline-flex items-center justify-center text-[10px] cursor-pointer hover:scale-110 active:scale-95 transition ${cellClass}`}
+                                    title={cellTitle}
+                                  >
+                                    {cellBadge}
+                                  </button>
+                                ) : (
+                                  <span
+                                    className={`w-7 h-7 rounded-lg inline-flex items-center justify-center text-[10px] ${cellClass}`}
+                                    title={cellTitle}
+                                  >
+                                    {cellBadge}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* VUE 3 : JOURNAL CHRONOLOGIQUE DES POINTAGES */}
+            {monthlyViewMode === "LOG" && (
+              <div className="bg-neutral-900/70 border border-neutral-800 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b border-neutral-800 bg-neutral-950/40 text-neutral-400 text-xs uppercase font-semibold">
+                        <th className="py-3.5 px-4">Date</th>
+                        <th className="py-3.5 px-4">Collaborateur</th>
+                        <th className="py-3.5 px-4">Pôle / Poste</th>
+                        <th className="py-3.5 px-4 text-center">Statut</th>
+                        <th className="py-3.5 px-4 text-center">Entrée</th>
+                        <th className="py-3.5 px-4 text-center">Sortie</th>
+                        <th className="py-3.5 px-4">Motif / Notes</th>
+                        {isPrivileged && <th className="py-3.5 px-4 text-right">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {filteredMonthlyAttendances.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-12 text-center text-neutral-400 text-sm">
+                            <Clock className="w-8 h-8 text-neutral-600 mx-auto mb-2 opacity-50" />
+                            <p className="font-medium">Aucun enregistrement trouvé pour ces critères.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMonthlyAttendances.map((att) => {
+                          const dateObj = att.date ? new Date(att.date) : null;
+                          const isPresent = att.status === "PRESENT" || Boolean(att.clockIn);
+                          const isLate = att.status === "LATE";
+                          const isOnLeave = att.status === "ON_LEAVE";
+                          const isHalfDay = att.status === "HALF_DAY";
+
+                          return (
+                            <tr key={att.id} className="hover:bg-neutral-800/30 transition">
+                              <td className="py-3 px-4 font-mono text-xs text-neutral-300">
+                                {dateObj ? dateObj.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }) : "—"}
+                              </td>
+                              <td className="py-3 px-4 font-semibold text-neutral-200">
+                                {att.employee.firstName} {att.employee.lastName}
+                              </td>
+                              <td className="py-3 px-4 text-xs text-neutral-400">
+                                <div>{att.employee.position}</div>
+                                {att.employee.department && <div className="text-neutral-500">{att.employee.department}</div>}
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                    isPresent
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800/30"
+                                      : isLate
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800/30"
+                                      : isOnLeave
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800/30"
+                                      : isHalfDay
+                                      ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800/30"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/30"
+                                  }`}
+                                >
+                                  {isPresent
+                                    ? "Présent"
+                                    : isLate
+                                    ? "En retard"
+                                    : isOnLeave
+                                    ? "En congé"
+                                    : isHalfDay
+                                    ? "Demi-journée"
+                                    : "Absent (-1j paye)"}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center font-mono text-xs text-neutral-300">
+                                {att.clockIn
+                                  ? new Date(att.clockIn).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                                  : "—"}
+                              </td>
+                              <td className="py-3 px-4 text-center font-mono text-xs text-amber-400">
+                                {att.clockOut
+                                  ? new Date(att.clockOut).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                                  : "—"}
+                              </td>
+                              <td className="py-3 px-4 text-xs text-neutral-400 max-w-[200px] truncate" title={att.notes || ""}>
+                                {att.notes || "—"}
+                              </td>
+                              {isPrivileged && (
+                                <td className="py-3 px-4 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const emp = employees.find((e) => e.id === att.employeeId);
+                                      if (emp) {
+                                        const dStr = att.date ? new Date(att.date).toISOString().split("T")[0] : undefined;
+                                        handleOpenEditAttendanceModal(emp, att, dStr);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-indigo-50 text-neutral-700 hover:text-indigo-600 border border-neutral-200 dark:bg-neutral-800/80 dark:hover:bg-indigo-950/40 dark:text-neutral-300 dark:hover:text-indigo-300 dark:border-neutral-700/50 dark:hover:border-indigo-500/30 text-xs font-semibold transition cursor-pointer"
+                                    title="Modifier ce pointage"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-indigo-400" />
+                                    <span>Modifier</span>
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* TAB 3: LEAVES */}
       {activeTab === "LEAVES" && (
@@ -1928,7 +2763,7 @@ export function RhClient({
                       : "Ajuster un pointage"}
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Feuille d'émargement du jour ({new Date().toLocaleDateString("fr-FR")})
+                    Feuille d'émargement · Date : {new Date(attFormDate).toLocaleDateString("fr-FR")}
                   </p>
                 </div>
               </div>
@@ -1942,6 +2777,20 @@ export function RhClient({
             </div>
 
             <form onSubmit={handleSaveAttendance} className="p-6 space-y-4">
+              {/* Date du pointage */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-1.5">
+                  Date du pointage <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={attFormDate}
+                  onChange={(e) => setAttFormDate(e.target.value)}
+                  required
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+              </div>
+
               {/* Collaborateur (si création/ajustement sans employé pré-sélectionné) */}
               {!attendanceModalEmp && (
                 <div>

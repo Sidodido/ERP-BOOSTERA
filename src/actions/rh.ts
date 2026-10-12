@@ -61,6 +61,26 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
     },
   });
 
+  // 2b. Monthly Attendances (couvre le mois civil et le cycle de paie du 10 au 10)
+  const monthStart = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
+  const monthEnd = new Date(Date.UTC(currentYear, currentMonth, 1));
+  const cycleStart = cycleInfo.startDate;
+  const cycleEnd = cycleInfo.endDate;
+  const queryStart = monthStart < cycleStart ? monthStart : cycleStart;
+  const queryEnd = monthEnd > cycleEnd ? monthEnd : cycleEnd;
+
+  const monthlyAttendances = await prisma.attendance.findMany({
+    where: {
+      date: { gte: queryStart, lt: queryEnd },
+    },
+    include: {
+      employee: {
+        select: { id: true, firstName: true, lastName: true, position: true, department: true },
+      },
+    },
+    orderBy: { date: "desc" },
+  });
+
   // 3. Leave Requests
   const leaveRequests = await prisma.leaveRequest.findMany({
     include: {
@@ -139,6 +159,10 @@ export async function getRhDataAction(monthParam?: number, yearParam?: number) {
       baseSalary: Number(emp.baseSalary),
     })),
     attendances: attendances.map((att) => ({
+      ...att,
+      breakMinutes: Number(att.breakMinutes),
+    })),
+    monthlyAttendances: monthlyAttendances.map((att) => ({
       ...att,
       breakMinutes: Number(att.breakMinutes),
     })),
@@ -515,6 +539,42 @@ export async function getTodayAttendancesAction() {
       presentToday,
       absentToday,
     },
+  };
+}
+
+/**
+ * Récupère les pointages mensuels pour un mois et une année donnés
+ */
+export async function getMonthlyAttendancesAction(month: number, year: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  const cycleInfo = getPayrollCycleDates(month, year);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd = new Date(Date.UTC(year, month, 1));
+  const cycleStart = cycleInfo.startDate;
+  const cycleEnd = cycleInfo.endDate;
+  const queryStart = monthStart < cycleStart ? monthStart : cycleStart;
+  const queryEnd = monthEnd > cycleEnd ? monthEnd : cycleEnd;
+
+  const attendances = await prisma.attendance.findMany({
+    where: {
+      date: { gte: queryStart, lt: queryEnd },
+    },
+    include: {
+      employee: {
+        select: { id: true, firstName: true, lastName: true, position: true, department: true },
+      },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  return {
+    success: true,
+    attendances: attendances.map((att) => ({
+      ...att,
+      breakMinutes: Number(att.breakMinutes),
+    })),
   };
 }
 

@@ -42,6 +42,7 @@ export default async function RhPage({
         availableCycles={data.availableCycles}
         employees={data.employees as any}
         attendances={data.attendances as any}
+        monthlyAttendances={(data as any).monthlyAttendances || []}
         leaveRequests={data.leaveRequests as any}
         salaryPayments={data.salaryPayments as any}
         commissions={data.commissions}
