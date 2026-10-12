@@ -94,6 +94,8 @@ import {
   type BreakSessionItem,
   type DayBreakSummary,
   pairBreakLogs,
+  detectAutoBreaks,
+  mergeBreaksWithAuto,
 } from "@/lib/break-utils";
 export type { BreakSessionItem, DayBreakSummary };
 
@@ -146,7 +148,7 @@ export async function getMyAttendanceAction() {
     );
   }
 
-  // Check break logs for today
+  // Check break logs for today (manual breaks)
   const todayBreakLogs = await prisma.auditLog.findMany({
     where: {
       userId: user.id,
@@ -156,8 +158,42 @@ export async function getMyAttendanceAction() {
     orderBy: { createdAt: "asc" },
   });
 
-  const todayBreaks = pairBreakLogs(todayBreakLogs, now);
+  let todayBreaks = pairBreakLogs(todayBreakLogs, now);
+
+  // Auto-détecter les pauses d'inactivité > 15 min si pointage d'arrivée présent
+  if (todayAttendance?.clockIn) {
+    const todayActivityLogs = await prisma.auditLog.findMany({
+      where: {
+        userId: user.id,
+        createdAt: { gte: today },
+        action: { notIn: ["PAUSE_START", "PAUSE_END"] },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, createdAt: true },
+    });
+
+    const autoBreaks = detectAutoBreaks({
+      userId: user.id,
+      clockIn: todayAttendance.clockIn,
+      clockOut: todayAttendance.clockOut,
+      activityLogs: todayActivityLogs,
+      manualBreaks: todayBreaks,
+      now,
+      thresholdMinutes: 15,
+    });
+
+    todayBreaks = mergeBreaksWithAuto(todayBreaks, autoBreaks);
+  }
+
   const ongoingBreak = todayBreaks.find((b) => b.isOngoing);
+  const totalCompletedBreakMinutes = todayBreaks
+    .filter((b) => !b.isOngoing)
+    .reduce((acc, b) => acc + b.durationMinutes, 0);
+
+  const effectiveBreakMinutes = Math.max(
+    todayAttendance?.breakMinutes || 0,
+    totalCompletedBreakMinutes
+  );
 
   const activeBreak = ongoingBreak
     ? {
@@ -165,12 +201,14 @@ export async function getMyAttendanceAction() {
         startTime: ongoingBreak.startTime,
         reason: ongoingBreak.reason,
         elapsedMinutes: ongoingBreak.durationMinutes,
+        isAutoDetected: !!ongoingBreak.isAutoDetected,
       }
     : {
         isOnBreak: false,
         startTime: null,
         reason: null,
         elapsedMinutes: 0,
+        isAutoDetected: false,
       };
 
   return {
@@ -191,7 +229,7 @@ export async function getMyAttendanceAction() {
           clockIn: todayAttendance.clockIn ? todayAttendance.clockIn.toISOString() : null,
           clockOut: todayAttendance.clockOut ? todayAttendance.clockOut.toISOString() : null,
           status: todayAttendance.status,
-          breakMinutes: todayAttendance.breakMinutes,
+          breakMinutes: effectiveBreakMinutes,
           durationMinutes,
           isClockedIn: !!todayAttendance.clockIn,
           isClockedOut: !!todayAttendance.clockOut,
@@ -615,25 +653,34 @@ export async function getMyBreaksHistoryAction(daysCount: number = 14) {
   const pastDate = new Date(now.getTime() - daysCount * 24 * 60 * 60 * 1000);
   pastDate.setHours(0, 0, 0, 0);
 
-  // 1. Récupérer tous les logs de pause de l'utilisateur sur la période
-  const logs = await prisma.auditLog.findMany({
-    where: {
-      userId: user.id,
-      action: { in: ["PAUSE_START", "PAUSE_END"] },
-      createdAt: { gte: pastDate },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  // 1. Récupérer tous les logs de pause et d'activité de l'utilisateur sur la période
+  const [logs, activityLogs, attendances] = await Promise.all([
+    prisma.auditLog.findMany({
+      where: {
+        userId: user.id,
+        action: { in: ["PAUSE_START", "PAUSE_END"] },
+        createdAt: { gte: pastDate },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        userId: user.id,
+        action: { notIn: ["PAUSE_START", "PAUSE_END"] },
+        createdAt: { gte: pastDate },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, createdAt: true },
+    }),
+    prisma.attendance.findMany({
+      where: {
+        employeeId: employee.id,
+        date: { gte: pastDate },
+      },
+    }),
+  ]);
 
   const sessions = pairBreakLogs(logs, now);
-
-  // 2. Récupérer les présences de l'employé sur la période pour concilier les totaux
-  const attendances = await prisma.attendance.findMany({
-    where: {
-      employeeId: employee.id,
-      date: { gte: pastDate },
-    },
-  });
 
   const attBreakMap = new Map<string, number>();
   for (const att of attendances) {
@@ -649,10 +696,35 @@ export async function getMyBreaksHistoryAction(daysCount: number = 14) {
     grouped[dayKey].push(s);
   }
 
-  // Assurer que les jours où un attendance a du breakMinutes soient aussi inclus
-  for (const [dateKey] of attBreakMap.entries()) {
+  // 4. Détecter et fusionner les pauses d'inactivité automatique (>15 min) pour chaque jour
+  for (const att of attendances) {
+    const dateKey = att.date.toISOString().split("T")[0];
     if (!grouped[dateKey]) {
       grouped[dateKey] = [];
+    }
+
+    if (att.clockIn) {
+      const dayStart = new Date(att.date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const dayActivityLogs = activityLogs.filter((l) => {
+        const t = new Date(l.createdAt).getTime();
+        return t >= dayStart.getTime() && t <= dayEnd.getTime();
+      });
+
+      const autoBreaks = detectAutoBreaks({
+        userId: user.id,
+        clockIn: att.clockIn,
+        clockOut: att.clockOut,
+        activityLogs: dayActivityLogs,
+        manualBreaks: grouped[dateKey],
+        now,
+        thresholdMinutes: 15,
+      });
+
+      grouped[dateKey] = mergeBreaksWithAuto(grouped[dateKey], autoBreaks);
     }
   }
 
@@ -701,5 +773,29 @@ export async function getMyBreaksHistoryAction(daysCount: number = 14) {
       daysCount: history.length,
     },
   };
+}
+
+/**
+ * Reprendre immédiatement l'activité suite à inactivité prolongée
+ */
+export async function resumeActivityAction() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Non authentifié");
+
+  await prisma.auditLog.create({
+    data: {
+      userId: user.id,
+      action: "USER_RESUME_ACTIVITY",
+      module: "ATTENDANCE",
+      details: JSON.stringify({
+        message: "Reprise d'activité confirmée par le collaborateur",
+        timestamp: new Date().toISOString(),
+      }),
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/rh");
+  return { success: true };
 }
 

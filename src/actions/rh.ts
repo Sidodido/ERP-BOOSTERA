@@ -18,7 +18,12 @@ import {
   getAvailablePayrollCycles,
   calculateAndSyncPayroll,
 } from "@/lib/payroll";
-import { pairBreakLogs, type EmployeeTodayBreak } from "@/lib/break-utils";
+import {
+  pairBreakLogs,
+  detectAutoBreaks,
+  mergeBreaksWithAuto,
+  type EmployeeTodayBreak,
+} from "@/lib/break-utils";
 export type { EmployeeTodayBreak };
 
 export async function getRhDataAction(monthParam?: number, yearParam?: number) {
@@ -608,14 +613,25 @@ export async function getTodayAllUsersBreaksAction() {
   });
   const attMap = new Map(attendances.map((a) => [a.employeeId, a]));
 
-  // 3. Audit logs de pause d'aujourd'hui
-  const breakLogs = await prisma.auditLog.findMany({
-    where: {
-      action: { in: ["PAUSE_START", "PAUSE_END"] },
-      createdAt: { gte: todayStart },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  // 3. Audit logs de pause et d'activité d'aujourd'hui
+  const [breakLogs, activityLogs] = await Promise.all([
+    prisma.auditLog.findMany({
+      where: {
+        action: { in: ["PAUSE_START", "PAUSE_END"] },
+        createdAt: { gte: todayStart },
+      },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.auditLog.findMany({
+      where: {
+        action: { notIn: ["PAUSE_START", "PAUSE_END"] },
+        createdAt: { gte: todayStart },
+        userId: { not: null },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, userId: true, createdAt: true },
+    }),
+  ]);
 
   const logsByUser = new Map<string, typeof breakLogs>();
   for (const log of breakLogs) {
@@ -626,12 +642,36 @@ export async function getTodayAllUsersBreaksAction() {
     logsByUser.get(log.userId)!.push(log);
   }
 
+  const actLogsByUser = new Map<string, typeof activityLogs>();
+  for (const log of activityLogs) {
+    if (!log.userId) continue;
+    if (!actLogsByUser.has(log.userId)) {
+      actLogsByUser.set(log.userId, []);
+    }
+    actLogsByUser.get(log.userId)!.push(log);
+  }
+
   const list: EmployeeTodayBreak[] = employees.map((emp) => {
     const userLogs = emp.userId ? logsByUser.get(emp.userId) || [] : [];
-    const sessions = pairBreakLogs(userLogs, now);
-    const ongoing = sessions.find((s) => s.isOngoing);
+    let sessions = pairBreakLogs(userLogs, now);
     const att = attMap.get(emp.id);
 
+    // Détection des pauses d'inactivité automatique (>15 min) si pointé aujourd'hui
+    if (emp.userId && att?.clockIn) {
+      const userActLogs = actLogsByUser.get(emp.userId) || [];
+      const autoBreaks = detectAutoBreaks({
+        userId: emp.userId,
+        clockIn: att.clockIn,
+        clockOut: att.clockOut,
+        activityLogs: userActLogs,
+        manualBreaks: sessions,
+        now,
+        thresholdMinutes: 15,
+      });
+      sessions = mergeBreaksWithAuto(sessions, autoBreaks);
+    }
+
+    const ongoing = sessions.find((s) => s.isOngoing);
     const sumMinutes = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
     const totalBreakMinutes = Math.max(sumMinutes, att?.breakMinutes || 0);
     const currentElapsed = ongoing ? ongoing.durationMinutes : 0;

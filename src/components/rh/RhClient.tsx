@@ -1693,8 +1693,15 @@ export function RhClient({
                                               >
                                                 <div className="flex items-center justify-between">
                                                   <span className="font-semibold text-neutral-200 flex items-center gap-1.5">
-                                                    <Coffee className="w-3.5 h-3.5 text-amber-400" />
-                                                    {s.reason}
+                                                    <span className={s.isAutoDetected ? "text-indigo-400" : "text-amber-400"}>
+                                                      {s.isAutoDetected ? "🤖" : "☕"}
+                                                    </span>
+                                                    <span>{s.reason}</span>
+                                                    {s.isAutoDetected && (
+                                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/40">
+                                                        Auto &gt;15m
+                                                      </span>
+                                                    )}
                                                   </span>
                                                   <span
                                                     className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-bold ${

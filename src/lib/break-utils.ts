@@ -5,6 +5,7 @@ export interface BreakSessionItem {
   durationMinutes: number;
   reason: string;
   isOngoing: boolean;
+  isAutoDetected?: boolean;
 }
 
 export interface DayBreakSummary {
@@ -121,3 +122,124 @@ export function pairBreakLogs(
 
   return sessions;
 }
+
+/**
+ * Détecte les périodes d'inactivité automatique (> thresholdMinutes, ex: 15 min)
+ * entre actions consécutives ou inactivité actuelle au poste.
+ */
+export function detectAutoBreaks(params: {
+  userId: string;
+  clockIn: Date | string | null;
+  clockOut: Date | string | null;
+  activityLogs: { id: string; createdAt: Date | string }[];
+  manualBreaks: BreakSessionItem[];
+  now?: Date;
+  thresholdMinutes?: number;
+}): BreakSessionItem[] {
+  if (!params.clockIn) return [];
+
+  const now = params.now || new Date();
+  const threshold = params.thresholdMinutes ?? 15;
+  const clockInDate = new Date(params.clockIn);
+  const clockOutDate = params.clockOut ? new Date(params.clockOut) : null;
+  const workEnd = clockOutDate || now;
+
+  // Filtrer les logs survenus après le pointage d'arrivée et avant la sortie/now
+  const validLogs = params.activityLogs
+    .map((l) => ({ id: l.id, date: new Date(l.createdAt) }))
+    .filter(
+      (l) =>
+        l.date.getTime() >= clockInDate.getTime() && l.date.getTime() <= workEnd.getTime()
+    )
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Points de contrôle chronologiques : début à clockIn
+  const points: { id: string; date: Date }[] = [{ id: "clock_in", date: clockInDate }];
+  for (const l of validLogs) {
+    const lastP = points[points.length - 1];
+    if (l.date.getTime() - lastP.date.getTime() > 1000) {
+      points.push(l);
+    }
+  }
+
+  // Si sortie effectuée, ajouter clockOut comme dernier point
+  if (clockOutDate && clockOutDate.getTime() > points[points.length - 1].date.getTime()) {
+    points.push({ id: "clock_out", date: clockOutDate });
+  }
+
+  const autoSessions: BreakSessionItem[] = [];
+
+  // 1. Analyse des intervalles entre actions successives
+  for (let i = 0; i < points.length - 1; i++) {
+    const gapStart = points[i].date;
+    const gapEnd = points[i + 1].date;
+    const gapMinutes = Math.floor((gapEnd.getTime() - gapStart.getTime()) / 60000);
+
+    if (gapMinutes < threshold) continue;
+
+    // Ne pas doubler si une pause manuelle couvre déjà cet intervalle
+    const coveredByManual = params.manualBreaks.some((mb) => {
+      const mStart = new Date(mb.startTime).getTime();
+      const mEnd = mb.endTime ? new Date(mb.endTime).getTime() : now.getTime();
+      return gapStart.getTime() < mEnd && gapEnd.getTime() > mStart;
+    });
+
+    if (coveredByManual) continue;
+
+    autoSessions.push({
+      id: `auto_${params.userId}_${gapStart.getTime()}_${gapEnd.getTime()}`,
+      startTime: gapStart.toISOString(),
+      endTime: gapEnd.toISOString(),
+      durationMinutes: gapMinutes,
+      reason: `Inactivité (${gapMinutes} min sans action)`,
+      isOngoing: false,
+      isAutoDetected: true,
+    });
+  }
+
+  // 2. Détection d'inactivité en cours (collaborateur au poste sans action depuis > threshold)
+  if (!clockOutDate) {
+    const isManualOngoing = params.manualBreaks.some((mb) => mb.isOngoing);
+    if (!isManualOngoing) {
+      const lastPoint = points[points.length - 1];
+      const timeSinceLastActionMin = Math.floor(
+        (now.getTime() - lastPoint.date.getTime()) / 60000
+      );
+
+      if (timeSinceLastActionMin >= threshold) {
+        const covered = params.manualBreaks.some((mb) => {
+          const mStart = new Date(mb.startTime).getTime();
+          const mEnd = mb.endTime ? new Date(mb.endTime).getTime() : now.getTime();
+          return lastPoint.date.getTime() < mEnd && now.getTime() > mStart;
+        });
+
+        if (!covered) {
+          autoSessions.push({
+            id: `auto_ongoing_${params.userId}_${lastPoint.date.getTime()}`,
+            startTime: lastPoint.date.toISOString(),
+            endTime: null,
+            durationMinutes: timeSinceLastActionMin,
+            reason: `Inactivité en cours (${timeSinceLastActionMin} min sans action)`,
+            isOngoing: true,
+            isAutoDetected: true,
+          });
+        }
+      }
+    }
+  }
+
+  return autoSessions;
+}
+
+/**
+ * Fusionne les pauses manuelles et automatiques par ordre chronologique
+ */
+export function mergeBreaksWithAuto(
+  manualBreaks: BreakSessionItem[],
+  autoBreaks: BreakSessionItem[]
+): BreakSessionItem[] {
+  const all = [...manualBreaks, ...autoBreaks];
+  all.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+  return all;
+}
+

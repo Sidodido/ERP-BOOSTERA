@@ -26,6 +26,7 @@ import {
   Users,
   Search,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import {
   getMyAttendanceAction,
@@ -33,6 +34,7 @@ import {
   clockOutAction,
   startBreakAction,
   endBreakAction,
+  resumeActivityAction,
   getMyBreaksHistoryAction,
   BreakSessionItem,
   DayBreakSummary,
@@ -73,6 +75,7 @@ interface AttendanceState {
     startTime: string | null;
     reason: string | null;
     elapsedMinutes: number;
+    isAutoDetected?: boolean;
   };
   todayBreaks?: BreakSessionItem[];
   today: {
@@ -330,8 +333,13 @@ export function DailyAttendanceWidget() {
   const handleEndBreak = () => {
     startTransition(async () => {
       try {
-        const res = await endBreakAction();
-        setFeedbackMessage(res.message);
+        if (data?.activeBreak?.isAutoDetected) {
+          await resumeActivityAction();
+          setFeedbackMessage("Activité reprise avec succès. Vous êtes à nouveau au poste !");
+        } else {
+          const res = await endBreakAction();
+          setFeedbackMessage(res.message);
+        }
         playNotificationSound();
         await loadAttendance();
         broadcastAttendanceSync();
@@ -740,12 +748,18 @@ export function DailyAttendanceWidget() {
                         : "bg-amber-500/10 border-amber-500/30 text-amber-400"
                     }`}
                   >
-                    <Coffee className="w-5 h-5 animate-bounce" />
+                    {data.activeBreak.isAutoDetected ? (
+                      <Zap className="w-5 h-5 text-amber-400 animate-pulse" />
+                    ) : (
+                      <Coffee className="w-5 h-5 animate-bounce" />
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                        Pause en Cours : {data.activeBreak.reason || "Standard"}
+                        {data.activeBreak.isAutoDetected
+                          ? "Pause Automatique (Inactivité > 15m)"
+                          : `Pause en Cours : ${data.activeBreak.reason || "Standard"}`}
                       </span>
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                     </div>
@@ -774,7 +788,11 @@ export function DailyAttendanceWidget() {
                   className="py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer self-stretch sm:self-auto"
                 >
                   <Play className="w-4 h-4 fill-white" />
-                  <span>Reprendre le Travail</span>
+                  <span>
+                    {data.activeBreak.isAutoDetected
+                      ? "Je suis au poste (Reprendre)"
+                      : "Reprendre le Travail"}
+                  </span>
                 </button>
               </div>
             ) : (
@@ -942,8 +960,15 @@ export function DailyAttendanceWidget() {
                           className="bg-neutral-950 p-2 rounded-lg border border-neutral-850 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-amber-400">☕</span>
+                            <span className={b.isAutoDetected ? "text-indigo-400" : "text-amber-400"}>
+                              {b.isAutoDetected ? "🤖" : "☕"}
+                            </span>
                             <span className="font-medium text-neutral-200">{b.reason}</span>
+                            {b.isAutoDetected && (
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/50">
+                                Auto &gt;15m
+                              </span>
+                            )}
                             <span className="text-[11px] text-neutral-500 font-mono">
                               ({formatTimeOnly(b.startTime)} -{" "}
                               {b.isOngoing ? "En cours..." : formatTimeOnly(b.endTime)})
@@ -951,9 +976,20 @@ export function DailyAttendanceWidget() {
                           </div>
                           <div className="flex items-center gap-2">
                             {b.isOngoing ? (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
-                                {liveElapsedBreakMinutes} min (En cours)
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                                  {liveElapsedBreakMinutes} min (En cours)
+                                </span>
+                                {b.isAutoDetected && (
+                                  <button
+                                    type="button"
+                                    onClick={handleEndBreak}
+                                    className="text-[10px] px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold cursor-pointer"
+                                  >
+                                    Au poste
+                                  </button>
+                                )}
+                              </div>
                             ) : (
                               <span
                                 className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
@@ -1349,10 +1385,17 @@ export function DailyAttendanceWidget() {
                                               className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between text-xs"
                                             >
                                               <div className="flex items-center gap-2">
-                                                <span className="text-amber-400">☕</span>
+                                                <span className={s.isAutoDetected ? "text-indigo-400" : "text-amber-400"}>
+                                                  {s.isAutoDetected ? "🤖" : "☕"}
+                                                </span>
                                                 <span className="font-medium text-neutral-200">
                                                   {s.reason}
                                                 </span>
+                                                {s.isAutoDetected && (
+                                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/50">
+                                                    Auto &gt;15m
+                                                  </span>
+                                                )}
                                                 <span className="text-[11px] font-mono text-neutral-500">
                                                   ({formatTimeOnly(s.startTime)} →{" "}
                                                   {s.isOngoing
@@ -1588,10 +1631,17 @@ export function DailyAttendanceWidget() {
                                               className="p-2 rounded-lg bg-neutral-900 border border-neutral-850 flex items-center justify-between text-xs"
                                             >
                                               <div className="flex items-center gap-2">
-                                                <span className="text-amber-400">☕</span>
+                                                <span className={s.isAutoDetected ? "text-indigo-400" : "text-amber-400"}>
+                                                  {s.isAutoDetected ? "🤖" : "☕"}
+                                                </span>
                                                 <span className="font-medium text-neutral-200">
                                                   {s.reason}
                                                 </span>
+                                                {s.isAutoDetected && (
+                                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950/80 text-indigo-300 border border-indigo-800/50">
+                                                    Auto &gt;15m
+                                                  </span>
+                                                )}
                                                 <span className="text-[11px] font-mono text-neutral-500">
                                                   ({formatTimeOnly(s.startTime)} →{" "}
                                                   {s.isOngoing ? "En cours..." : formatTimeOnly(s.endTime)})
@@ -1645,6 +1695,9 @@ export function DailyAttendanceWidget() {
                           </li>
                           <li>
                             <strong>Quota Quotidien :</strong> Ne pas dépasser 40 minutes de pause cumulée par jour de travail.
+                          </li>
+                          <li>
+                            <strong>Pauses Automatiques (&gt; 15 min) :</strong> Toute inactivité supérieure à 15 minutes sans action au poste est automatiquement calculée et décomptée du quota journalier (40 min/jour).
                           </li>
                           <li>
                             <strong>Alertes & Notifications :</strong> Des alertes visuelles et sonores vous informent dès qu'un seuil est dépassé afin de préserver votre temps de travail et la précision des fiches RH.
