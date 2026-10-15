@@ -593,6 +593,15 @@ export async function getTodayAllUsersBreaksAction() {
   const user = await getCurrentUser();
   if (!user) throw new Error("Non authentifié");
 
+  const isAdmin =
+    user.role === "ADMIN" ||
+    user.role === "SALES_DIRECTOR" ||
+    (user.role as any) === "DIRECTEUR" ||
+    user.role === "HR";
+  if (!isAdmin) {
+    throw new Error("Accès réservé aux administrateurs");
+  }
+
   const now = new Date();
   const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 

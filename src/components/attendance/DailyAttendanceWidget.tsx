@@ -116,13 +116,18 @@ export function DailyAttendanceWidget() {
   const [showTodayBreaksDetail, setShowTodayBreaksDetail] = useState<boolean>(false);
   const [liveElapsedBreakMinutes, setLiveElapsedBreakMinutes] = useState<number>(0);
 
-  // Détection rôle commercial
+  // Détection rôle commercial et administrateur
   const isCommercial =
     data?.isCommercial ??
     (data?.userRole === "SALES_REP" ||
-      data?.userRole === "SALES_DIRECTOR" ||
       (data?.userRole as any) === "COMMERCIAL" ||
       data?.employee?.department === "COMMERCIAL");
+
+  const isAdmin =
+    data?.userRole === "ADMIN" ||
+    data?.userRole === "SALES_DIRECTOR" ||
+    Boolean(data?.userRole?.toLowerCase().includes("admin")) ||
+    Boolean(data?.userRole?.toLowerCase().includes("directeur"));
 
   // Pour les commerciaux : les pauses automatiques d'inactivité ne sont JAMAIS actives
   const isEffectivelyOnBreak = isCommercial
@@ -132,7 +137,7 @@ export function DailyAttendanceWidget() {
   // Breaks History Modal
   // Breaks History & Team Breaks Modal
   const [showBreaksHistoryModal, setShowBreaksHistoryModal] = useState<boolean>(false);
-  const [modalTab, setModalTab] = useState<"MY_BREAKS" | "ALL_USERS">("ALL_USERS");
+  const [modalTab, setModalTab] = useState<"MY_BREAKS" | "ALL_USERS">("MY_BREAKS");
   const [historyDaysCount, setHistoryDaysCount] = useState<number>(14);
   const [breaksHistoryData, setBreaksHistoryData] = useState<{
     history: DayBreakSummary[];
@@ -403,9 +408,10 @@ export function DailyAttendanceWidget() {
   };
 
   const openBreaksHistoryModal = (targetTab: "MY_BREAKS" | "ALL_USERS" = "ALL_USERS") => {
-    setModalTab(targetTab);
+    const finalTab = !isAdmin ? "MY_BREAKS" : targetTab;
+    setModalTab(finalTab);
     setShowBreaksHistoryModal(true);
-    if (targetTab === "MY_BREAKS") {
+    if (finalTab === "MY_BREAKS") {
       loadBreaksHistory(historyDaysCount);
     } else {
       loadAllUsersBreaks();
@@ -917,14 +923,16 @@ export function DailyAttendanceWidget() {
               </button>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => openBreaksHistoryModal("ALL_USERS")}
-                  className="py-1 px-2.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 hover:text-indigo-200 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Users className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Pauses Aujourd'hui (Tous)</span>
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => openBreaksHistoryModal("ALL_USERS")}
+                    className="py-1 px-2.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-950/70 border border-indigo-800/60 text-indigo-300 hover:text-indigo-200 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Users className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Pauses Aujourd'hui (Tous)</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -1115,26 +1123,28 @@ export function DailyAttendanceWidget() {
 
             {/* Modal Tab Switcher */}
             <div className="px-5 pt-2.5 border-b border-neutral-800 bg-neutral-900 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setModalTab("ALL_USERS");
-                  loadAllUsersBreaks();
-                }}
-                className={`pb-2.5 px-1.5 text-xs font-bold transition flex items-center gap-2 border-b-2 cursor-pointer ${
-                  modalTab === "ALL_USERS"
-                    ? "border-indigo-500 text-indigo-400"
-                    : "border-transparent text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Pauses Aujourd'hui (Tous les Utilisateurs)</span>
-                {allUsersBreaksData?.kpis?.currentlyOnBreak ? (
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
-                    {allUsersBreaksData.kpis.currentlyOnBreak} en pause
-                  </span>
-                ) : null}
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalTab("ALL_USERS");
+                    loadAllUsersBreaks();
+                  }}
+                  className={`pb-2.5 px-1.5 text-xs font-bold transition flex items-center gap-2 border-b-2 cursor-pointer ${
+                    modalTab === "ALL_USERS"
+                      ? "border-indigo-500 text-indigo-400"
+                      : "border-transparent text-neutral-400 hover:text-neutral-200"
+                  }`}
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Pauses Aujourd'hui (Tous les Utilisateurs)</span>
+                  {allUsersBreaksData?.kpis?.currentlyOnBreak ? (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800 animate-pulse">
+                      {allUsersBreaksData.kpis.currentlyOnBreak} en pause
+                    </span>
+                  ) : null}
+                </button>
+              )}
 
               <button
                 type="button"
