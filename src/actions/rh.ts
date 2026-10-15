@@ -655,9 +655,14 @@ export async function getTodayAllUsersBreaksAction() {
     const userLogs = emp.userId ? logsByUser.get(emp.userId) || [] : [];
     let sessions = pairBreakLogs(userLogs, now);
     const att = attMap.get(emp.id);
+    const isCommercialEmp =
+      emp.user?.role === "SALES_REP" ||
+      (emp.user?.role as any) === "COMMERCIAL" ||
+      emp.user?.role === "SALES_DIRECTOR" ||
+      emp.department === "COMMERCIAL";
 
-    // Détection des pauses d'inactivité automatique (>15 min) si pointé aujourd'hui
-    if (emp.userId && att?.clockIn) {
+    // Détection des pauses d'inactivité automatique (>15 min) si pointé aujourd'hui (EXCLUS pour les commerciaux)
+    if (!isCommercialEmp && emp.userId && att?.clockIn) {
       const userActLogs = actLogsByUser.get(emp.userId) || [];
       const autoBreaks = detectAutoBreaks({
         userId: emp.userId,
@@ -669,11 +674,13 @@ export async function getTodayAllUsersBreaksAction() {
         thresholdMinutes: 15,
       });
       sessions = mergeBreaksWithAuto(sessions, autoBreaks);
+    } else if (isCommercialEmp) {
+      sessions = sessions.filter((s) => !s.isAutoDetected);
     }
 
     const ongoing = sessions.find((s) => s.isOngoing);
     const sumMinutes = sessions.reduce((acc, s) => acc + s.durationMinutes, 0);
-    const totalBreakMinutes = Math.max(sumMinutes, att?.breakMinutes || 0);
+    const totalBreakMinutes = isCommercialEmp ? sumMinutes : Math.max(sumMinutes, att?.breakMinutes || 0);
     const currentElapsed = ongoing ? ongoing.durationMinutes : 0;
     const isOver = totalBreakMinutes > 40;
     const isCrit = ongoing ? ongoing.durationMinutes >= 120 : false;

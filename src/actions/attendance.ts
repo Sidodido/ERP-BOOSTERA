@@ -160,8 +160,14 @@ export async function getMyAttendanceAction() {
 
   let todayBreaks = pairBreakLogs(todayBreakLogs, now);
 
-  // Auto-détecter les pauses d'inactivité > 15 min si pointage d'arrivée présent
-  if (todayAttendance?.clockIn) {
+  const isCommercial =
+    user.role === "SALES_REP" ||
+    (user.role as any) === "COMMERCIAL" ||
+    user.role === "SALES_DIRECTOR" ||
+    employee.department === "COMMERCIAL";
+
+  // Auto-détecter les pauses d'inactivité > 15 min si pointage d'arrivée présent (EXCLUS pour les commerciaux)
+  if (!isCommercial && todayAttendance?.clockIn) {
     const todayActivityLogs = await prisma.auditLog.findMany({
       where: {
         userId: user.id,
@@ -183,6 +189,9 @@ export async function getMyAttendanceAction() {
     });
 
     todayBreaks = mergeBreaksWithAuto(todayBreaks, autoBreaks);
+  } else if (isCommercial) {
+    // Supprimer toute pause auto-détectée pour les commerciaux
+    todayBreaks = todayBreaks.filter((b) => !b.isAutoDetected);
   }
 
   const ongoingBreak = todayBreaks.find((b) => b.isOngoing);
@@ -190,10 +199,9 @@ export async function getMyAttendanceAction() {
     .filter((b) => !b.isOngoing)
     .reduce((acc, b) => acc + b.durationMinutes, 0);
 
-  const effectiveBreakMinutes = Math.max(
-    todayAttendance?.breakMinutes || 0,
-    totalCompletedBreakMinutes
-  );
+  const effectiveBreakMinutes = isCommercial
+    ? totalCompletedBreakMinutes
+    : Math.max(todayAttendance?.breakMinutes || 0, totalCompletedBreakMinutes);
 
   const activeBreak = ongoingBreak
     ? {
@@ -201,7 +209,7 @@ export async function getMyAttendanceAction() {
         startTime: ongoingBreak.startTime,
         reason: ongoingBreak.reason,
         elapsedMinutes: ongoingBreak.durationMinutes,
-        isAutoDetected: !!ongoingBreak.isAutoDetected,
+        isAutoDetected: !isCommercial && !!ongoingBreak.isAutoDetected,
       }
     : {
         isOnBreak: false,
@@ -213,6 +221,8 @@ export async function getMyAttendanceAction() {
 
   return {
     authenticated: true,
+    userRole: user.role,
+    isCommercial,
     employee: {
       id: employee.id,
       name: `${employee.firstName} ${employee.lastName}`,
@@ -696,45 +706,55 @@ export async function getMyBreaksHistoryAction(daysCount: number = 14) {
     grouped[dayKey].push(s);
   }
 
-  // 4. Détecter et fusionner les pauses d'inactivité automatique (>15 min) pour chaque jour
-  for (const att of attendances) {
-    const dateKey = att.date.toISOString().split("T")[0];
-    if (!grouped[dateKey]) {
-      grouped[dateKey] = [];
-    }
+  const isCommercial =
+    user.role === "SALES_REP" ||
+    (user.role as any) === "COMMERCIAL" ||
+    user.role === "SALES_DIRECTOR";
 
-    if (att.clockIn) {
-      const dayStart = new Date(att.date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setHours(23, 59, 59, 999);
+  // 4. Détecter et fusionner les pauses d'inactivité automatique (>15 min) pour chaque jour (EXCLUS pour les commerciaux)
+  if (!isCommercial) {
+    for (const att of attendances) {
+      const dateKey = att.date.toISOString().split("T")[0];
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = [];
+      }
 
-      const dayActivityLogs = activityLogs.filter((l) => {
-        const t = new Date(l.createdAt).getTime();
-        return t >= dayStart.getTime() && t <= dayEnd.getTime();
-      });
+      if (att.clockIn) {
+        const dayStart = new Date(att.date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setHours(23, 59, 59, 999);
 
-      const autoBreaks = detectAutoBreaks({
-        userId: user.id,
-        clockIn: att.clockIn,
-        clockOut: att.clockOut,
-        activityLogs: dayActivityLogs,
-        manualBreaks: grouped[dateKey],
-        now,
-        thresholdMinutes: 15,
-      });
+        const dayActivityLogs = activityLogs.filter((l) => {
+          const t = new Date(l.createdAt).getTime();
+          return t >= dayStart.getTime() && t <= dayEnd.getTime();
+        });
 
-      grouped[dateKey] = mergeBreaksWithAuto(grouped[dateKey], autoBreaks);
+        const autoBreaks = detectAutoBreaks({
+          userId: user.id,
+          clockIn: att.clockIn,
+          clockOut: att.clockOut,
+          activityLogs: dayActivityLogs,
+          manualBreaks: grouped[dateKey],
+          now,
+          thresholdMinutes: 15,
+        });
+
+        grouped[dateKey] = mergeBreaksWithAuto(grouped[dateKey], autoBreaks);
+      }
     }
   }
 
   const history: DayBreakSummary[] = Object.keys(grouped)
     .sort((a, b) => b.localeCompare(a)) // Les plus récents en premier
     .map((dateStr) => {
-      const daySessions = grouped[dateStr] || [];
+      let daySessions = grouped[dateStr] || [];
+      if (isCommercial) {
+        daySessions = daySessions.filter((s) => !s.isAutoDetected);
+      }
       const sumSessions = daySessions.reduce((acc, s) => acc + s.durationMinutes, 0);
-      const attMinutes = attBreakMap.get(dateStr) || 0;
-      const totalMinutes = Math.max(sumSessions, attMinutes);
+      const attMinutes = isCommercial ? sumSessions : (attBreakMap.get(dateStr) || 0);
+      const totalMinutes = isCommercial ? sumSessions : Math.max(sumSessions, attMinutes);
 
       const d = new Date(dateStr + "T00:00:00");
       const dayLabel = d.toLocaleDateString("fr-FR", {

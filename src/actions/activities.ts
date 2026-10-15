@@ -506,6 +506,16 @@ export async function getActivitiesDataAction(params: ActivityFilterParams = {})
     const userName = userLogs[0].user?.name || "Collaborateur";
     const userRole = userLogs[0].user?.employee?.position || userLogs[0].user?.role || "Collaborateur";
 
+    const rawRole = userLogs[0].user?.role || "";
+    const isCommercialUser =
+      rawRole === "SALES_REP" ||
+      rawRole === "SALES_DIRECTOR" ||
+      (rawRole as any) === "COMMERCIAL" ||
+      (userLogs[0].user?.employee as any)?.department === "COMMERCIAL" ||
+      userRole.toLowerCase().includes("commercial");
+
+    if (isCommercialUser) continue;
+
     // ── Scan gaps between consecutive actions ──────────────────────────────
     for (let i = 0; i < userLogs.length - 1; i++) {
       const currentLog = userLogs[i];

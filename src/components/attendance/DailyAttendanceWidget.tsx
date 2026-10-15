@@ -27,6 +27,7 @@ import {
   Search,
   RefreshCw,
   Zap,
+  UtensilsCrossed,
 } from "lucide-react";
 import {
   getMyAttendanceAction,
@@ -64,6 +65,8 @@ function broadcastAttendanceSync() {
 
 interface AttendanceState {
   authenticated: boolean;
+  userRole?: string;
+  isCommercial?: boolean;
   employee?: {
     id: string;
     name: string;
@@ -110,9 +113,21 @@ export function DailyAttendanceWidget() {
   const [showHistory, setShowHistory] = useState<boolean>(false);
 
   // Breaks specifics
-  const [showBreakPresets, setShowBreakPresets] = useState<boolean>(false);
   const [showTodayBreaksDetail, setShowTodayBreaksDetail] = useState<boolean>(false);
   const [liveElapsedBreakMinutes, setLiveElapsedBreakMinutes] = useState<number>(0);
+
+  // Détection rôle commercial
+  const isCommercial =
+    data?.isCommercial ??
+    (data?.userRole === "SALES_REP" ||
+      data?.userRole === "SALES_DIRECTOR" ||
+      (data?.userRole as any) === "COMMERCIAL" ||
+      data?.employee?.department === "COMMERCIAL");
+
+  // Pour les commerciaux : les pauses automatiques d'inactivité ne sont JAMAIS actives
+  const isEffectivelyOnBreak = isCommercial
+    ? Boolean(data?.activeBreak?.isOnBreak && !data.activeBreak.isAutoDetected)
+    : Boolean(data?.activeBreak?.isOnBreak);
 
   // Breaks History Modal
   // Breaks History & Team Breaks Modal
@@ -221,7 +236,7 @@ export function DailyAttendanceWidget() {
 
   // Recalculate live elapsed minutes for ongoing break every 3 seconds
   useEffect(() => {
-    if (data?.activeBreak?.isOnBreak && data.activeBreak.startTime) {
+    if (isEffectivelyOnBreak && data?.activeBreak?.startTime) {
       const calc = () => {
         const startMs = new Date(data.activeBreak!.startTime!).getTime();
         const diffMin = Math.max(0, Math.floor((Date.now() - startMs) / 60000));
@@ -233,15 +248,16 @@ export function DailyAttendanceWidget() {
     } else {
       setLiveElapsedBreakMinutes(0);
     }
-  }, [data?.activeBreak?.isOnBreak, data?.activeBreak?.startTime]);
+  }, [isEffectivelyOnBreak, data?.activeBreak?.startTime]);
 
   // Alert triggers with audible chime
   useEffect(() => {
-    if (!data?.activeBreak?.isOnBreak || !data.activeBreak.startTime) return;
+    if (!isEffectivelyOnBreak || !data?.activeBreak?.startTime) return;
+    if (isCommercial && data.activeBreak.isAutoDetected) return;
 
     const startIso = data.activeBreak.startTime;
     const reason = (data.activeBreak.reason || "").toLowerCase();
-    const isLunch = reason.includes("déjeuner") || reason.includes("dejeuner");
+    const isLunch = reason.includes("déjeuner") || reason.includes("dejeuner") || isCommercial;
     const limit = isLunch ? 45 : 15;
 
     // 1. Critical Alert (> 120 min)
@@ -256,9 +272,11 @@ export function DailyAttendanceWidget() {
     }
   }, [
     liveElapsedBreakMinutes,
-    data?.activeBreak?.isOnBreak,
+    isEffectivelyOnBreak,
     data?.activeBreak?.startTime,
     data?.activeBreak?.reason,
+    data?.activeBreak?.isAutoDetected,
+    isCommercial,
     soundEnabled,
   ]);
 
@@ -313,8 +331,7 @@ export function DailyAttendanceWidget() {
     });
   };
 
-  const handleStartBreak = (reason: string) => {
-    setShowBreakPresets(false);
+  const handleStartBreak = (reason: string = "Pause Déjeuner") => {
     startTransition(async () => {
       try {
         const res = await startBreakAction(reason);
@@ -415,18 +432,26 @@ export function DailyAttendanceWidget() {
   };
 
   // Warning metrics calculation
-  const currentElapsed = data?.activeBreak?.isOnBreak ? liveElapsedBreakMinutes : 0;
+  const currentElapsed = isEffectivelyOnBreak ? liveElapsedBreakMinutes : 0;
   const totalBreaksMinutesToday = (data?.today?.breakMinutes || 0) + currentElapsed;
   const quotaLimit = 40; // 40 min daily limit
   const isDailyQuotaExceeded = totalBreaksMinutesToday > quotaLimit;
   const isDailyQuotaHigh = totalBreaksMinutesToday > 60;
 
   const activeReason = (data?.activeBreak?.reason || "").toLowerCase();
-  const isActiveLunch = activeReason.includes("déjeuner") || activeReason.includes("dejeuner");
+  const isActiveLunch =
+    activeReason.includes("déjeuner") ||
+    activeReason.includes("dejeuner") ||
+    isCommercial;
   const activeRecommendedLimit = isActiveLunch ? 45 : 15;
   const isActiveBreakExceeded =
-    data?.activeBreak?.isOnBreak && currentElapsed > activeRecommendedLimit;
-  const isActiveBreakCritical = data?.activeBreak?.isOnBreak && currentElapsed >= 120;
+    isEffectivelyOnBreak && currentElapsed > activeRecommendedLimit;
+  const isActiveBreakCritical = isEffectivelyOnBreak && currentElapsed >= 120;
+
+  // Filtrage des pauses aujourd'hui (sans auto-détectées pour les commerciaux)
+  const displayTodayBreaks = isCommercial
+    ? (data?.todayBreaks || []).filter((b) => !b.isAutoDetected)
+    : (data?.todayBreaks || []);
 
   return (
     <div className="bg-neutral-900/90 border border-neutral-800/90 rounded-2xl p-5 shadow-sm space-y-4">
@@ -675,7 +700,7 @@ export function DailyAttendanceWidget() {
           )}
 
           {/* ACTIVE WARNING BANNER : PAUSE DEPASSEE (> 15m ou > 45m) */}
-          {isActiveBreakExceeded && !isActiveBreakCritical && (
+          {isActiveBreakExceeded && !isActiveBreakCritical && (!isCommercial || !data?.activeBreak?.isAutoDetected) && (
             <div className="bg-amber-950/60 border border-amber-600/70 rounded-xl p-3 text-amber-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-md">
               <div className="flex items-center gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
@@ -684,7 +709,7 @@ export function DailyAttendanceWidget() {
                     Avertissement : Durée de pause conseillée dépassée
                   </div>
                   <div className="text-[11px] text-amber-200/90 mt-0.5">
-                    Votre pause « {data?.activeBreak?.reason} » dure depuis{" "}
+                    Votre pause « {data?.activeBreak?.reason || "Pause Déjeuner"} » dure depuis{" "}
                     <strong>{liveElapsedBreakMinutes} min</strong> (seuil recommandé :{" "}
                     {activeRecommendedLimit} min, dépassement de +
                     {liveElapsedBreakMinutes - activeRecommendedLimit} min).
@@ -728,7 +753,7 @@ export function DailyAttendanceWidget() {
           {/* MAIN BREAK CARD (Active Break or Start Break Controls) */}
           <div
             className={`p-4 rounded-xl border transition-all ${
-              data?.activeBreak?.isOnBreak
+              isEffectivelyOnBreak
                 ? isActiveBreakCritical
                   ? "bg-rose-950/20 border-rose-800/60 shadow-lg"
                   : isActiveBreakExceeded
@@ -737,7 +762,7 @@ export function DailyAttendanceWidget() {
                 : "bg-neutral-950/50 border-neutral-800/80"
             }`}
           >
-            {data?.activeBreak?.isOnBreak ? (
+            {isEffectivelyOnBreak ? (
               /* Mode Pause Active */
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -748,23 +773,23 @@ export function DailyAttendanceWidget() {
                         : "bg-amber-500/10 border-amber-500/30 text-amber-400"
                     }`}
                   >
-                    {data.activeBreak.isAutoDetected ? (
+                    {!isCommercial && data?.activeBreak?.isAutoDetected ? (
                       <Zap className="w-5 h-5 text-amber-400 animate-pulse" />
                     ) : (
-                      <Coffee className="w-5 h-5 animate-bounce" />
+                      <UtensilsCrossed className="w-5 h-5 text-amber-400 animate-bounce" />
                     )}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                        {data.activeBreak.isAutoDetected
+                        {!isCommercial && data?.activeBreak?.isAutoDetected
                           ? "Pause Automatique (Inactivité > 15m)"
-                          : `Pause en Cours : ${data.activeBreak.reason || "Standard"}`}
+                          : data?.activeBreak?.reason || "Pause Déjeuner en Cours"}
                       </span>
                       <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
                     </div>
                     <p className="text-xs text-neutral-400 mt-0.5">
-                      Démarrée à {formatTimeOnly(data.activeBreak.startTime)} • Durée :{" "}
+                      Démarrée à {formatTimeOnly(data?.activeBreak?.startTime)} • Durée :{" "}
                       <strong
                         className={`font-mono ${
                           isActiveBreakExceeded ? "text-amber-300" : "text-neutral-200"
@@ -789,27 +814,27 @@ export function DailyAttendanceWidget() {
                 >
                   <Play className="w-4 h-4 fill-white" />
                   <span>
-                    {data.activeBreak.isAutoDetected
+                    {!isCommercial && data?.activeBreak?.isAutoDetected
                       ? "Je suis au poste (Reprendre)"
                       : "Reprendre le Travail"}
                   </span>
                 </button>
               </div>
             ) : (
-              /* Mode Travail Actif (Peut prendre une pause) */
+              /* Mode Travail Actif (Bouton manuel Pause Déjeuner) */
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 shrink-0">
-                    <Coffee className="w-4 h-4 text-amber-400" />
+                    <UtensilsCrossed className="w-4 h-4 text-amber-400" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-neutral-200">
-                        Pause & Repos Collaborateur
+                        Pause Déjeuner Collaborateur
                       </span>
-                      {data?.todayBreaks && data.todayBreaks.length > 0 && (
+                      {displayTodayBreaks.length > 0 && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 border border-neutral-700">
-                          {data.todayBreaks.length} pause(s)
+                          {displayTodayBreaks.length} pause(s)
                         </span>
                       )}
                     </div>
@@ -822,45 +847,15 @@ export function DailyAttendanceWidget() {
                 </div>
 
                 {!isClockedOut && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {showBreakPresets ? (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {[
-                          { label: "Déjeuner 🍽️ (45m)", reason: "Pause Déjeuner" },
-                          { label: "Café ☕ (15m)", reason: "Pause Café" },
-                          { label: "Repos 🌿 (15m)", reason: "Pause Détente" },
-                          { label: "Rapide ⏱️ (10m)", reason: "Pause Rapide" },
-                        ].map((p) => (
-                          <button
-                            key={p.reason}
-                            type="button"
-                            onClick={() => handleStartBreak(p.reason)}
-                            disabled={isPending}
-                            className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium transition cursor-pointer"
-                          >
-                            {p.label}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setShowBreakPresets(false)}
-                          className="px-2 py-1 text-xs text-neutral-500 hover:text-neutral-300 cursor-pointer"
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setShowBreakPresets(true)}
-                        disabled={isPending}
-                        className="py-2 px-3.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 hover:border-amber-600/50 text-neutral-200 hover:text-amber-300 text-xs font-semibold transition flex items-center gap-2 cursor-pointer shadow-xs"
-                      >
-                        <Coffee className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Prendre une Pause</span>
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleStartBreak("Pause Déjeuner")}
+                    disabled={isPending}
+                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-neutral-950 font-bold text-xs transition flex items-center justify-center gap-2 shadow-md shadow-amber-600/20 cursor-pointer disabled:opacity-50"
+                  >
+                    <UtensilsCrossed className="w-4 h-4 text-neutral-950" />
+                    <span>Pause Déjeuner</span>
+                  </button>
                 )}
               </div>
             )}
@@ -912,7 +907,7 @@ export function DailyAttendanceWidget() {
                 <span>
                   {showTodayBreaksDetail
                     ? "Masquer les pauses d'aujourd'hui"
-                    : `Détail des pauses d'aujourd'hui (${data?.todayBreaks?.length || 0})`}
+                    : `Détail des pauses d'aujourd'hui (${displayTodayBreaks.length})`}
                 </span>
                 {showTodayBreaksDetail ? (
                   <ChevronUp className="w-3 h-3" />
@@ -948,9 +943,9 @@ export function DailyAttendanceWidget() {
                 <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
                   Sessions de pause aujourd'hui :
                 </div>
-                {data?.todayBreaks && data.todayBreaks.length > 0 ? (
+                {displayTodayBreaks && displayTodayBreaks.length > 0 ? (
                   <div className="space-y-1.5">
-                    {data.todayBreaks.map((b, idx) => {
+                    {displayTodayBreaks.map((b, idx) => {
                       const isLunch = b.reason.toLowerCase().includes("déjeuner");
                       const lim = isLunch ? 45 : 15;
                       const isOver = b.durationMinutes > lim;
@@ -1696,9 +1691,11 @@ export function DailyAttendanceWidget() {
                           <li>
                             <strong>Quota Quotidien :</strong> Ne pas dépasser 40 minutes de pause cumulée par jour de travail.
                           </li>
-                          <li>
-                            <strong>Pauses Automatiques (&gt; 15 min) :</strong> Toute inactivité supérieure à 15 minutes sans action au poste est automatiquement calculée et décomptée du quota journalier (40 min/jour).
-                          </li>
+                          {!isCommercial && (
+                            <li>
+                              <strong>Pauses Automatiques (&gt; 15 min) :</strong> Toute inactivité supérieure à 15 minutes sans action au poste est automatiquement calculée et décomptée du quota journalier (40 min/jour).
+                            </li>
+                          )}
                           <li>
                             <strong>Alertes & Notifications :</strong> Des alertes visuelles et sonores vous informent dès qu'un seuil est dépassé afin de préserver votre temps de travail et la précision des fiches RH.
                           </li>

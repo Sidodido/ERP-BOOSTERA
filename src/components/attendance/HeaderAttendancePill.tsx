@@ -35,10 +35,18 @@ export function HeaderAttendancePill() {
     try {
       const res = await getMyAttendanceAction();
       if (res?.today) {
+        const isCommercial =
+          (res as any).isCommercial ||
+          (res as any).userRole === "SALES_REP" ||
+          (res as any).userRole === "SALES_DIRECTOR" ||
+          (res as any).userRole === "COMMERCIAL";
+        const isAuto = Boolean(res.activeBreak?.isAutoDetected);
+        const isOnBreak = Boolean(res.activeBreak?.isOnBreak) && !(isCommercial && isAuto);
+
         setData({
           clockIn: res.today.clockIn,
           clockOut: res.today.clockOut,
-          isOnBreak: !!res.activeBreak?.isOnBreak,
+          isOnBreak,
           elapsedMinutes: res.activeBreak?.elapsedMinutes || 0,
         });
       } else {
