@@ -25,6 +25,9 @@ import {
   RotateCcw,
   Check,
   History,
+  CheckSquare,
+  FileText,
+  Flag,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
@@ -1121,496 +1124,237 @@ export function ProductionKanbanView({
         </div>
       )}
 
-      {/* Modal: Create Task */}
+      {/* Modal: Create Task / Note (Version simple & rapide) */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Créer une Tâche de Production"
-        description="Assignez la tâche à un membre et définissez le projet et la deadline."
+        title="Nouvelle Tâche / Note"
+        description="Notez rapidement une consigne ou créez une tâche de production."
       >
         <form onSubmit={handleCreateTask} className="space-y-4">
-          {/* 1. Rattachement de la tâche & Échéance */}
-          <div className="space-y-2.5 p-3 rounded-xl bg-neutral-900/90 border border-neutral-800 shadow-2xs">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-neutral-300">
-                Rattachement de la tâche *
-              </label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-950 border border-neutral-800 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setAttachMode("PROJECT")}
-                  className={`flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    attachMode === "PROJECT"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
-                  }`}
-                >
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span>Par Projet</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAttachMode("CLIENT")}
-                  className={`flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    attachMode === "CLIENT"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60"
-                  }`}
-                >
-                  <User className="w-3.5 h-3.5" />
-                  <span>Par Client</span>
-                </button>
+          {/* Modèles rapides en 1 clic */}
+          {templates && templates.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-neutral-950/70 border border-neutral-800 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-neutral-400">
+                <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-blue-400" />
+                  Remplir en 1 clic :
+                </span>
+                <span className="text-[10px] text-neutral-500">Cliquez pour appliquer</span>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {templates.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => {
+                      setTaskForm((prev) => ({
+                        ...prev,
+                        title: tpl.title.split("(")[0].trim(),
+                        description: tpl.description || prev.description,
+                        priority: (tpl.priority as TaskPriority) || prev.priority,
+                        timeSpentHours: tpl.defaultHours || prev.timeSpentHours,
+                      }));
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-750 hover:border-blue-500/50 text-neutral-200 hover:text-blue-300 text-xs transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                  >
+                    <span className="text-blue-400 font-bold">+</span>
+                    <span>{tpl.title.split("(")[0].trim()}</span>
+                    {tpl.defaultHours > 0 && (
+                      <span className="text-[10px] text-neutral-400 font-mono">({tpl.defaultHours}h)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Titre de la tâche */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-neutral-200 flex items-center gap-1.5">
+              <CheckSquare className="w-3.5 h-3.5 text-blue-400" />
+              Titre de la tâche ou note *
+            </label>
+            <input
+              type="text"
+              autoFocus
+              placeholder="Ex: Shooting photo sur place, Montage vidéo reel, Maquette site..."
+              value={taskForm.title}
+              onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+              className="w-full px-3.5 py-2.5 text-sm bg-neutral-950 border border-neutral-800 focus:border-blue-500 rounded-xl text-neutral-100 placeholder:text-neutral-500 focus:outline-none transition font-medium"
+              required
+            />
+          </div>
+
+          {/* Description / Notes */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-neutral-400" />
+              Notes & Spécifications (optionnel)
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Instructions de production, dimensions, brief, liens utiles ou mémos..."
+              value={taskForm.description}
+              onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+              className="w-full p-3 text-xs bg-neutral-950 border border-neutral-800 focus:border-blue-500 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none transition resize-y font-normal"
+            />
+          </div>
+
+          {/* Grille des réglages compacts */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/80">
+            {/* Rattachement (Projet ou Client) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1">
+                  <Briefcase className="w-3 h-3 text-neutral-400" />
+                  Rattaché à
+                </label>
+                <div className="flex items-center gap-1 text-[10px] bg-neutral-950 border border-neutral-800 rounded-md p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setAttachMode("PROJECT")}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer transition ${
+                      attachMode === "PROJECT" ? "bg-blue-600 text-white font-bold" : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    Projet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAttachMode("CLIENT")}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer transition ${
+                      attachMode === "CLIENT" ? "bg-blue-600 text-white font-bold" : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    Client
+                  </button>
+                </div>
               </div>
 
               {attachMode === "PROJECT" ? (
-                <div className="space-y-1">
-                  <select
-                    value={taskForm.projectId}
-                    onChange={(e) => setTaskForm({ ...taskForm, projectId: e.target.value })}
-                    className="w-full h-9 px-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                    required
-                  >
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id} className="bg-neutral-900 text-neutral-200">
-                        {p.code} — {p.name} ({p.client.companyName})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-neutral-400">
-                    Les tâches seront intégrées dans le tableau de bord du projet sélectionné.
-                  </p>
-                </div>
+                <select
+                  value={taskForm.projectId}
+                  onChange={(e) => setTaskForm({ ...taskForm, projectId: e.target.value })}
+                  className="w-full h-8 px-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  required
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-neutral-900 text-neutral-200">
+                      {p.name} ({p.client.companyName})
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <div className="space-y-1">
-                  <select
-                    value={selectedClientId || (clients[0]?.id || "")}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
-                    className="w-full h-9 px-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                    required
-                  >
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id} className="bg-neutral-900 text-neutral-200">
-                        {c.companyName} {c.brandName ? `(${c.brandName})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[11px] text-neutral-400">
-                    Les tâches seront rattachées directement au dossier client.
-                  </p>
-                </div>
+                <select
+                  value={selectedClientId || (clients[0]?.id || "")}
+                  onChange={(e) => setSelectedClientId(e.target.value)}
+                  className="w-full h-8 px-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+                  required
+                >
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-neutral-900 text-neutral-200">
+                      {c.companyName} {c.brandName ? `(${c.brandName})` : ""}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
 
-            <div className="pt-1 flex items-center justify-between gap-3 border-t border-neutral-800">
-              <label className="text-xs font-semibold text-neutral-300 shrink-0">
-                Date d'échéance :
+            {/* Assigné à */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1">
+                <User className="w-3 h-3 text-neutral-400" />
+                Assigné à
+              </label>
+              <select
+                value={taskForm.assigneeId}
+                onChange={(e) => setTaskForm({ ...taskForm, assigneeId: e.target.value })}
+                className="w-full h-8 px-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="" className="bg-neutral-900 text-neutral-400">-- Non assigné --</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id} className="bg-neutral-900 text-neutral-200">
+                    {u.name} ({u.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Priorité */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1">
+                <Flag className="w-3 h-3 text-neutral-400" />
+                Priorité
+              </label>
+              <select
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as TaskPriority })}
+                className="w-full h-8 px-2.5 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                {Object.entries(TASK_PRIORITIES).map(([k, v]) => (
+                  <option key={k} value={k} className="bg-neutral-900 text-neutral-200">
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date d'échéance */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-neutral-400" />
+                Échéance
               </label>
               <Input
                 type="date"
                 value={taskForm.dueDate}
                 onChange={(e) => setTaskForm({ ...taskForm, dueDate: e.target.value })}
-                className="h-8 text-xs max-w-44"
+                className="h-8 text-xs"
               />
             </div>
           </div>
 
-          {/* 2. Modèles de Tâches Dynamiques & Sélection Multiple */}
-          <div className="space-y-3 p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800 shadow-2xs">
-            {/* Header de la section modèles */}
-            <div className="flex items-center justify-between gap-2 pb-2 border-b border-neutral-800">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Modèles de Tâches</span>
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 font-bold border border-blue-500/30">
-                  Sélection 1-Clic
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTemplateForm(!showAddTemplateForm)}
-                  className="px-2.5 py-1 text-[11px] font-semibold text-blue-400 hover:bg-blue-500/10 rounded-lg border border-blue-500/30 transition-colors flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span className="hidden sm:inline">Nouveau modèle</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsManagingTemplates(!isManagingTemplates)}
-                  className={`p-1 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                    isManagingTemplates
-                      ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
-                      : "text-neutral-400 hover:text-neutral-200 border-neutral-800"
-                  }`}
-                  title={isManagingTemplates ? "Quitter le mode gestion" : "Gérer / Supprimer des modèles"}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Formulaire Inline d'ajout de nouveau modèle */}
-            {showAddTemplateForm && (
-              <div className="p-3 bg-neutral-900 rounded-xl border border-blue-500/30 space-y-2.5 animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-neutral-100">
-                    Ajouter un modèle de tâche personnalisé
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddTemplateForm(false)}
-                    className="text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer"
-                  >
-                    Fermer
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-medium">Titre du modèle *</label>
-                    <Input
-                      placeholder="Ex: Animation Motion Design 2D"
-                      value={newTemplateForm.title}
-                      onChange={(e) => setNewTemplateForm({ ...newTemplateForm, title: e.target.value })}
-                      className="h-8 text-xs"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-medium">Section</label>
-                    <select
-                      value={newTemplateForm.part}
-                      onChange={(e) => setNewTemplateForm({ ...newTemplateForm, part: e.target.value as any })}
-                      className="w-full h-8 px-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 cursor-pointer"
-                    >
-                      <option value="PART_1" className="bg-neutral-900 text-neutral-200">Partie 1 : Sur site & Voix-Off</option>
-                      <option value="PART_2" className="bg-neutral-900 text-neutral-200">Partie 2 : Montage, Web & Extras</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-medium">Heures estimées</label>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      min="0.5"
-                      value={newTemplateForm.defaultHours}
-                      onChange={(e) => setNewTemplateForm({ ...newTemplateForm, defaultHours: parseFloat(e.target.value) || 1 })}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-neutral-400 font-medium">Priorité</label>
-                    <select
-                      value={newTemplateForm.priority}
-                      onChange={(e) => setNewTemplateForm({ ...newTemplateForm, priority: e.target.value as any })}
-                      className="w-full h-8 px-2 text-xs bg-neutral-950 border border-neutral-800 rounded-lg text-neutral-200 cursor-pointer"
-                    >
-                      {Object.entries(TASK_PRIORITIES).map(([k, v]) => (
-                        <option key={k} value={k} className="bg-neutral-900 text-neutral-200">{v.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[11px] text-neutral-400 font-medium">Description (optionnelle)</label>
-                  <Input
-                    placeholder="Instructions, brief, livrable..."
-                    value={newTemplateForm.description}
-                    onChange={(e) => setNewTemplateForm({ ...newTemplateForm, description: e.target.value })}
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowAddTemplateForm(false)}
-                    className="h-7 text-xs px-2.5"
-                  >
-                    Annuler
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={handleAddNewTemplate}
-                    disabled={isPending || !newTemplateForm.title.trim()}
-                    className="h-7 text-xs px-3 bg-blue-600 text-white"
-                  >
-                    Enregistrer le modèle
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Partie 1 : Modèles sur site & Voix-Off */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-blue-400 flex items-center gap-1.5">
-                    <Video className="w-3.5 h-3.5" />
-                    <span>Partie 1 : Modèles sur site & Voix-Off</span>
-                  </span>
-                </div>
-                <span className="text-[10px] text-neutral-400 font-mono">
-                  {templates.filter((t) => t.part === "PART_1").length} modèles
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {templates.filter((t) => t.part === "PART_1").map((tpl) => {
-                  const isSelected = selectedTemplateIds.includes(tpl.id);
-                  return (
-                    <div
-                      key={tpl.id}
-                      onClick={() => {
-                        toggleTemplateSelection(tpl.id);
-                        setTaskForm({
-                          ...taskForm,
-                          title: tpl.title,
-                          description: tpl.description || "",
-                          priority: tpl.priority as TaskPriority,
-                          timeSpentHours: tpl.defaultHours,
-                        });
-                      }}
-                      className={`text-left px-2.5 py-1.5 rounded-lg border text-[11px] transition-all cursor-pointer flex items-center justify-between gap-1 group shadow-2xs ${
-                        isSelected
-                          ? "bg-blue-500/20 border-blue-500 text-blue-200 font-semibold ring-1 ring-blue-500/40"
-                          : "bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] border transition-colors ${
-                          isSelected ? "bg-blue-600 text-white border-blue-600 font-bold" : "border-neutral-700 bg-neutral-800 text-neutral-400"
-                        }`}>
-                          {isSelected ? "✓" : "+"}
-                        </span>
-                        <span className="truncate">
-                          {tpl.title.split("(")[0].trim()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          {tpl.defaultHours}h
-                        </span>
-                        {isManagingTemplates && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteTemplate(tpl.id, e)}
-                            className="p-0.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded"
-                            title="Supprimer ce modèle"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Partie 2 : Modèles Montage, Web, Marketing & Additionnels */}
-            <div className="space-y-1.5 pt-2.5 border-t border-neutral-800">
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-purple-400 flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5" />
-                    <span>Partie 2 : Modèles Montage, Web & Extras</span>
-                  </span>
-                </div>
-                <span className="text-[10px] text-purple-400/80 font-mono">
-                  {templates.filter((t) => t.part === "PART_2").length} modèles
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {templates.filter((t) => t.part === "PART_2").map((tpl) => {
-                  const isSelected = selectedTemplateIds.includes(tpl.id);
-                  return (
-                    <div
-                      key={tpl.id}
-                      onClick={() => {
-                        toggleTemplateSelection(tpl.id);
-                        setTaskForm({
-                          ...taskForm,
-                          title: tpl.title,
-                          description: tpl.description || "",
-                          priority: tpl.priority as TaskPriority,
-                          timeSpentHours: tpl.defaultHours,
-                        });
-                      }}
-                      className={`text-left px-2.5 py-1.5 rounded-lg border text-[11px] transition-all cursor-pointer flex items-center justify-between gap-1 group shadow-2xs ${
-                        isSelected
-                          ? "bg-purple-500/20 border-purple-500 text-purple-200 font-semibold ring-1 ring-purple-500/40"
-                          : "bg-neutral-900 hover:bg-neutral-800 border-neutral-800 text-neutral-300 hover:text-white"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className={`w-3.5 h-3.5 rounded flex items-center justify-center text-[10px] border transition-colors ${
-                          isSelected ? "bg-purple-600 text-white border-purple-600 font-bold" : "border-neutral-700 bg-neutral-800 text-neutral-400"
-                        }`}>
-                          {isSelected ? "✓" : "+"}
-                        </span>
-                        <span className="truncate">
-                          {tpl.title.split("(")[0].trim()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          {tpl.defaultHours}h
-                        </span>
-                        {isManagingTemplates && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleDeleteTemplate(tpl.id, e)}
-                            className="p-0.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded"
-                            title="Supprimer ce modèle"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Bandeau d'action groupée si au moins une tâche est cochée */}
-            {selectedTemplateIds.length > 0 && (
-              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-500/15 via-indigo-500/15 to-blue-500/15 border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200 shadow-md">
-                <div>
-                  <p className="text-xs font-bold text-neutral-100 flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span>{selectedTemplateIds.length} tâche{selectedTemplateIds.length > 1 ? "s" : ""} cochée{selectedTemplateIds.length > 1 ? "s" : ""} pour création groupée</span>
-                  </p>
-                  <p className="text-[11px] text-neutral-300 mt-0.5">
-                    Durée totale cumulée : <span className="font-mono font-bold text-blue-300">{totalBatchHours}h</span> • Notifications automatiques incluses
-                  </p>
-                </div>
-                <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTemplateIds([])}
-                    className="text-xs text-neutral-400 hover:text-neutral-200 px-2 py-1 cursor-pointer transition-colors"
-                  >
-                    Désélectionner
-                  </button>
-                  <Button
-                    type="button"
-                    onClick={handleCreateBatchTasks}
-                    disabled={isPending}
-                    className="shrink-0 h-8 text-xs px-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold gap-1.5 shadow-md shadow-blue-500/20 cursor-pointer whitespace-nowrap"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span className="whitespace-nowrap">{isPending ? "Création..." : `Créer les ${selectedTemplateIds.length} tâches en 1 clic`}</span>
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Séparateur & Création / Personnalisation d'une tâche unique */}
-          <div className="pt-2 border-t border-neutral-800 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-neutral-200">
-                Ou personnaliser une tâche unique
-              </span>
-              <span className="text-[10px] text-neutral-400">
-                Formulaire individuel
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-300">Titre de la tâche *</label>
-              <Input
-                placeholder="Ex: Shooting Photo / Vidéo sur place"
-                value={taskForm.title}
-                onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-neutral-300">Assigné à</label>
-                  <span className="text-[10px] text-blue-400 font-semibold flex items-center gap-1">
-                    <Bell className="w-3 h-3" />
-                    Sera notifié(e)
-                  </span>
-                </div>
-                <select
-                  value={taskForm.assigneeId}
-                  onChange={(e) => setTaskForm({ ...taskForm, assigneeId: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  <option value="" className="bg-neutral-900 text-neutral-400">-- Non assigné (aucune notification) --</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id} className="bg-neutral-900 text-neutral-200">
-                      {u.name} ({u.role})
-                    </option>
-                  ))}
-                </select>
-                {taskForm.assigneeId ? (
-                  <p className="text-[11px] text-blue-300 bg-blue-500/10 border border-blue-500/30 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
-                    <Bell className="w-3 h-3 text-blue-400 shrink-0" />
-                    <span>
-                      <strong>{users.find((u) => u.id === taskForm.assigneeId)?.name}</strong> recevra une notification automatique lors de la création de la tâche.
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-neutral-500 italic px-1">
-                    Aucune notification ne sera envoyée tant qu'aucun membre n'est assigné.
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-300">Priorité</label>
-                <select
-                  value={taskForm.priority}
-                  onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as TaskPriority })}
-                  className="w-full h-9 px-3 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 focus:outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  {Object.entries(TASK_PRIORITIES).map(([k, v]) => (
-                    <option key={k} value={k} className="bg-neutral-900 text-neutral-200">
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-300">Temps estimé (Heures)</label>
-              <Input
+          {/* Temps estimé (Optionnel discret) */}
+          <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950/60 border border-neutral-800 text-xs text-neutral-400">
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-blue-400" />
+              Temps estimé (optionnel) :
+            </span>
+            <div className="flex items-center gap-1.5">
+              <input
                 type="number"
                 step="0.5"
-                value={taskForm.timeSpentHours}
-                onChange={(e) => setTaskForm({ ...taskForm, timeSpentHours: Number(e.target.value) })}
+                min="0"
+                value={taskForm.timeSpentHours || ""}
+                placeholder="0"
+                onChange={(e) => setTaskForm({ ...taskForm, timeSpentHours: Number(e.target.value) || 0 })}
+                className="w-16 h-7 px-2 text-center text-xs bg-neutral-900 border border-neutral-700 rounded-lg text-neutral-100 font-mono focus:outline-none focus:border-blue-500"
               />
+              <span className="font-mono text-neutral-400">heures</span>
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-300">Description & Spécifications</label>
-              <textarea
-                rows={2}
-                placeholder="Instructions de production, dimensions, brief..."
-                value={taskForm.description}
-                onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
-                className="w-full p-2 text-xs bg-neutral-950 border border-neutral-800 rounded-xl text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div className="pt-2 flex justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsCreateModalOpen(false)}>
-                Annuler
-              </Button>
-              <Button type="submit" size="sm" disabled={isPending || !taskForm.title.trim()}>
-                {isPending ? "Création..." : "Créer la tâche unitaire"}
-              </Button>
-            </div>
+          {/* Actions */}
+          <div className="pt-2 flex items-center justify-end gap-2.5 border-t border-neutral-800/80">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCreateModalOpen(false)}
+              className="h-9 px-4 text-xs cursor-pointer"
+            >
+              Annuler
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isPending || !taskForm.title.trim()}
+              className="h-9 px-5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs gap-1.5 shadow-md shadow-blue-600/30 cursor-pointer disabled:opacity-40"
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              <span>{isPending ? "Création..." : "Créer la tâche"}</span>
+            </Button>
           </div>
         </form>
       </Modal>
